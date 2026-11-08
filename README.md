@@ -1,4 +1,4 @@
-# AcaSift 0.3.1 — React + Flask academic similarity analysis
+# AcaSift 0.3.2 — React + Flask academic similarity analysis
 
 **Tagline:** Find the overlap. Follow the source.
 
@@ -211,9 +211,10 @@ permanent records or offered for download.
 - Consider background processing and indexed candidate retrieval for larger repositories.
 
 
-## 11. Navigation and motion (0.3.1)
+## 11. Navigation and motion (0.3.2)
 
-- Route changes return the viewport to the top; in-page hash links scroll to their target.
-- A floating scroll-to-top control appears after the visitor scrolls 360 pixels.
-- Public and workspace routes use a short fade-and-rise page-entry transition.
-- Smooth scrolling and transitions respect the operating system's reduced-motion preference.
+- Route changes use React Router View Transitions for a coordinated outgoing/incoming page animation.
+- Navigation returns the viewport to the top with a controlled ease-in-out scroll animation; in-page hash links scroll to their target.
+- The floating scroll-to-top control appears after 360 pixels and uses the same interruptible scroll animation.
+- The `/health` endpoint remains available to Render health checks but is intentionally omitted from public navigation.
+- Motion respects the operating system's reduced-motion preference; browsers without the View Transitions API use a CSS fallback.

@@ -43,3 +43,16 @@
 - Added a restrained fade-and-rise page-entry transition on route changes.
 - Added keyboard focus styling and accessible labelling for the scroll control.
 - Respected `prefers-reduced-motion` for route transitions and scrolling.
+
+
+# AcaSift 0.3.2 release notes
+
+## Navigation and motion refinement
+
+- Removed the System status link from the public footer. The `/health` endpoint remains active for Render health checks and is not part of visitor navigation.
+- Enabled React Router View Transitions on client-side links, navigation links and route forms.
+- Added coordinated outgoing and incoming page snapshots with a longer ease-out entrance.
+- Replaced browser-dependent smooth scrolling with an interruptible requestAnimationFrame animation using cubic ease-in-out timing.
+- Applied the same controlled scroll animation to route changes, hash targets and the floating scroll-to-top control.
+- Increased the floating control's fade and movement timing for a less abrupt appearance and dismissal.
+- Preserved reduced-motion accessibility behaviour.

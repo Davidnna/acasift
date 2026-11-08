@@ -1,64 +1,64 @@
-# AcaSift 0.2.0 — GitHub and Render deployment checklist
+# AcaSift 0.3.0 — React frontend deployment
 
-## 1. Upload to GitHub
-- [ ] Create a repository named `acasift`.
-- [ ] Set the default branch to `main`.
-- [ ] Extract the supplied ZIP archive.
-- [ ] Open the extracted `acasift` folder and upload its CONTENTS to the repository root.
-- [ ] Confirm that `README.md`, `render.yaml`, `run.py`, `config.py`, `.gitignore`,
-      `.env.example`, `app/`, `tests/` and `sample_documents/` are at the repository root.
-- [ ] Do not upload a real `.env` file, passwords, API keys or database connection strings.
+## What changes in this release
 
-Suggested first commit message:
+AcaSift's interface is now a React + TypeScript single-page application using React Router's
+data-router APIs. Flask remains the backend API and PostgreSQL remains the database.
 
-`feat: initialize AcaSift academic similarity analysis platform`
+The Render deployment changes from the native Python runtime to the Docker runtime because the
+production deployment must build the React bundle with Node and then serve it from Flask. The
+Dockerfile performs this as a multi-stage build. The frontend and API are served from the same
+origin, preserving session-cookie authentication and CSRF protection.
 
-## 2. Neon database
-- [ ] Create or select a Neon PostgreSQL project and database.
-- [ ] Copy the connection string from Neon Console > Connect.
-- [ ] Preserve TLS parameters such as `sslmode=require`.
-- [ ] Keep the connection string private. Do not put it in GitHub or this chat.
+## Before deploying
 
-## 3. Render deployment
-- [ ] Sign in to Render.
-- [ ] Choose **New > Blueprint**.
-- [ ] Connect the GitHub repository named `acasift`.
-- [ ] Render should detect the root `render.yaml` and configure `acasift`.
-- [ ] Set `DATABASE_URL` to the Neon connection string.
-- [ ] Confirm Render generates `SECRET_KEY`.
-- [ ] Complete the initial deployment and inspect the build logs.
-- [ ] Open `https://YOUR-RENDER-SERVICE.onrender.com/health` and verify `{"status":"ok"}`.
+1. Keep the existing Neon database and its `DATABASE_URL` unchanged.
+2. Do not delete the existing Render service or database.
+3. Ensure the GitHub repository root contains `Dockerfile`, `.dockerignore`, `render.yaml`,
+   `frontend/`, `app/`, `requirements.txt` and `run.py`.
+4. Ensure `.env` and all database credentials are excluded from Git.
 
-## 4. Create the first administrator
-Render Free web services do not provide Shell access. Run the Flask CLI from your
-computer after installing the project requirements:
+## GitHub upload
 
-1. Temporarily set `DATABASE_URL` in your local `.env` file to the Neon connection string.
-2. Run `flask --app run.py create-admin`.
-3. Enter the administrator name, email and password when prompted.
-4. Restore your local development `DATABASE_URL` after the administrator is created.
-5. Sign in to the deployed AcaSift application.
+Extract the supplied source archive and replace the existing repository files with the contents
+of the `acasift` folder. Upload the folder contents at the repository root, not the containing
+folder itself.
 
-## 5. Automatic redeployment
-- [ ] Confirm Render is linked to the GitHub repository and the `main` branch.
-- [ ] Confirm auto-deploy is set to **On Commit**.
-- [ ] Make future code changes locally, test them, commit and push to `main`.
-- [ ] Render will automatically build and redeploy each new commit.
+Suggested commit message:
 
-## 6. Important storage limitation
-Neon stores relational records and extracted document text. Uploaded original files are
-currently written to the application filesystem. Render Free web services have an
-ephemeral filesystem, so original uploads may disappear after a restart, spin-down or
-redeployment. Do not treat original uploads as permanent until private object storage or
-another persistent storage solution is implemented.
+`feat: migrate AcaSift frontend to React and React Router`
 
-## 7. Free-plan behaviour
-Render Free web services spin down after 15 minutes without inbound traffic and can take
-about a minute to start again on the next request. Free services do not provide persistent
-disks or Shell access. Check the provider's current limits before relying on the free tier.
+## Render Blueprint update
 
-## AcaSift 0.2.0 public website verification
-After deployment, verify these unauthenticated routes return HTTP 200:
+The updated `render.yaml` uses `runtime: docker` and points to `./Dockerfile`.
+
+1. Open the existing AcaSift service in Render.
+2. Review the Blueprint change before applying it. It should keep the service name `acasift`,
+   branch `main`, health check `/health` and the existing environment variables.
+3. Confirm the runtime/build configuration is Docker and the Dockerfile path is `./Dockerfile`.
+4. Preserve the existing `DATABASE_URL` and `SECRET_KEY`. Do not generate a new database or
+   replace the Neon connection string.
+5. Trigger the deploy and inspect the Docker build logs.
+
+If Render proposes creating a second service, deleting the current service, changing its name,
+or replacing environment variables, stop before confirming and review the proposed change.
+The current live service URL is `https://acasift.onrender.com/`; preserving it is important.
+
+## Expected deployment process
+
+1. Node 20 installs the React frontend dependencies.
+2. Vite and TypeScript build the React application.
+3. Python 3.11 installs the Flask application dependencies.
+4. The built React bundle is copied into `app/static/spa/`.
+5. Flask initialises any missing database tables and Gunicorn starts the application.
+
+The first Docker build may take longer than the previous Python-only deployment because it builds
+both frontend and backend layers. Docker layer caching may reduce later build times, but this is
+not guaranteed.
+
+## Post-deployment checks
+
+Public routes:
 - `/`
 - `/about`
 - `/features`
@@ -67,6 +67,42 @@ After deployment, verify these unauthenticated routes return HTTP 200:
 - `/access`
 - `/login`
 
-Verify `/dashboard` redirects unauthenticated visitors to `/login`, and `/health`
-returns `{"status":"ok"}`. The public site does not enable self-service registration;
-account creation remains administrator-managed.
+Application routes (sign-in required):
+- `/app/dashboard`
+- `/app/documents`
+- `/app/documents/new`
+- `/app/admin/users` (administrator only)
+- `/app/admin/references` (administrator only)
+
+API checks:
+- `GET /health` returns `{"status":"ok"}`.
+- `GET /api/csrf` returns a CSRF token.
+- `GET /api/auth/me` returns the signed-in user or HTTP 401.
+- `GET /api/dashboard` returns HTTP 401 when signed out.
+
+After sign-in, test document uploads, reference management, user creation and comparison reports.
+Verify that a normal user cannot open administrator endpoints or another user's comparison.
+
+## Local frontend development
+
+Run Flask on port 5000, then run these commands in a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. The Vite development server proxies `/api` requests to Flask.
+
+## Automatic redeployment
+
+The Blueprint retains `autoDeployTrigger: commit` on branch `main`. Future commits to `main`
+trigger a Render build and deployment. The React bundle is rebuilt from `frontend/` during each
+Docker build; do not manually edit generated files under `app/static/spa/`.
+
+## Important storage limitation
+
+The database remains external in Neon. Original uploaded files are still stored on the Render
+application filesystem, which is ephemeral on the free plan. Do not treat originals as permanent
+until private object storage or another persistent file-storage service is implemented.

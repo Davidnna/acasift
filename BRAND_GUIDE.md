@@ -23,3 +23,9 @@ proves academic misconduct. A human reviewer must interpret the result in contex
 ## Academic project relationship
 AcaSift is the software brand. The approved final-year project title remains:
 “Design and Implementation of a Plagiarism Detection System.”
+
+## Frontend implementation
+- React 18 and TypeScript.
+- Vite for development and production bundling.
+- React Router 6 data router for nested routes, loaders, actions, forms and route errors.
+- Same-origin Flask JSON API with session-cookie authentication and CSRF headers.

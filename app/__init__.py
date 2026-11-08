@@ -1,11 +1,12 @@
 import os
 
 import click
-from flask import Flask
+from flask import Flask, jsonify, redirect, request, url_for
 from werkzeug.security import generate_password_hash
 
 from config import Config
 from app.extensions import csrf, db, login_manager
+from flask_wtf.csrf import CSRFError
 
 
 def create_app(config_class=Config):
@@ -19,7 +20,7 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
     csrf.init_app(app)
 
-    login_manager.login_view = "auth.login"
+    login_manager.login_view = "main.spa"
     login_manager.login_message_category = "warning"
 
     from app.models import User
@@ -28,15 +29,35 @@ def create_app(config_class=Config):
     def load_user(user_id):
         return db.session.get(User, int(user_id))
 
-    from app.routes.auth import bp as auth_bp
+    from app.api import bp as api_bp
     from app.routes.main import bp as main_bp
-    from app.routes.documents import bp as documents_bp
-    from app.routes.admin import bp as admin_bp
 
-    app.register_blueprint(auth_bp)
+    app.register_blueprint(api_bp)
     app.register_blueprint(main_bp)
-    app.register_blueprint(documents_bp)
-    app.register_blueprint(admin_bp)
+
+    @login_manager.unauthorized_handler
+    def unauthorized():
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Authentication required."}), 401
+        return redirect(url_for("main.spa", path="login"))
+
+    @app.errorhandler(403)
+    def forbidden(_error):
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "You do not have permission to perform this action."}), 403
+        return jsonify({"error": "Forbidden"}), 403
+
+    @app.errorhandler(404)
+    def not_found(_error):
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "API endpoint not found."}), 404
+        return jsonify({"error": "Not found."}), 404
+
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(error):
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Your session token is invalid or expired. Refresh and try again."}), 400
+        return jsonify({"error": "The form session has expired."}), 400
 
     @app.cli.command("init-db")
     def init_db():
@@ -71,8 +92,8 @@ def create_app(config_class=Config):
 
     @app.errorhandler(413)
     def file_too_large(_error):
-        from flask import flash, redirect, request, url_for
-        flash("The uploaded file exceeds the configured size limit.", "danger")
-        return redirect(request.referrer or url_for("main.dashboard"))
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "The uploaded file exceeds the configured size limit."}), 413
+        return jsonify({"error": "The uploaded file exceeds the configured size limit."}), 413
 
     return app

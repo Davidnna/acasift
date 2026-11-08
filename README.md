@@ -1,56 +1,89 @@
-# AcaSift — Academic Similarity Analysis
+# AcaSift 0.3.0 — React + Flask academic similarity analysis
 
 **Tagline:** Find the overlap. Follow the source.
 
-AcaSift is a web-based academic document similarity analysis platform developed with Flask
-and PostgreSQL. It supports PDF, DOCX and TXT text extraction, TF-IDF/Cosine Similarity,
-word-based N-gram matching, matched-passage review and source-level comparison reports.
+AcaSift is a web-based academic document similarity analysis platform. The product is the
+software implementation for the approved final-year project titled **“Design and
+Implementation of a Plagiarism Detection System.”** The academic project title remains
+unchanged; AcaSift is the software brand.
 
-AcaSift is the software brand for the final-year research project titled **“Design and
-Implementation of a Plagiarism Detection System.”** The brand name does not change the
-approved academic research topic.
+> Similarity results indicate textual overlap. They are not automatic findings of plagiarism.
+> Human review is required.
 
-**Current release:** 0.2.0
+## 1. Architecture
 
-> Similarity results are indicators of textual overlap. They are not automatic findings
-> of plagiarism. Human review is required.
+AcaSift now uses a separated frontend/backend architecture within one deployable service:
 
-## 1. Public website and application access
+- **Frontend:** React 18, TypeScript, Vite and React Router 6 data APIs.
+- **Backend:** Flask JSON API, Flask-Login session authentication and Flask-WTF CSRF protection.
+- **Database:** PostgreSQL through SQLAlchemy; SQLite is available for local development.
+- **Analysis:** TF-IDF vectorisation, cosine similarity and word-based N-gram matching.
+- **Deployment:** Multi-stage Docker build on Render. Node builds the React bundle; Python serves
+  the bundle and Flask API from the same origin.
 
-Unauthenticated visitors can access the public homepage and the About, Features, How It
-Works, FAQ and Get Access pages. The private dashboard, document workspace, reports and
-administration routes remain protected by authentication and role checks. Self-service
-registration is not enabled: accounts are created by an authorised administrator.
+The frontend uses React Router's data router with nested layouts, route loaders, route actions,
+protected route loaders, lazy route-level code splitting, `<Form>`, `useFetcher`, `useNavigation`, request cancellation and route-level error handling.
+The Flask API and React application share the same origin, so browser session cookies and CSRF
+protection work without cross-origin authentication configuration.
 
-The public pages describe the current product scope accurately. AcaSift compares submissions
-against an administrator-curated internal reference repository; it does not search the entire
-internet, perform OCR on scanned PDFs, or provide semantic paraphrase detection.
+## 2. Current capabilities
 
-## 2. Features in this development milestone
-
-- Administrator and registered-user accounts.
-- Administrator-managed account creation.
-- Administrator upload of reference documents.
-- User upload of academic submissions.
-- PDF, DOCX and TXT text extraction.
-- Text normalisation through tokenisation and case folding.
-- TF-IDF vectorisation and Cosine Similarity.
-- Word-based N-gram overlap and passage offsets.
+- Public product website: Home, About, Features, How it Works, FAQ and Get Access.
+- Administrator-created accounts; public self-registration is not enabled.
+- Administrator-managed reference document repository.
+- User submission uploads for PDF, DOCX and TXT files.
+- Text extraction and normalisation.
+- TF-IDF and cosine similarity for document-level comparison.
+- Word N-gram overlap and matching passage offsets.
 - Comparison history and source-level reports.
-- PostgreSQL support, with SQLite available for local development.
+- Role-based API access for users and administrators.
 
-Scanned/image-only PDFs are not supported in this version because OCR is outside the
-initial project scope.
+The current system compares submissions only against administrator-curated documents in its
+internal reference repository. It does not search the entire internet or external academic
+databases. Scanned/image-only PDFs, OCR, semantic paraphrase detection, cross-language matching
+and source-code comparison are not included in this release.
 
-## 3. Requirements
+## 3. Project structure
 
-- Python 3.10 or later (Python 3.11 is recommended).
-- PostgreSQL 14 or later for the database configuration used in the final project.
-- A modern web browser.
+```text
+acasift/
+├── app/
+│   ├── api/                 # Flask JSON API endpoints
+│   ├── routes/              # React SPA and health route
+│   ├── services/            # Extraction, similarity and workflow services
+│   ├── static/
+│   │   ├── img/             # Brand assets
+│   │   └── spa/             # Built React bundle (generated by Docker build)
+│   ├── extensions.py
+│   └── models.py
+├── frontend/
+│   ├── src/
+│   │   ├── components/      # Public and authenticated layouts, shared UI
+│   │   ├── pages/           # Public and workspace pages
+│   │   ├── styles/          # React frontend styling
+│   │   ├── api.ts           # Same-origin API client and CSRF handling
+│   │   └── router.tsx       # React Router data router, loaders and actions
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── vite.config.ts
+├── tests/
+├── Dockerfile
+├── render.yaml
+├── requirements.txt
+└── run.py
+```
 
-## 4. Installation (Windows PowerShell)
+## 4. Local development
 
-Open PowerShell in the extracted project folder.
+### Prerequisites
+
+- Python 3.11 or later.
+- Node.js 20 or later and npm.
+- PostgreSQL for a production-like local setup; SQLite is sufficient for a quick local check.
+
+### Backend setup
+
+From the project root in PowerShell:
 
 ```powershell
 py -3.11 -m venv .venv
@@ -58,167 +91,121 @@ py -3.11 -m venv .venv
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 Copy-Item .env.example .env
-```
-
-For a first local run, the example `.env` uses SQLite. This allows you to verify the
-application before configuring PostgreSQL.
-
-For PostgreSQL, create a database and user, then edit `DATABASE_URL` in `.env`:
-
-```text
-DATABASE_URL=postgresql+psycopg://acasift_user:your_password@localhost:5432/acasift_db
-```
-
-Do not commit `.env` or disclose its secret values.
-
-## 5. Initialise the database and create an administrator
-
-```powershell
 flask --app run.py init-db
 flask --app run.py create-admin
 ```
 
-The create-admin command prompts for the administrator's name, email and password.
-Use a password of at least 10 characters.
+The sample `.env` uses SQLite. For PostgreSQL, set `DATABASE_URL` to a PostgreSQL connection
+string. Do not commit `.env` or expose database credentials.
 
-## 6. Start the application
+Start Flask in Terminal 1:
 
 ```powershell
-flask --app run.py run --debug
+flask --app run.py run --port 5000
 ```
 
-Open:
+### React frontend setup
 
-```text
-http://127.0.0.1:5000
+In Terminal 2:
+
+```powershell
+cd frontend
+npm install
+npm run dev
 ```
 
-Sign in using the administrator account created in step 4.
+Open `http://localhost:5173`. Vite proxies `/api` requests to the Flask server on port 5000.
+The placeholder file in `app/static/spa/` is only a local fallback; the Vite development server
+serves the React source directly.
 
-## 7. First-use workflow
+To create a production bundle locally:
 
-1. Sign in as administrator.
-2. Open **Add reference document**.
-3. Upload the two synthetic `.txt` examples in `sample_documents/` to populate the
-   reference repository.
-4. Open **Manage users** and create a normal user account.
-5. Sign out and sign in as the normal user.
-6. Upload a test document containing some sentences from one of the sample references.
-7. Review the generated comparison report.
-8. Sign in as administrator to add or manage reference documents.
+```powershell
+cd frontend
+npm run build
+```
 
-The sample reference files are synthetic demonstration material. They are not published
-academic sources and must not be represented as research evidence.
+Vite writes the compiled application to `app/static/spa/`.
 
-## 8. Run the tests
+## 5. API overview
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| GET | `/api/csrf` | Public | Obtain a CSRF token |
+| GET | `/api/auth/me` | Public response | Current session user or 401 |
+| POST | `/api/auth/login` | Public | Authenticate a user |
+| POST | `/api/auth/logout` | Authenticated | End the session |
+| GET | `/api/dashboard` | Authenticated | Dashboard metrics and recent activity |
+| GET | `/api/documents` | Authenticated | List visible documents |
+| POST | `/api/documents` | Authenticated | Upload and analyse a submission |
+| GET | `/api/comparisons/{id}` | Owner or admin | Retrieve a comparison report |
+| GET | `/api/admin/users` | Admin | List accounts |
+| POST | `/api/admin/users` | Admin | Create an account |
+| GET | `/api/admin/references` | Admin | List reference documents |
+| POST | `/api/admin/references` | Admin | Upload a reference document |
+
+All state-changing API requests require the `X-CSRFToken` header. The React API client obtains
+the token from `/api/csrf` and includes it automatically. Authentication uses Flask session
+cookies with same-origin requests; no bearer token is stored in browser local storage.
+
+## 6. Similarity calculations
+
+### Cosine similarity
+
+A TF-IDF vectoriser is fitted to the submitted text and the available reference texts. Cosine
+similarity is calculated between the submission vector and each reference vector. The report
+shows the score as a percentage-scaled similarity value; it is not a percentage of plagiarised
+content.
+
+### Matched N-gram coverage
+
+The application generates unique word-based N-grams from the submitted document and checks
+which sequences also occur in each reference document:
+
+`matched_ngram_coverage = unique_matching_query_ngrams / unique_query_ngrams * 100`
+
+The report stores character offsets and displays the matching submitted passage with the
+corresponding reference excerpt. The default N-gram size is 5; it is reduced for shorter texts.
+
+## 7. Run tests
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
 
-## 9. Similarity calculations
+The current automated Python tests cover the SPA fallback, health endpoint, CSRF token route,
+unauthenticated API protection, authentication session lifecycle and N-gram matching. The
+React TypeScript production build is executed by the Docker build on Render.
 
-### Document-level score
+## 8. Deployment on Render
 
-The application fits a TF-IDF vectoriser to the submitted text and the available
-reference texts, then calculates Cosine Similarity. The displayed value is:
+The repository contains a multi-stage `Dockerfile` and a Render Blueprint. Render builds the
+React bundle in a Node stage, installs Python requirements in a Python stage, copies the React
+bundle into Flask's static directory, and starts Gunicorn.
 
-`cosine_similarity * 100`
+Required Render environment variables:
 
-This is a vector similarity score, not the percentage of plagiarised content.
+- `DATABASE_URL`: Neon PostgreSQL connection string.
+- `SECRET_KEY`: generated by Render.
+- `SESSION_COOKIE_SECURE=true`.
 
-### Passage-level coverage
+The Blueprint is configured for automatic deployment on commits to `main`. Do not put secrets
+in GitHub. Review `DEPLOYMENT.md` before applying the React migration to an existing Render
+service, because the service runtime changes from native Python to Docker.
 
-The application creates unique word-based N-grams from the submitted text and checks
-which of those sequences occur in each reference document:
+## 9. Storage limitation
 
-`matched_ngram_coverage = unique_matching_query_ngrams / unique_query_ngrams * 100`
+PostgreSQL stores application records and extracted text. Original uploaded files are currently
+stored on the application filesystem. Render's free web service filesystem is ephemeral, so
+original files can disappear after restarts or redeployments. AcaSift needs private object
+storage or another persistent file-storage service before original uploads can be treated as
+permanent records or offered for download.
 
-The report stores offsets into the submitted and reference text to support passage review.
-The current implementation uses one selected N-gram size (default 5); for documents
-shorter than that size, the size is reduced to the available token count.
+## 10. Next development priorities
 
-## 10. Important implementation notes
-
-- The current comparison process is synchronous and is suitable for a student-project
-  prototype and modest test repositories. Comparisons use administrator-curated reference
-  documents only; users' private submissions are not automatically exposed as sources.
-  Large repositories should use background jobs and indexed candidate retrieval.
-- The comparison query currently examines up to `MAX_COMPARISON_SOURCES` processed
-  documents, ordered by upload time. Review and document this limit in experiments.
-- File uploads are stored in the local `instance/uploads` folder. For production
-  deployment, use private object storage or a protected persistent volume.
-- Add HTTPS, secure production secrets, database backups, rate limiting, audit logging,
-  and deployment-specific hardening before public deployment.
-- The initial system does not perform internet-wide search, OCR, source-code matching,
-  cross-language matching or semantic paraphrase detection.
-
-## 11. Project structure
-
-```text
-acasift/
-├── app/
-│   ├── routes/
-│   ├── services/
-│   ├── templates/
-│   ├── static/
-│   ├── extensions.py
-│   ├── models.py
-│   └── decorators.py
-├── sample_documents/
-├── tests/
-├── config.py
-├── run.py
-├── requirements.txt
-└── README.md
-```
-
-## 12. Next development tasks
-
-- Add pagination and document-retention controls.
-- Add downloadable PDF reports if required.
-- Add asynchronous processing for larger repositories.
-- Add a labelled evaluation corpus and calculate precision, recall, F1-score and
-  processing time for Chapter Five.
-- Capture screenshots of the actual running application for Chapter Four.
-
-
-## 13. GitHub + Render deployment
-
-The repository includes `render.yaml` for an AcaSift Render Blueprint deployment.
-
-1. Push the complete project to a GitHub repository using the `main` branch.
-2. In Render, choose **New > Blueprint** and connect the GitHub repository.
-3. Render reads `render.yaml` and configures the Python web service.
-4. During Blueprint setup, provide `DATABASE_URL` from the Neon Console. Use the connection string for the correct Neon project, branch, database and role. Keep its TLS parameters (such as `sslmode=require`).
-5. Render generates `SECRET_KEY` automatically.
-6. Complete the initial deployment and check `/health`.
-7. Create the first administrator from your own computer, pointing the local CLI at the
-   Neon database. Temporarily set `DATABASE_URL` in your local `.env` to the Neon connection
-   string, run `flask --app run.py create-admin`, follow the prompts, then restore your local
-   development URL if needed. Do not paste the connection string or password into chat.
-
-AcaSift normalises standard `postgresql://` and `postgres://` connection strings to SQLAlchemy's
-Psycopg 3 dialect. The `DATABASE_URL` must never be committed to GitHub. Render's Free web
-services do not provide Shell access, so use the local CLI method above on the free plan.
-
-### Automatic redeployment
-
-The Blueprint sets `autoDeployTrigger: commit` and watches the `main` branch. A push to that
-branch triggers a new build and deployment. Use GitHub as the source of truth: make code
-changes locally, test them, commit, and push. Do not edit production files manually in Render.
-
-### Database and uploaded files
-
-PostgreSQL/Neon stores application records and extracted document text. AcaSift 0.2.0
-stores uploaded originals on the application filesystem but does not yet provide a download
-feature. Render's free web service filesystem is ephemeral; uploaded originals may disappear
-when the service restarts or redeploys. Before adding file downloads or treating original
-uploads as durable records, move originals to private object storage or another persistent
-storage service. The database itself remains external in Neon.
-
-### Important deployment note
-
-`flask --app run.py init-db` creates missing tables at startup. It does not alter existing
-tables when the schema changes. Before introducing database schema changes after launch,
-we must add and run database migrations (for example, with Flask-Migrate/Alembic).
+- Verify the React production deployment and all protected route flows.
+- Add database migrations before changing SQLAlchemy models.
+- Add persistent private object storage for original uploads.
+- Add pagination, retention controls and downloadable reports.
+- Evaluate precision, recall, F1-score and processing time using a labelled test corpus.
+- Consider background processing and indexed candidate retrieval for larger repositories.

@@ -1,0 +1,90 @@
+{
+  "dataset_name": "AcaSift controlled overlap evaluation set v1",
+  "description": "Original synthetic document pairs designed to test exact word-sequence overlap detection. This is a software verification corpus, not a representative academic benchmark.",
+  "cases": [
+    {
+      "id": "P01_exact_copy",
+      "expected_overlap": true,
+      "submitted_text": "Academic integrity requires students to acknowledge the original source in every submitted assignment.",
+      "reference_text": "Academic integrity requires students to acknowledge the original source in every submitted assignment and research report.",
+      "expected_passage": "Academic integrity requires students to acknowledge the original source"
+    },
+    {
+      "id": "P02_partial_copy",
+      "expected_overlap": true,
+      "submitted_text": "The project considers several database tools. Relational database management systems organise records into structured tables and support efficient querying for institutional information. The final chapter presents the findings.",
+      "reference_text": "Relational database management systems organise records into structured tables and support efficient querying for institutional information across different organisations.",
+      "expected_passage": "Relational database management systems organise records into structured tables and support efficient querying for institutional information"
+    },
+    {
+      "id": "P03_case_and_punctuation",
+      "expected_overlap": true,
+      "submitted_text": "INFORMATION SYSTEMS organise data, support decisions and coordinate institutional processes.",
+      "reference_text": "Information systems organise data support decisions and coordinate institutional processes in modern organisations.",
+      "expected_passage": "INFORMATION SYSTEMS organise data, support decisions and coordinate institutional processes"
+    },
+    {
+      "id": "P04_separate_passages",
+      "expected_overlap": true,
+      "submitted_text": "Supervised learning classifies documents based on labelled examples. A separate section reviews the research context. The second technique compares word sequences across reference documents to identify repeated passages.",
+      "reference_text": "Supervised learning classifies documents based on labelled examples in a training collection. Elsewhere, the system compares word sequences across reference documents to identify repeated passages during review.",
+      "expected_passage": "Supervised learning classifies documents based on labelled examples"
+    },
+    {
+      "id": "P05_repeated_source_phrase",
+      "expected_overlap": true,
+      "submitted_text": "The system stores document metadata and extracted text for later comparison and reporting. The system stores document metadata and extracted text for later comparison and reporting.",
+      "reference_text": "The system stores document metadata and extracted text for later comparison and reporting in a secure repository.",
+      "expected_passage": "The system stores document metadata and extracted text for later comparison and reporting"
+    },
+    {
+      "id": "P06_unicode_compatibility",
+      "expected_overlap": true,
+      "submitted_text": "The ﬁnal analysis compares repeated word sequences against curated reference documents.",
+      "reference_text": "The final analysis compares repeated word sequences against curated reference documents.",
+      "expected_passage": "The ﬁnal analysis compares repeated word sequences against curated reference documents"
+    },
+    {
+      "id": "N01_unrelated_topics",
+      "expected_overlap": false,
+      "submitted_text": "Photosynthesis converts light energy into chemical energy in green plants during the growing season.",
+      "reference_text": "Relational databases organise records into tables and support structured queries across business systems.",
+      "expected_passage": ""
+    },
+    {
+      "id": "N02_paraphrase_only",
+      "expected_overlap": false,
+      "submitted_text": "Students must credit sources whenever they use another writer's ideas in academic work.",
+      "reference_text": "Learners should provide attribution when incorporating someone else's concepts into scholarly writing.",
+      "expected_passage": ""
+    },
+    {
+      "id": "N03_reordered_terms",
+      "expected_overlap": false,
+      "submitted_text": "Students cite sources and document their research carefully throughout the project.",
+      "reference_text": "Research sources document students carefully and cite their work before submission.",
+      "expected_passage": ""
+    },
+    {
+      "id": "N04_shared_academic_vocabulary",
+      "expected_overlap": false,
+      "submitted_text": "This study examines the results of a survey among university students.",
+      "reference_text": "The research evaluates findings from interviews with hospital workers.",
+      "expected_passage": ""
+    },
+    {
+      "id": "N05_short_common_phrase",
+      "expected_overlap": false,
+      "submitted_text": "The purpose of this study is to examine student performance during the semester.",
+      "reference_text": "The purpose of this research is to evaluate learning outcomes across departments.",
+      "expected_passage": ""
+    },
+    {
+      "id": "N06_distinct_content",
+      "expected_overlap": false,
+      "submitted_text": "A neural network optimises parameters through repeated gradient updates during model training.",
+      "reference_text": "A river delta forms when sediment accumulates near a coastline over many years.",
+      "expected_passage": ""
+    }
+  ]
+}

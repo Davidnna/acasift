@@ -45,6 +45,7 @@ export interface ComparisonResult {
   matched_ngram_coverage: number;
   matched_ngram_count: number;
   total_query_ngrams: number;
+  coverage_method?: string;
   passages: Passage[];
 }
 

@@ -1,0 +1,129 @@
+{
+  "dataset": "AcaSift controlled overlap evaluation set v1",
+  "ngram_size": 5,
+  "case_count": 12,
+  "confusion_matrix": {
+    "true_positive": 6,
+    "false_positive": 0,
+    "true_negative": 6,
+    "false_negative": 0
+  },
+  "metrics": {
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "accuracy": 1.0,
+    "positive_passage_localization_rate": 1.0
+  },
+  "cases": [
+    {
+      "id": "P01_exact_copy",
+      "expected_overlap": true,
+      "detected_overlap": true,
+      "matched_ngram_windows": 9,
+      "total_ngram_windows": 9,
+      "coverage_percent": 100.0,
+      "passage_localized": true
+    },
+    {
+      "id": "P02_partial_copy",
+      "expected_overlap": true,
+      "detected_overlap": true,
+      "matched_ngram_windows": 12,
+      "total_ngram_windows": 24,
+      "coverage_percent": 50.0,
+      "passage_localized": true
+    },
+    {
+      "id": "P03_case_and_punctuation",
+      "expected_overlap": true,
+      "detected_overlap": true,
+      "matched_ngram_windows": 6,
+      "total_ngram_windows": 6,
+      "coverage_percent": 100.0,
+      "passage_localized": true
+    },
+    {
+      "id": "P04_separate_passages",
+      "expected_overlap": true,
+      "detected_overlap": true,
+      "matched_ngram_windows": 10,
+      "total_ngram_windows": 24,
+      "coverage_percent": 41.6667,
+      "passage_localized": true
+    },
+    {
+      "id": "P05_repeated_source_phrase",
+      "expected_overlap": true,
+      "detected_overlap": true,
+      "matched_ngram_windows": 18,
+      "total_ngram_windows": 22,
+      "coverage_percent": 81.8182,
+      "passage_localized": true
+    },
+    {
+      "id": "P06_unicode_compatibility",
+      "expected_overlap": true,
+      "detected_overlap": true,
+      "matched_ngram_windows": 7,
+      "total_ngram_windows": 7,
+      "coverage_percent": 100.0,
+      "passage_localized": true
+    },
+    {
+      "id": "N01_unrelated_topics",
+      "expected_overlap": false,
+      "detected_overlap": false,
+      "matched_ngram_windows": 0,
+      "total_ngram_windows": 10,
+      "coverage_percent": 0.0,
+      "passage_localized": null
+    },
+    {
+      "id": "N02_paraphrase_only",
+      "expected_overlap": false,
+      "detected_overlap": false,
+      "matched_ngram_windows": 0,
+      "total_ngram_windows": 9,
+      "coverage_percent": 0.0,
+      "passage_localized": null
+    },
+    {
+      "id": "N03_reordered_terms",
+      "expected_overlap": false,
+      "detected_overlap": false,
+      "matched_ngram_windows": 0,
+      "total_ngram_windows": 7,
+      "coverage_percent": 0.0,
+      "passage_localized": null
+    },
+    {
+      "id": "N04_shared_academic_vocabulary",
+      "expected_overlap": false,
+      "detected_overlap": false,
+      "matched_ngram_windows": 0,
+      "total_ngram_windows": 7,
+      "coverage_percent": 0.0,
+      "passage_localized": null
+    },
+    {
+      "id": "N05_short_common_phrase",
+      "expected_overlap": false,
+      "detected_overlap": false,
+      "matched_ngram_windows": 0,
+      "total_ngram_windows": 9,
+      "coverage_percent": 0.0,
+      "passage_localized": null
+    },
+    {
+      "id": "N06_distinct_content",
+      "expected_overlap": false,
+      "detected_overlap": false,
+      "matched_ngram_windows": 0,
+      "total_ngram_windows": 8,
+      "coverage_percent": 0.0,
+      "passage_localized": null
+    }
+  ],
+  "interpretation": "These metrics describe performance on this small synthetic exact-overlap corpus only. They are not estimates of real-world plagiarism detection accuracy."
+}

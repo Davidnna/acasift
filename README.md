@@ -1,4 +1,4 @@
-# AcaSift 0.3.3 — React + Flask academic similarity analysis
+# AcaSift 0.4.0 — React + Flask academic similarity analysis
 
 **Tagline:** Find the overlap. Follow the source.
 
@@ -157,15 +157,29 @@ similarity is calculated between the submission vector and each reference vector
 shows the score as a percentage-scaled similarity value; it is not a percentage of plagiarised
 content.
 
-### Matched N-gram coverage
+### Matched N-gram occurrence coverage
 
-The application generates unique word-based N-grams from the submitted document and checks
-which sequences also occur in each reference document:
+The application generates overlapping word-based N-gram windows from the submitted document
+and checks whether each window occurs in a reference document:
 
-`matched_ngram_coverage = unique_matching_query_ngrams / unique_query_ngrams * 100`
+`matched_ngram_coverage = matched_query_ngram_windows / total_query_ngram_windows * 100`
 
-The report stores character offsets and displays the matching submitted passage with the
-corresponding reference excerpt. The default N-gram size is 5; it is reduced for shorter texts.
+The denominator counts every N-gram window in the submitted text, including repeated windows.
+The default N-gram size is 5; it is reduced for shorter texts down to a minimum of 2 tokens.
+Single-token matches are not treated as meaningful phrase overlap. Matching is case-insensitive,
+uses Unicode compatibility normalisation, and ignores punctuation and spacing between tokens.
+Character offsets continue to refer to the original text so the report can show the source excerpts.
+New results store the coverage method. Existing reports retain their legacy unique-N-gram
+coverage definition and are labelled accordingly; the startup database check adds the coverage-method column
+without deleting or rewriting historical comparison records.
+
+### Interpretation limits
+
+TF-IDF cosine similarity measures similarity between weighted document-term vectors. It is not
+a copied-content percentage. Exact N-gram matching identifies shared word sequences; it does
+not independently establish plagiarism and does not detect paraphrases that share no exact
+word sequence. Quotations, reference lists, common expressions and technical terminology can
+produce legitimate overlap. Human review remains necessary.
 
 ## 7. Run tests
 
@@ -204,17 +218,36 @@ permanent records or offered for download.
 ## 10. Next development priorities
 
 - Verify the React production deployment and all protected route flows.
-- Add database migrations before changing SQLAlchemy models.
+- Extend the additive migration process as future database fields are introduced.
 - Add persistent private object storage for original uploads.
 - Add pagination, retention controls and downloadable reports.
 - Evaluate precision, recall, F1-score and processing time using a labelled test corpus.
 - Consider background processing and indexed candidate retrieval for larger repositories.
 
 
-## 11. Navigation and motion (0.3.3)
+## 11. Navigation and motion (0.3.4)
 
 - Route changes use React Router View Transitions for a coordinated outgoing/incoming page animation.
+- Route and button scrolling use an interruptible, distance-scaled animation with sine ease-in-out timing, capped at 2.8 seconds.
 - Navigation returns the viewport to the top with a controlled ease-in-out scroll animation; in-page hash links scroll to their target.
-- The floating scroll-to-top control appears after 360 pixels and uses the same interruptible scroll animation.
+- The floating scroll-to-top control appears after 360 pixels and uses the same interruptible scroll animation with a slower entrance and exit.
 - The `/health` endpoint remains available to Render health checks but is intentionally omitted from public navigation.
 - Motion respects the operating system's reduced-motion preference; browsers without the View Transitions API use a CSS fallback.
+
+## 12. Detection evaluation (0.4.0)
+
+A small labelled synthetic corpus is provided in `evaluation/cases.json`. It includes exact
+copying, partial overlap, case/punctuation differences, separated passages, Unicode compatibility,
+paraphrase-only pairs and unrelated text. Run the evaluation from the project root:
+
+```powershell
+python scripts/evaluate_similarity.py --ngram-size 5 --output evaluation/results.json
+```
+
+The script reports precision, recall, F1-score, accuracy, a confusion matrix and positive-passage
+localisation rate. Its binary decision rule is deliberately narrow: a pair is marked as containing
+exact overlap when at least one N-gram window matches. These metrics describe only the supplied
+synthetic test cases; they are not a valid estimate of real-world plagiarism detection performance.
+For a defensible academic evaluation, the corpus must be expanded with institutionally approved,
+representative documents and manually labelled copied passages, and the matching configuration
+should be selected using a separate validation set.

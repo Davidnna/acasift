@@ -1,6 +1,7 @@
 import os
 
 import click
+from sqlalchemy import inspect, text
 from flask import Flask, jsonify, redirect, request, url_for
 from werkzeug.security import generate_password_hash
 
@@ -64,7 +65,18 @@ def create_app(config_class=Config):
         """Create database tables."""
         with app.app_context():
             db.create_all()
-        click.echo("Database tables created.")
+            inspector = inspect(db.engine)
+            if inspector.has_table("comparison_results"):
+                columns = {column["name"] for column in inspector.get_columns("comparison_results")}
+                if "coverage_method" not in columns:
+                    # Existing rows receive the legacy label so their stored unique-N-gram
+                    # metrics are not misrepresented as the 0.4.0 occurrence-based metric.
+                    with db.engine.begin() as connection:
+                        connection.execute(text(
+                            "ALTER TABLE comparison_results "
+                            "ADD COLUMN coverage_method VARCHAR(20) NOT NULL DEFAULT 'unique_ngrams'"
+                        ))
+        click.echo("Database tables created and additive migrations checked.")
 
     @app.cli.command("create-admin")
     @click.option("--name", prompt="Administrator name")

@@ -88,6 +88,7 @@ def run_comparison(submitted_document):
                 matched_ngram_coverage=item["matched_ngram_coverage"],
                 matched_ngram_count=item["matched_ngram_count"],
                 total_query_ngrams=item["total_query_ngrams"],
+                coverage_method="ngram_windows",
             )
             db.session.add(result)
             db.session.flush()

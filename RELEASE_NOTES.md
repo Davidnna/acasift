@@ -79,3 +79,22 @@
 - Slowed common button, card, sidebar and link feedback transitions.
 - Preserved manual interruption and `prefers-reduced-motion` support.
 - No backend, authentication or database changes.
+
+
+# AcaSift 0.4.0 release notes
+
+## Detection engine and evaluation
+
+- N-gram token matching now applies Unicode NFKC normalization and case-folding while preserving
+  original character offsets for report excerpts.
+- Passage merging now uses token-position alignment rather than raw character-offset differences.
+- N-gram coverage now counts matched query windows over all query windows, including repeated
+  occurrences. Single-token overlap is excluded; short documents use a minimum bigram.
+- TF-IDF vectorization now applies Unicode accent normalization and includes one-character tokens.
+- Comparison reports explain the difference between document-level TF-IDF similarity and exact
+  N-gram overlap, and explicitly state that neither score proves plagiarism.
+- Added a synthetic labelled evaluation corpus and a script reporting precision, recall, F1,
+  accuracy, confusion matrix and passage-localisation rate.
+- Added expanded automated tests for punctuation, case, Unicode, offsets, disjoint passages,
+  short documents and repository ranking.
+- Added an additive `coverage_method` column to comparison results. Startup migration labels existing rows as legacy so historical metrics are not reinterpreted.

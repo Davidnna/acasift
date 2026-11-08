@@ -74,6 +74,7 @@ def _comparison_payload(comparison, include_results=False):
                 "matched_ngram_coverage": float(result.matched_ngram_coverage),
                 "matched_ngram_count": result.matched_ngram_count,
                 "total_query_ngrams": result.total_query_ngrams,
+                "coverage_method": result.coverage_method,
                 "passages": passages,
             })
     return payload

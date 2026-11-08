@@ -102,3 +102,10 @@
   .scroll-top-button,.button,.signin-link,.feature-card,.sidebar-link,.workspace-sidebar,.text-link,.public-nav a,.footer-links a,.sidebar-help{transition:none!important}
   *,*::before,*::after{scroll-behavior:auto!important}
 }
+
+/* AcaSift 0.4.0 — clearer explanation of similarity measurements */
+.methodology-note{background:#f7fafc;border:1px solid var(--line);border-radius:10px;padding:15px 18px;margin:14px 0 17px;color:#637187}
+.methodology-note h3{font-size:12px;color:var(--navy);margin:0 0 8px}
+.methodology-note ul{margin:0;padding-left:18px;display:grid;gap:6px}
+.methodology-note li{font-size:10px;line-height:1.65}
+.methodology-note strong{color:#40536c}

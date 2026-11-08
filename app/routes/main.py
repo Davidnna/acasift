@@ -10,7 +10,32 @@ bp = Blueprint("main", __name__)
 def index():
     if current_user.is_authenticated:
         return redirect(url_for("main.dashboard"))
-    return redirect(url_for("auth.login"))
+    return render_template("public_home.html")
+
+
+@bp.route("/about")
+def about():
+    return render_template("about.html")
+
+
+@bp.route("/features")
+def features():
+    return render_template("features.html")
+
+
+@bp.route("/how-it-works")
+def how_it_works():
+    return render_template("how_it_works.html")
+
+
+@bp.route("/faq")
+def faq():
+    return render_template("faq.html")
+
+
+@bp.route("/access")
+def access():
+    return render_template("access.html")
 
 
 @bp.route("/dashboard")

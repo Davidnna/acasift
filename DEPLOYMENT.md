@@ -1,4 +1,4 @@
-# AcaSift 0.1.2 — GitHub and Render deployment checklist
+# AcaSift 0.2.0 — GitHub and Render deployment checklist
 
 ## 1. Upload to GitHub
 - [ ] Create a repository named `acasift`.
@@ -56,3 +56,17 @@ another persistent storage solution is implemented.
 Render Free web services spin down after 15 minutes without inbound traffic and can take
 about a minute to start again on the next request. Free services do not provide persistent
 disks or Shell access. Check the provider's current limits before relying on the free tier.
+
+## AcaSift 0.2.0 public website verification
+After deployment, verify these unauthenticated routes return HTTP 200:
+- `/`
+- `/about`
+- `/features`
+- `/how-it-works`
+- `/faq`
+- `/access`
+- `/login`
+
+Verify `/dashboard` redirects unauthenticated visitors to `/login`, and `/health`
+returns `{"status":"ok"}`. The public site does not enable self-service registration;
+account creation remains administrator-managed.

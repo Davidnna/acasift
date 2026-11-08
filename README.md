@@ -10,15 +10,23 @@ AcaSift is the software brand for the final-year research project titled **“De
 Implementation of a Plagiarism Detection System.”** The brand name does not change the
 approved academic research topic.
 
-**Current release:** 0.1.2
+**Current release:** 0.2.0
 
 > Similarity results are indicators of textual overlap. They are not automatic findings
 > of plagiarism. Human review is required.
 
-> Similarity results are indicators of textual overlap. They are not automatic findings
-> of plagiarism. Human review is required.
+## 1. Public website and application access
 
-## 1. Features in this development milestone
+Unauthenticated visitors can access the public homepage and the About, Features, How It
+Works, FAQ and Get Access pages. The private dashboard, document workspace, reports and
+administration routes remain protected by authentication and role checks. Self-service
+registration is not enabled: accounts are created by an authorised administrator.
+
+The public pages describe the current product scope accurately. AcaSift compares submissions
+against an administrator-curated internal reference repository; it does not search the entire
+internet, perform OCR on scanned PDFs, or provide semantic paraphrase detection.
+
+## 2. Features in this development milestone
 
 - Administrator and registered-user accounts.
 - Administrator-managed account creation.
@@ -34,13 +42,13 @@ approved academic research topic.
 Scanned/image-only PDFs are not supported in this version because OCR is outside the
 initial project scope.
 
-## 2. Requirements
+## 3. Requirements
 
 - Python 3.10 or later (Python 3.11 is recommended).
 - PostgreSQL 14 or later for the database configuration used in the final project.
 - A modern web browser.
 
-## 3. Installation (Windows PowerShell)
+## 4. Installation (Windows PowerShell)
 
 Open PowerShell in the extracted project folder.
 
@@ -63,7 +71,7 @@ DATABASE_URL=postgresql+psycopg://acasift_user:your_password@localhost:5432/acas
 
 Do not commit `.env` or disclose its secret values.
 
-## 4. Initialise the database and create an administrator
+## 5. Initialise the database and create an administrator
 
 ```powershell
 flask --app run.py init-db
@@ -73,7 +81,7 @@ flask --app run.py create-admin
 The create-admin command prompts for the administrator's name, email and password.
 Use a password of at least 10 characters.
 
-## 5. Start the application
+## 6. Start the application
 
 ```powershell
 flask --app run.py run --debug
@@ -87,7 +95,7 @@ http://127.0.0.1:5000
 
 Sign in using the administrator account created in step 4.
 
-## 6. First-use workflow
+## 7. First-use workflow
 
 1. Sign in as administrator.
 2. Open **Add reference document**.
@@ -102,13 +110,13 @@ Sign in using the administrator account created in step 4.
 The sample reference files are synthetic demonstration material. They are not published
 academic sources and must not be represented as research evidence.
 
-## 7. Run the tests
+## 8. Run the tests
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
 
-## 8. Similarity calculations
+## 9. Similarity calculations
 
 ### Document-level score
 
@@ -130,7 +138,7 @@ The report stores offsets into the submitted and reference text to support passa
 The current implementation uses one selected N-gram size (default 5); for documents
 shorter than that size, the size is reduced to the available token count.
 
-## 9. Important implementation notes
+## 10. Important implementation notes
 
 - The current comparison process is synchronous and is suitable for a student-project
   prototype and modest test repositories. Comparisons use administrator-curated reference
@@ -145,7 +153,7 @@ shorter than that size, the size is reduced to the available token count.
 - The initial system does not perform internet-wide search, OCR, source-code matching,
   cross-language matching or semantic paraphrase detection.
 
-## 10. Project structure
+## 11. Project structure
 
 ```text
 acasift/
@@ -165,7 +173,7 @@ acasift/
 └── README.md
 ```
 
-## 11. Next development tasks
+## 12. Next development tasks
 
 - Add pagination and document-retention controls.
 - Add downloadable PDF reports if required.
@@ -175,7 +183,7 @@ acasift/
 - Capture screenshots of the actual running application for Chapter Four.
 
 
-## 12. GitHub + Render deployment
+## 13. GitHub + Render deployment
 
 The repository includes `render.yaml` for an AcaSift Render Blueprint deployment.
 
@@ -202,7 +210,7 @@ changes locally, test them, commit, and push. Do not edit production files manua
 
 ### Database and uploaded files
 
-PostgreSQL/Neon stores application records and extracted document text. AcaSift 0.1.2
+PostgreSQL/Neon stores application records and extracted document text. AcaSift 0.2.0
 stores uploaded originals on the application filesystem but does not yet provide a download
 feature. Render's free web service filesystem is ephemeral; uploaded originals may disappear
 when the service restarts or redeploys. Before adding file downloads or treating original

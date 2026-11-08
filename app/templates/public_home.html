@@ -1,0 +1,84 @@
+{% extends "public_base.html" %}
+{% block title %}AcaSift | Find the overlap. Follow the source.{% endblock %}
+{% block meta_description %}AcaSift compares academic documents against an institution's curated reference repository, highlights matching passages and supports informed academic review.{% endblock %}
+{% block content %}
+<section class="home-hero public-container">
+  <div class="hero-copy">
+    <div class="eyebrow hero-eyebrow"><span class="eyebrow-dot"></span> ACADEMIC DOCUMENT SIMILARITY ANALYSIS</div>
+    <h1>Understand text similarity.<br><span>Review with context.</span></h1>
+    <p class="hero-lead">AcaSift helps academic communities compare submitted documents with a curated reference collection, identify overlapping passages and make more informed decisions during document review.</p>
+    <div class="hero-actions">
+      <a class="button button-primary button-large" href="{{ url_for('main.how_it_works') }}">Explore how it works <span aria-hidden="true">→</span></a>
+      <a class="button button-outline button-large" href="{{ url_for('auth.login') }}">Sign in to AcaSift</a>
+    </div>
+    <p class="hero-note"><span class="note-check">✓</span> Designed to support academic review, not replace human judgement.</p>
+  </div>
+  <div class="hero-visual" aria-label="Illustration of an AcaSift document similarity report">
+    <div class="visual-orbit orbit-one"></div><div class="visual-orbit orbit-two"></div>
+    <div class="visual-card visual-card-main">
+      <div class="visual-card-top"><span class="visual-file-icon">▤</span><div><strong>Sample submission</strong><small>Document comparison</small></div><span class="visual-status">SAMPLE VIEW</span></div>
+      <div class="visual-divider"></div>
+      <div class="visual-metric-row"><div><small>Cosine similarity</small><strong>18.6%</strong></div><div><small>Matching N-gram coverage</small><strong>12.4%</strong></div></div>
+      <div class="visual-bar-label"><span>Text overlap indicator</span><span>Illustrative sample</span></div>
+      <div class="visual-bar"><span></span></div>
+      <div class="visual-match-heading"><span class="match-dot"></span> Matching passage identified</div>
+      <div class="visual-text-line long"></div><div class="visual-text-line medium"></div><div class="visual-highlight-line"></div><div class="visual-text-line short"></div>
+      <div class="visual-source"><span class="source-icon">↗</span><span><strong>Reference source</strong><small>Curated repository document</small></span><span class="source-arrow">→</span></div>
+    </div>
+    <div class="floating-chip chip-top"><span>⌕</span> Passage matching</div>
+    <div class="floating-chip chip-bottom"><span>✓</span> Source review</div>
+  </div>
+</section>
+
+<section class="public-proof-strip">
+  <div class="public-container proof-inner">
+    <span>BUILT FOR ACADEMIC DOCUMENT REVIEW</span>
+    <div><strong>PDF</strong><small>Documents</small></div>
+    <div><strong>DOCX</strong><small>Word files</small></div>
+    <div><strong>TXT</strong><small>Text files</small></div>
+    <div><strong>TF-IDF</strong><small>Text similarity</small></div>
+    <div><strong>N-grams</strong><small>Passage matching</small></div>
+  </div>
+</section>
+
+<section class="public-section public-container">
+  <div class="section-heading centered-heading">
+    <div class="eyebrow">WHAT ACASIFT DOES</div>
+    <h2>From document submission<br>to evidence-led review.</h2>
+    <p>AcaSift brings document extraction, text comparison and source-level review into one straightforward workflow.</p>
+  </div>
+  <div class="feature-grid home-feature-grid">
+    <article class="public-feature-card"><div class="feature-icon teal-icon">▤</div><h3>Document text extraction</h3><p>Extract text from supported PDF, DOCX and TXT documents so their contents can be analysed.</p><a href="{{ url_for('main.features') }}">Explore features <span>→</span></a></article>
+    <article class="public-feature-card"><div class="feature-icon navy-icon">⌕</div><h3>Similarity comparison</h3><p>Compare a submission with documents in the administrator-curated reference repository using text similarity methods.</p><a href="{{ url_for('main.features') }}">Explore features <span>→</span></a></article>
+    <article class="public-feature-card"><div class="feature-icon gold-icon">▧</div><h3>Matching passage review</h3><p>Inspect identified overlapping word sequences alongside their corresponding reference-source passages.</p><a href="{{ url_for('main.features') }}">Explore features <span>→</span></a></article>
+  </div>
+</section>
+
+<section class="public-section workflow-section">
+  <div class="public-container workflow-inner">
+    <div class="section-heading">
+      <div class="eyebrow">A CLEAR WORKFLOW</div>
+      <h2>How AcaSift works</h2>
+      <p>Administrators maintain the reference collection. Users submit documents for comparison and review the resulting report.</p>
+      <a class="text-link" href="{{ url_for('main.how_it_works') }}">See the full process <span>→</span></a>
+    </div>
+    <div class="workflow-steps">
+      <div class="workflow-step"><span class="step-number">01</span><div><h3>Build the reference collection</h3><p>An administrator adds reference documents to the repository.</p></div></div>
+      <div class="workflow-step"><span class="step-number">02</span><div><h3>Submit an academic document</h3><p>An authorised user uploads a PDF, DOCX or TXT document.</p></div></div>
+      <div class="workflow-step"><span class="step-number">03</span><div><h3>Compare and review</h3><p>AcaSift calculates similarity indicators and presents matching passages by source.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="public-section public-container">
+  <div class="integrity-callout">
+    <div class="callout-icon">i</div>
+    <div><div class="eyebrow">IMPORTANT TO UNDERSTAND</div><h2>A similarity score is a signal, not a verdict.</h2><p>Text overlap can occur in properly cited quotations, references, standard terminology and commonly used phrases. AcaSift provides indicators and matching passages for human assessment. It does not independently determine whether plagiarism has occurred.</p></div>
+    <a class="button button-outline" href="{{ url_for('main.faq') }}">Read the FAQs</a>
+  </div>
+</section>
+
+<section class="public-cta-section">
+  <div class="public-container public-cta-inner"><div><div class="eyebrow">ACASIFT WORKSPACE</div><h2>Ready to review a document?</h2><p>Sign in with an account provided by your institution's AcaSift administrator.</p></div><a class="button button-light button-large" href="{{ url_for('auth.login') }}">Sign in <span>→</span></a></div>
+</section>
+{% endblock %}

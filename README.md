@@ -1,4 +1,4 @@
-# AcaSift 0.3.2 — React + Flask academic similarity analysis
+# AcaSift 0.3.3 — React + Flask academic similarity analysis
 
 **Tagline:** Find the overlap. Follow the source.
 
@@ -211,7 +211,7 @@ permanent records or offered for download.
 - Consider background processing and indexed candidate retrieval for larger repositories.
 
 
-## 11. Navigation and motion (0.3.2)
+## 11. Navigation and motion (0.3.3)
 
 - Route changes use React Router View Transitions for a coordinated outgoing/incoming page animation.
 - Navigation returns the viewport to the top with a controlled ease-in-out scroll animation; in-page hash links scroll to their target.

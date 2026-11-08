@@ -45,7 +45,7 @@
 - Respected `prefers-reduced-motion` for route transitions and scrolling.
 
 
-# AcaSift 0.3.2 release notes
+# AcaSift 0.3.3 release notes
 
 ## Navigation and motion refinement
 
@@ -56,3 +56,10 @@
 - Applied the same controlled scroll animation to route changes, hash targets and the floating scroll-to-top control.
 - Increased the floating control's fade and movement timing for a less abrupt appearance and dismissal.
 - Preserved reduced-motion accessibility behaviour.
+
+
+## 0.3.3 — Build correction
+
+- Removed the unsupported `viewTransition` prop from the React Router `fetcher.Form` used for sign-out.
+- Kept View Transitions enabled on supported `Link`, `NavLink`, and route `Form` navigation elements.
+- No backend or database changes.

@@ -213,7 +213,7 @@ export function AppLayout() {
       </div>
       <div className="app-topbar-right">
         <div className="account-chip"><span className="avatar">{user.full_name.slice(0, 1).toUpperCase()}</span><span className="account-details"><strong>{user.full_name}</strong><small>{user.is_admin ? 'Administrator' : 'Registered user'}</small></span><ChevronDown size={15} /></div>
-        <fetcher.Form viewTransition method="post" action="/logout"><button className="icon-button signout-button" type="submit" disabled={signingOut} title="Sign out"><LogOut size={17} /><span>Sign out</span></button></fetcher.Form>
+        <fetcher.Form method="post" action="/logout"><button className="icon-button signout-button" type="submit" disabled={signingOut} title="Sign out"><LogOut size={17} /><span>Sign out</span></button></fetcher.Form>
       </div>
     </header>
     <div className="workspace-frame">

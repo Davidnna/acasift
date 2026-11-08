@@ -106,3 +106,17 @@ Docker build; do not manually edit generated files under `app/static/spa/`.
 The database remains external in Neon. Original uploaded files are still stored on the Render
 application filesystem, which is ephemeral on the free plan. Do not treat originals as permanent
 until private object storage or another persistent file-storage service is implemented.
+
+
+## Browser-only first administrator setup (0.4.1)
+
+1. Push the 0.4.1 source update to `main` and wait for Render to deploy successfully.
+2. In Render > `acasift` > Environment, add `ADMIN_BOOTSTRAP_TOKEN`.
+3. Generate a random value of at least 48 characters with a password manager. Do not reuse an account password.
+4. Save the environment change and wait for Render to redeploy.
+5. Visit `https://acasift.onrender.com/setup/first-admin`.
+6. Enter the name, email, a unique password (at least 10 characters), and the token.
+7. After successful creation and sign-in, remove `ADMIN_BOOTSTRAP_TOKEN` from Render Environment.
+8. Save and wait for the final redeployment. Confirm `/setup/first-admin` now reports that setup is unavailable and sign-in works.
+
+Do not place the token in a GitHub file, URL, screenshot, support ticket, or chat message.

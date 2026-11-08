@@ -1,7 +1,12 @@
-from flask import Blueprint, jsonify, request
+import hmac
+import re
+
+from flask import Blueprint, current_app, jsonify, request
+
 from flask_login import current_user, login_user, login_required, logout_user
 from flask_wtf.csrf import generate_csrf
 from werkzeug.security import generate_password_hash
+from sqlalchemy import select, func, text
 
 from app.decorators import admin_required
 from app.extensions import db
@@ -267,3 +272,95 @@ def upload_reference():
         from flask import current_app
         current_app.logger.exception("Reference document upload failed.")
         return _error("The reference document could not be saved.", 500)
+
+
+@bp.get("/bootstrap/status")
+def bootstrap_status():
+    """Expose only whether one-time first-admin setup can currently be used."""
+    token = str(current_app.config.get("ADMIN_BOOTSTRAP_TOKEN") or "")
+    token_is_configured = len(token) >= 32
+    admin_exists = db.session.execute(
+        select(User.user_id).where(User.role == "admin").limit(1)
+    ).first() is not None
+
+    response = jsonify({"available": token_is_configured and not admin_exists})
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
+
+
+@bp.post("/bootstrap/first-admin")
+def bootstrap_first_admin():
+    """Create exactly one initial administrator when a high-entropy token is configured."""
+    configured_token = str(current_app.config.get("ADMIN_BOOTSTRAP_TOKEN") or "")
+    if len(configured_token) < 32:
+        return _error("Initial administrator setup is disabled. Configure a strong setup token first.", 410)
+
+    data = request.get_json(silent=True) or {}
+    supplied_token = str(data.get("setup_token", ""))
+    if len(supplied_token) > 512 or not hmac.compare_digest(supplied_token.encode('utf-8'), configured_token.encode('utf-8')):
+        return _error("The setup token is invalid.", 403)
+
+    full_name = str(data.get("full_name", "")).strip()
+    email = str(data.get("email", "")).strip().lower()
+    password = str(data.get("password", ""))
+
+    if not full_name or len(full_name) > 150:
+        return _error("Enter your name (up to 150 characters).")
+    if len(email) > 150 or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        return _error("Enter a valid email address.")
+    if len(password) < 10 or len(password) > 256:
+        return _error("Your password must contain between 10 and 256 characters.")
+
+    created_user = None
+    outcome = None
+
+    try:
+        # PostgreSQL advisory transaction lock serialises simultaneous bootstrap
+        # attempts across Render workers. The administrator count is checked only
+        # after acquiring the lock, so two requests cannot both create an admin.
+        with db.session.begin():
+            if db.engine.dialect.name == "postgresql":
+                db.session.execute(text("SELECT pg_advisory_xact_lock(731245908113)"))
+
+            existing_admin = db.session.execute(
+                select(User.user_id).where(User.role == "admin").limit(1)
+            ).first()
+
+            if existing_admin:
+                outcome = "completed"
+            else:
+                existing_email = db.session.execute(
+                    select(User.user_id).where(func.lower(User.email) == email).limit(1)
+                ).first()
+
+                if existing_email:
+                    outcome = "email_exists"
+                else:
+                    created_user = User(
+                        full_name=full_name,
+                        email=email,
+                        password_hash=generate_password_hash(password),
+                        role="admin",
+                        is_active=True,
+                    )
+                    db.session.add(created_user)
+                    db.session.flush()
+
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("First administrator bootstrap failed.")
+        return _error("The administrator account could not be created. Please try again.", 500)
+
+    if outcome == "completed":
+        return _error("Initial administrator setup has already been completed.", 409)
+    if outcome == "email_exists":
+        return _error("An account with that email already exists. Use a different email address.", 409)
+
+    # Sign in only after the database transaction commits successfully.
+    login_user(created_user, remember=False, fresh=True)
+    response = jsonify({
+        "message": "Your AcaSift administrator account has been created.",
+        "user": _user_payload(created_user),
+    })
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response, 201

@@ -251,3 +251,30 @@ synthetic test cases; they are not a valid estimate of real-world plagiarism det
 For a defensible academic evaluation, the corpus must be expanded with institutionally approved,
 representative documents and manually labelled copied passages, and the matching configuration
 should be selected using a separate validation set.
+
+
+## First administrator setup (browser-only)
+
+AcaSift 0.4.1 adds a one-time first-administrator setup flow so the initial administrator
+can be created without a local terminal or Render Shell.
+
+1. Deploy the release to Render.
+2. In Render, open the `acasift` service and select **Environment**.
+3. Add `ADMIN_BOOTSTRAP_TOKEN` with a password-manager-generated random value of at least
+   48 characters. Prefer letters and numbers. Do not commit it, put it in a URL, or share it.
+4. Save the environment change and wait for the service to redeploy.
+5. Open `https://acasift.onrender.com/setup/first-admin`.
+6. Enter the administrator's name, email, a unique password of at least 10 characters,
+   and the temporary setup token. Successful creation signs the new administrator in.
+7. Immediately remove `ADMIN_BOOTSTRAP_TOKEN` from the Render Environment and save.
+   Wait for that redeployment to finish. The setup endpoint also permanently refuses a
+   second administrator after the first one exists.
+
+The API checks that no administrator exists and uses a PostgreSQL transaction-level advisory
+lock to serialise concurrent bootstrap attempts across Render workers. It uses the existing
+CSRF protection, hashes the password with Werkzeug, and never returns or stores the setup
+token in the database. The setup page is not linked in the public navigation.
+
+If the setup page reports that setup is unavailable, check that the environment variable is
+present and at least 32 characters long, and that the Neon database connected to Render
+does not already contain an administrator.

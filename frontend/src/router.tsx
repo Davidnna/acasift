@@ -6,6 +6,8 @@ import {
 } from 'react-router-dom';
 import {
   createUser,
+  createFirstAdmin,
+  getBootstrapStatus,
   getComparison,
   getCurrentUser,
   getDashboard,
@@ -48,6 +50,28 @@ async function loadForUser<T>(args: LoaderFunctionArgs, load: (signal: AbortSign
 async function loadForAdmin<T>(args: LoaderFunctionArgs, load: (signal: AbortSignal) => Promise<T>) {
   await requireAdmin(args);
   return load(args.request.signal);
+}
+
+
+async function firstAdminLoader({ request }: LoaderFunctionArgs) {
+  return { available: await getBootstrapStatus(request.signal) };
+}
+
+async function firstAdminAction({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  const payload = {
+    full_name: String(formData.get('full_name') || ''),
+    email: String(formData.get('email') || ''),
+    password: String(formData.get('password') || ''),
+    setup_token: String(formData.get('setup_token') || ''),
+  };
+  try {
+    await createFirstAdmin(payload);
+    throw redirect('/app/dashboard');
+  } catch (error) {
+    if (error instanceof Response) throw error;
+    return { error: error instanceof Error ? error.message : 'The administrator account could not be created.' };
+  }
 }
 
 async function loginLoader({ request }: LoaderFunctionArgs) {
@@ -133,6 +157,7 @@ export const router = createBrowserRouter([
           { path: 'login', loader: loginLoader, action: loginAction, lazy: async () => ({ Component: (await import('./pages/login')).LoginPage }) },
         ],
       },
+      { path: 'setup/first-admin', loader: firstAdminLoader, action: firstAdminAction, lazy: async () => ({ Component: (await import('./pages/setup')).FirstAdminSetupPage }) },
       { path: 'logout', action: logoutAction, element: null },
       {
         id: 'app',

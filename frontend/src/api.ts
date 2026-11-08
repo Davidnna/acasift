@@ -113,3 +113,22 @@ export async function getReferences(signal?: AbortSignal): Promise<DocumentRecor
 export async function uploadReference(formData: FormData, signal?: AbortSignal): Promise<void> {
   await request('/api/admin/references', { method: 'POST', body: formData, signal });
 }
+
+
+export async function getBootstrapStatus(signal?: AbortSignal): Promise<boolean> {
+  const data = await request<{ available: boolean }>('/api/bootstrap/status', { signal });
+  return data.available;
+}
+
+export async function createFirstAdmin(payload: {
+  full_name: string;
+  email: string;
+  password: string;
+  setup_token: string;
+}): Promise<User> {
+  const data = await request<{ user: User }>('/api/bootstrap/first-admin', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return data.user;
+}

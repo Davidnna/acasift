@@ -37,7 +37,7 @@ class ReactAppTests(unittest.TestCase):
     def test_public_and_client_side_routes_serve_react_shell(self):
         paths = [
             "/", "/about", "/features", "/how-it-works", "/faq", "/access",
-            "/login", "/app/dashboard", "/app/documents", "/app/admin/users",
+            "/login", "/setup/first-admin", "/app/dashboard", "/app/documents", "/app/admin/users",
         ]
         for path in paths:
             with self.subTest(path=path):

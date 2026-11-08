@@ -98,3 +98,19 @@
 - Added expanded automated tests for punctuation, case, Unicode, offsets, disjoint passages,
   short documents and repository ranking.
 - Added an additive `coverage_method` column to comparison results. Startup migration labels existing rows as legacy so historical metrics are not reinterpreted.
+
+
+# AcaSift 0.4.1 release notes
+
+## Browser-based first administrator setup
+
+- Added a token-protected one-time first-administrator API.
+- Added `/setup/first-admin` React page, not exposed in public navigation.
+- Requires a high-entropy `ADMIN_BOOTSTRAP_TOKEN` environment variable.
+- Rechecks for an existing administrator inside a database transaction.
+- Uses a PostgreSQL advisory transaction lock to prevent concurrent first-admin creation.
+- Hashes the new administrator password using the existing Werkzeug password hashing.
+- Reuses the application's CSRF-protected JSON request layer.
+- Automatically signs in the newly created administrator.
+- Setup becomes unavailable after the first administrator exists; remove the environment token after setup.
+- No database schema changes.

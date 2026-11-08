@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Dashboard | AcaSift{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><div class="eyebrow">WORKSPACE</div><h1>Dashboard</h1><p class="muted">Review academic documents and examine textual similarities.</p></div>
+  <a class="button button-primary" href="{{ url_for('documents.upload_submission') }}">+ Check a document</a>
+</div>
+<div class="stat-grid">
+  <div class="stat-card"><span class="stat-label">Your documents</span><strong>{{ document_count }}</strong><span class="stat-foot">Uploaded documents</span></div>
+  <div class="stat-card"><span class="stat-label">Comparisons</span><strong>{{ comparison_count }}</strong><span class="stat-foot">Analysis records</span></div>
+  <div class="stat-card"><span class="stat-label">Reference repository</span><strong>{{ reference_count }}</strong><span class="stat-foot">Available reference documents</span></div>
+</div>
+<div class="content-grid">
+  <section class="panel">
+    <div class="panel-heading"><h2>Recent documents</h2><a href="{{ url_for('documents.list_documents') }}">View all</a></div>
+    {% if recent_documents %}
+      <div class="table-wrap"><table><thead><tr><th>Document</th><th>Type</th><th>Status</th><th>Uploaded</th></tr></thead><tbody>
+      {% for doc in recent_documents %}
+      <tr><td><strong>{{ doc.title }}</strong><small>{{ doc.original_filename }}</small></td><td>{{ doc.document_type|title }}</td><td><span class="status status-good">{{ doc.processing_status|title }}</span></td><td>{{ doc.uploaded_at.strftime('%d %b %Y') }}</td></tr>
+      {% endfor %}
+      </tbody></table></div>
+    {% else %}
+      <div class="empty-state"><strong>No documents yet</strong><p>Upload a document to begin.</p></div>
+    {% endif %}
+  </section>
+  <section class="panel">
+    <div class="panel-heading"><h2>Recent comparisons</h2></div>
+    {% if recent_comparisons %}
+      <div class="list-stack">
+      {% for comparison in recent_comparisons %}
+        <a class="list-row" href="{{ url_for('documents.view_comparison', comparison_id=comparison.comparison_id) }}">
+          <span><strong>{{ comparison.submitted_document.title }}</strong><small>Comparison #{{ comparison.comparison_id }}</small></span>
+          <span class="status status-{{ 'good' if comparison.status == 'completed' else 'muted' }}">{{ comparison.status|title }}</span>
+        </a>
+      {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state"><strong>No comparisons yet</strong><p>Your analysis history will appear here.</p></div>
+    {% endif %}
+  </section>
+</div>
+<div class="notice notice-info"><strong>Interpretation note:</strong> A similarity score measures textual overlap. It does not by itself establish plagiarism. Quotations, references and common technical language may also produce matches.</div>
+{% endblock %}

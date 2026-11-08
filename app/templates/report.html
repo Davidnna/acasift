@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Comparison report | AcaSift{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><div class="eyebrow">SIMILARITY ANALYSIS</div><h1>Comparison report</h1><p class="muted">{{ comparison.submitted_document.title }} · Comparison #{{ comparison.comparison_id }}</p></div>
+  <a class="button button-quiet" href="{{ url_for('main.dashboard') }}">Back to dashboard</a>
+</div>
+<div class="report-summary">
+  <div><span class="stat-label">Status</span><strong>{{ comparison.status|title }}</strong></div>
+  <div><span class="stat-label">Reference documents compared</span><strong>{{ results|length }}</strong></div>
+  <div><span class="stat-label">Started</span><strong class="summary-date">{{ comparison.started_at.strftime('%d %b %Y, %H:%M') }}</strong></div>
+</div>
+<div class="notice notice-warning"><strong>Important:</strong> Similarity measurements indicate textual overlap, not a definitive plagiarism finding. Review the matched passages, source context, quotations and citations before drawing conclusions.</div>
+{% if comparison.status == 'failed' %}
+  <div class="empty-state"><strong>Analysis did not complete</strong><p>The application could not finish this comparison. Check the server log and try again.</p></div>
+{% elif not results %}
+  <div class="empty-state"><strong>No reference documents were available</strong><p>Add documents to the internal repository, then upload the submission again for comparison.</p></div>
+{% else %}
+  <section class="panel">
+    <div class="panel-heading"><h2>Compared sources</h2><span class="muted small">Ranked by document-level similarity</span></div>
+    {% for result in results %}
+    <article class="result-card">
+      <div class="result-header">
+        <div><h3>{{ result.reference_document.title }}</h3><p class="muted small">{{ result.reference_document.original_filename }}</p></div>
+        <span class="status status-{{ 'warning' if result.matched_ngram_count > 0 else 'muted' }}">{{ result.matched_ngram_count }} matching N-grams</span>
+      </div>
+      <div class="metric-grid">
+        <div class="metric"><span>Cosine similarity</span><strong>{{ "%.2f"|format(result.cosine_similarity|float) }}%</strong></div>
+        <div class="metric"><span>Matched N-gram coverage</span><strong>{{ "%.2f"|format(result.matched_ngram_coverage|float) }}%</strong></div>
+        <div class="metric"><span>Unique query N-grams</span><strong>{{ result.total_query_ngrams }}</strong></div>
+      </div>
+      {% if result.passages %}
+      <div class="passage-list"><h4>Identified matching passages</h4>
+        {% for passage in result.passages %}
+        <div class="passage">
+          <div class="passage-label">Submitted document · characters {{ passage.submitted_start }}–{{ passage.submitted_end }}</div>
+          <p>{{ passage.matched_text }}</p>
+          <div class="passage-label source-label">Reference source · characters {{ passage.reference_start }}–{{ passage.reference_end }}</div>
+          <p>{{ result.reference_document.extracted_text[passage.reference_start:passage.reference_end] }}</p>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="small muted">No matching N-gram passages were identified for this source.</p>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </section>
+{% endif %}
+{% endblock %}

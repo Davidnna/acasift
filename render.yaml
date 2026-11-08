@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: acasift
+    runtime: python
+    plan: free
+    branch: main
+    buildCommand: python -m pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: flask --app run.py init-db && gunicorn run:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: NGRAM_SIZE
+        value: "5"
+      - key: MAX_COMPARISON_SOURCES
+        value: "50"
+      - key: MAX_CONTENT_LENGTH_MB
+        value: "15"
+      - key: SESSION_COOKIE_SECURE
+        value: "true"

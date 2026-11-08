@@ -1,0 +1,6 @@
+SAMPLE REFERENCE DOCUMENT B — SYNTHETIC TEST TEXT
+
+A database management system is software that allows users to define, create, maintain
+and control access to a database. Relational database systems organise information into
+tables consisting of rows and columns. Structured Query Language is commonly used to
+retrieve, insert, update and delete records stored in relational databases.

@@ -1,0 +1,7 @@
+SAMPLE REFERENCE DOCUMENT A — SYNTHETIC TEST TEXT
+
+Artificial intelligence is a branch of computer science concerned with the development
+of systems that perform tasks commonly associated with human intelligence. These tasks
+include learning, reasoning, problem solving, perception and language understanding.
+Machine learning is an important area of artificial intelligence because it enables
+computer systems to identify patterns from data and improve their performance.

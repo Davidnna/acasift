@@ -63,3 +63,19 @@
 - Removed the unsupported `viewTransition` prop from the React Router `fetcher.Form` used for sign-out.
 - Kept View Transitions enabled on supported `Link`, `NavLink`, and route `Form` navigation elements.
 - No backend or database changes.
+
+
+# AcaSift 0.3.4 release notes
+
+## Deliberate scrolling and slower transitions
+
+- Reworked scroll-to-top timing: travel duration now scales with distance and is capped at 2.8 seconds.
+- Changed the scroll easing curve to a sine ease-in-out for a gentler start and finish.
+- Disabled browser history scroll restoration so it cannot override AcaSift's route scroll behaviour.
+- Started route scroll handling after the destination route commits to the DOM.
+- Used the document's root scrolling element for frame-by-frame positioning.
+- Increased route View Transition timing to approximately 0.95 seconds.
+- Increased the floating scroll control's entrance/exit timing and refined its hover response.
+- Slowed common button, card, sidebar and link feedback transitions.
+- Preserved manual interruption and `prefers-reduced-motion` support.
+- No backend, authentication or database changes.

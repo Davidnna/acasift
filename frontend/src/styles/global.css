@@ -17,18 +17,88 @@
 @media(max-width:420px){.hero-actions{flex-direction:column;align-items:stretch}.hero-actions .button{width:100%}.hero-art{min-height:335px}.report-window{padding:14px}.floating-tag{font-size:9px;padding:8px 9px}.tag-top{top:20px}.tag-bottom{bottom:20px}.integrity-panel{grid-template-columns:1fr}.integrity-panel>.button{grid-column:1}.footer-grid{grid-template-columns:1fr}.footer-about{grid-column:auto}.public-actions .button{padding:8px 9px}.app-topbar .brand-word span{display:none}}
 
 
-/* AcaSift 0.3.2: smooth route View Transitions and controlled scrolling */
-.route-transition{min-height:100vh;view-transition-name:acasift-page;isolation:isolate}
-::view-transition-old(acasift-page){animation:acasift-page-out .22s cubic-bezier(.4,0,1,1) both}
-::view-transition-new(acasift-page){animation:acasift-page-in .52s cubic-bezier(.22,1,.36,1) both}
-@keyframes acasift-page-out{to{opacity:0;transform:translate3d(0,-5px,0);filter:blur(1.5px)}}
-@keyframes acasift-page-in{from{opacity:0;transform:translate3d(0,13px,0);filter:blur(2px)}to{opacity:1;transform:translate3d(0,0,0);filter:blur(0)}}
-@supports not (view-transition-name:acasift-page){.route-transition{animation:acasift-page-fallback .48s cubic-bezier(.22,1,.36,1) both}}
-@keyframes acasift-page-fallback{from{opacity:0;transform:translate3d(0,12px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
-.scroll-top-button{position:fixed;right:clamp(16px,3vw,30px);bottom:clamp(16px,3vw,30px);z-index:1200;width:46px;height:46px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.2);border-radius:50%;background:var(--navy);color:#fff;box-shadow:0 8px 24px rgba(20,36,61,.22);opacity:0;visibility:hidden;pointer-events:none;transform:translate3d(0,18px,0) scale(.9);transition:opacity .38s cubic-bezier(.22,1,.36,1),transform .48s cubic-bezier(.22,1,.36,1),visibility 0s linear .38s,background-color .24s ease,border-color .24s ease}
-.scroll-top-button.is-visible{opacity:1;visibility:visible;pointer-events:auto;transform:translate3d(0,0,0) scale(1);transition:opacity .38s cubic-bezier(.22,1,.36,1),transform .48s cubic-bezier(.22,1,.36,1),visibility 0s,background-color .24s ease,border-color .24s ease}
-.scroll-top-button:hover{background:var(--teal-dark);border-color:rgba(255,255,255,.35);transform:translate3d(0,-3px,0) scale(1.04)}
+/* AcaSift 0.3.4 — slower, more deliberate navigation and motion */
+.route-transition{
+  min-height:100vh;
+  view-transition-name:acasift-page;
+  isolation:isolate;
+}
+::view-transition-group(acasift-page){
+  animation-duration:.95s;
+  animation-timing-function:cubic-bezier(.22,1,.36,1);
+}
+::view-transition-old(acasift-page){
+  animation:acasift-page-out .42s cubic-bezier(.4,0,.2,1) both;
+}
+::view-transition-new(acasift-page){
+  animation:acasift-page-in .95s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes acasift-page-out{
+  from{opacity:1;transform:translate3d(0,0,0)}
+  to{opacity:0;transform:translate3d(0,-9px,0)}
+}
+@keyframes acasift-page-in{
+  from{opacity:0;transform:translate3d(0,20px,0)}
+  to{opacity:1;transform:translate3d(0,0,0)}
+}
+@supports not (view-transition-name:acasift-page){
+  .route-transition{animation:acasift-page-fallback .9s cubic-bezier(.22,1,.36,1) both}
+}
+@keyframes acasift-page-fallback{
+  from{opacity:0;transform:translate3d(0,18px,0)}
+  to{opacity:1;transform:translate3d(0,0,0)}
+}
+
+/* The floating control has a slower entrance, exit and hover response. */
+.scroll-top-button{
+  position:fixed;
+  right:clamp(16px,3vw,30px);
+  bottom:clamp(16px,3vw,30px);
+  z-index:1200;
+  width:48px;
+  height:48px;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(255,255,255,.2);
+  border-radius:50%;
+  background:var(--navy);
+  color:#fff;
+  box-shadow:0 8px 24px rgba(20,36,61,.22);
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transform:translate3d(0,22px,0) scale(.88);
+  transition:opacity .55s cubic-bezier(.22,1,.36,1),transform .72s cubic-bezier(.22,1,.36,1),visibility 0s linear .55s,background-color .35s ease,border-color .35s ease,box-shadow .35s ease;
+}
+.scroll-top-button.is-visible{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transform:translate3d(0,0,0) scale(1);
+  transition:opacity .55s cubic-bezier(.22,1,.36,1),transform .72s cubic-bezier(.22,1,.36,1),visibility 0s,background-color .35s ease,border-color .35s ease,box-shadow .35s ease;
+}
+.scroll-top-button:hover{
+  background:var(--teal-dark);
+  border-color:rgba(255,255,255,.35);
+  box-shadow:0 12px 30px rgba(20,36,61,.27);
+  transform:translate3d(0,-4px,0) scale(1.045);
+}
 .scroll-top-button:active{transform:translate3d(0,0,0) scale(.96)}
 .scroll-top-button:focus-visible{outline:3px solid rgba(24,169,153,.38);outline-offset:4px}
-@media(max-width:760px){.scroll-top-button{width:43px;height:43px;right:16px;bottom:16px}}
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}::view-transition-old(acasift-page),::view-transition-new(acasift-page){animation:none!important}.route-transition{animation:none!important}.scroll-top-button{transition:none!important}*,*::before,*::after{scroll-behavior:auto!important}}
+
+/* Make common interface feedback noticeable without making controls sluggish. */
+.button{transition:background-color .3s cubic-bezier(.22,1,.36,1),border-color .3s cubic-bezier(.22,1,.36,1),color .3s cubic-bezier(.22,1,.36,1),box-shadow .35s cubic-bezier(.22,1,.36,1),transform .3s cubic-bezier(.22,1,.36,1)}
+.signin-link{transition:color .3s ease}
+.feature-card{transition:transform .38s cubic-bezier(.22,1,.36,1),box-shadow .4s ease,border-color .35s ease}
+.sidebar-link{transition:color .3s ease,background-color .3s ease,transform .3s cubic-bezier(.22,1,.36,1)}
+.workspace-sidebar{transition:transform .38s cubic-bezier(.22,1,.36,1),box-shadow .38s ease}
+.text-link{transition:gap .3s cubic-bezier(.22,1,.36,1),color .3s ease}
+.public-nav a,.footer-links a,.sidebar-help{transition:color .3s ease,background-color .3s ease}
+@media(max-width:760px){.scroll-top-button{width:45px;height:45px;right:16px;bottom:16px}}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto!important}
+  ::view-transition-old(acasift-page),::view-transition-new(acasift-page){animation:none!important}
+  .route-transition{animation:none!important}
+  .scroll-top-button,.button,.signin-link,.feature-card,.sidebar-link,.workspace-sidebar,.text-link,.public-nav a,.footer-links a,.sidebar-help{transition:none!important}
+  *,*::before,*::after{scroll-behavior:auto!important}
+}

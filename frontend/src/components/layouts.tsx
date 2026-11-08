@@ -4,7 +4,7 @@ import {
   FileSearch, Files, Gauge, HelpCircle, LayoutDashboard, LogOut, Menu,
   Settings2, ShieldCheck, Upload, Users, X, ArrowUp,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import type { User } from '../types';
 
@@ -19,28 +19,29 @@ function Brand({ inverse = false }: { inverse?: boolean }) {
 
 function animateWindowScroll(targetY: number): () => void {
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const startY = window.scrollY || document.documentElement.scrollTop;
-  const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  const scrollingElement = document.scrollingElement ?? document.documentElement;
+  const startY = window.scrollY || scrollingElement.scrollTop;
+  const maxY = Math.max(0, scrollingElement.scrollHeight - window.innerHeight);
   const endY = Math.max(0, Math.min(targetY, maxY));
   const distance = endY - startY;
 
   if (reducedMotion || Math.abs(distance) < 1) {
-    window.scrollTo({ top: endY, left: 0, behavior: 'auto' });
+    scrollingElement.scrollTop = endY;
     return () => undefined;
   }
 
-  // A controlled animation is more consistent than relying on browser-specific
-  // native smooth-scroll timing, especially on long pages and mobile devices.
-  const duration = Math.min(1050, Math.max(560, Math.abs(distance) * 0.42));
+  // Longer journeys receive proportionally more time. The previous 560–1050ms
+  // cap made a full-page return feel abrupt on tall pages.
+  const duration = Math.min(2800, Math.max(1050, Math.abs(distance) * 0.78));
   let frameId = 0;
-  let startTime = 0;
+  let startTime: number | null = null;
   let cancelled = false;
 
   const cleanup = () => {
     if (frameId) cancelAnimationFrame(frameId);
-    window.removeEventListener('wheel', cancel, { capture: true });
-    window.removeEventListener('touchstart', cancel, { capture: true });
-    window.removeEventListener('pointerdown', cancel, { capture: true });
+    window.removeEventListener('wheel', cancel, true);
+    window.removeEventListener('touchstart', cancel, true);
+    window.removeEventListener('pointerdown', cancel, true);
     window.removeEventListener('keydown', cancelForKeyboard);
   };
 
@@ -63,20 +64,17 @@ function animateWindowScroll(targetY: number): () => void {
 
   const tick = (now: number) => {
     if (cancelled) return;
-    if (!startTime) startTime = now;
+    if (startTime === null) startTime = now;
 
     const progress = Math.min(1, (now - startTime) / duration);
-    // Ease-in-out cubic: gradual acceleration and deceleration at both ends.
-    const eased = progress < 0.5
-      ? 4 * progress * progress * progress
-      : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-    window.scrollTo({ top: startY + distance * eased, left: 0, behavior: 'auto' });
+    // Sine ease-in-out gives the movement a gentle take-off and landing.
+    const eased = -(Math.cos(Math.PI * progress) - 1) / 2;
+    scrollingElement.scrollTop = startY + distance * eased;
 
     if (progress < 1) {
       frameId = requestAnimationFrame(tick);
     } else {
-      window.scrollTo({ top: endY, left: 0, behavior: 'auto' });
+      scrollingElement.scrollTop = endY;
       cancelled = true;
       cleanup();
     }
@@ -85,7 +83,6 @@ function animateWindowScroll(targetY: number): () => void {
   frameId = requestAnimationFrame(tick);
   return cancel;
 }
-
 function ScrollToTopButton() {
   const [visible, setVisible] = useState(false);
   const cancelScroll = useRef<(() => void) | null>(null);
@@ -123,20 +120,37 @@ export function RootLayout() {
   const location = useLocation();
   const cancelScroll = useRef<(() => void) | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const previousRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+    return () => {
+      window.history.scrollRestoration = previousRestoration;
+    };
+  }, []);
+
+  useLayoutEffect(() => {
     cancelScroll.current?.();
 
-    if (location.hash) {
-      const targetId = decodeURIComponent(location.hash.slice(1));
-      const target = document.getElementById(targetId);
-      if (target) {
-        cancelScroll.current = animateWindowScroll(target.getBoundingClientRect().top + window.scrollY);
-        return () => cancelScroll.current?.();
+    // Wait until the destination route has committed before measuring its
+    // document height. This avoids racing route rendering and history updates.
+    const frameId = requestAnimationFrame(() => {
+      if (location.hash) {
+        const targetId = decodeURIComponent(location.hash.slice(1));
+        const target = document.getElementById(targetId);
+        if (target) {
+          const targetY = target.getBoundingClientRect().top + window.scrollY;
+          cancelScroll.current = animateWindowScroll(targetY);
+          return;
+        }
       }
-    }
 
-    cancelScroll.current = animateWindowScroll(0);
-    return () => cancelScroll.current?.();
+      cancelScroll.current = animateWindowScroll(0);
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      cancelScroll.current?.();
+    };
   }, [location.key, location.hash]);
 
   return <>
@@ -147,7 +161,6 @@ export function RootLayout() {
     <ScrollToTopButton />
   </>;
 }
-
 export function PublicLayout() {
   const user = useLoaderData() as User | null;
   const [menuOpen, setMenuOpen] = useState(false);

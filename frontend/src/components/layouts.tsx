@@ -1,10 +1,10 @@
-import { useFetcher, useLoaderData, useNavigation, useRouteError, Outlet, NavLink, Link } from 'react-router-dom';
+import { useFetcher, useLoaderData, useNavigation, useRouteError, Outlet, NavLink, Link, useLocation } from 'react-router-dom';
 import {
   Activity, ArrowUpRight, BookOpen, ChevronDown, CircleHelp, FileCheck2,
   FileSearch, Files, Gauge, HelpCircle, LayoutDashboard, LogOut, Menu,
-  Settings2, ShieldCheck, Upload, Users, X,
+  Settings2, ShieldCheck, Upload, Users, X, ArrowUp,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import type { User } from '../types';
 
@@ -17,11 +17,64 @@ function Brand({ inverse = false }: { inverse?: boolean }) {
   );
 }
 
+function ScrollToTopButton() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const updateVisibility = () => setVisible(window.scrollY > 360);
+    updateVisibility();
+    window.addEventListener('scroll', updateVisibility, { passive: true });
+    return () => window.removeEventListener('scroll', updateVisibility);
+  }, []);
+
+  const scrollToTop = () => {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, left: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+  };
+
+  return <button
+    type="button"
+    className={`scroll-top-button ${visible ? 'is-visible' : ''}`}
+    onClick={scrollToTop}
+    aria-label="Scroll to top"
+    title="Scroll to top"
+    aria-hidden={!visible}
+    tabIndex={visible ? 0 : -1}
+  >
+    <ArrowUp size={19} strokeWidth={2.4} aria-hidden="true" />
+  </button>;
+}
+
 export function RootLayout() {
   const navigation = useNavigation();
+  const location = useLocation();
+
+  useEffect(() => {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (location.hash) {
+      const targetId = decodeURIComponent(location.hash.slice(1));
+      const target = document.getElementById(targetId);
+      if (target) {
+        target.scrollIntoView({
+          behavior: reduceMotion ? 'auto' : 'smooth',
+          block: 'start',
+        });
+        return;
+      }
+    }
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: reduceMotion ? 'auto' : 'smooth',
+    });
+  }, [location.pathname, location.search, location.hash]);
+
   return <>
     {navigation.state !== 'idle' && <div className="navigation-progress"><span /></div>}
-    <Outlet />
+    <div key={location.pathname} className="route-transition">
+      <Outlet />
+    </div>
+    <ScrollToTopButton />
   </>;
 }
 

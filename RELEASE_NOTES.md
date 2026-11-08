@@ -1,4 +1,4 @@
-# AcaSift 0.3.0 release notes
+# AcaSift 0.3.1 release notes
 
 ## React frontend migration
 
@@ -34,3 +34,12 @@
   `npm run build` during deployment.
 - Flask runtime tests: included in `tests/`, but not executed here because Flask dependencies
   are not installed in this environment.
+
+
+## Navigation, scrolling and transitions
+
+- Added route-aware scroll-to-top behaviour for public, login and authenticated pages.
+- Added a floating scroll-to-top button that appears after 360px of scrolling.
+- Added a restrained fade-and-rise page-entry transition on route changes.
+- Added keyboard focus styling and accessible labelling for the scroll control.
+- Respected `prefers-reduced-motion` for route transitions and scrolling.

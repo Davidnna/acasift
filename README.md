@@ -1,4 +1,4 @@
-# AcaSift 0.3.0 — React + Flask academic similarity analysis
+# AcaSift 0.3.1 — React + Flask academic similarity analysis
 
 **Tagline:** Find the overlap. Follow the source.
 
@@ -209,3 +209,11 @@ permanent records or offered for download.
 - Add pagination, retention controls and downloadable reports.
 - Evaluate precision, recall, F1-score and processing time using a labelled test corpus.
 - Consider background processing and indexed candidate retrieval for larger repositories.
+
+
+## 11. Navigation and motion (0.3.1)
+
+- Route changes return the viewport to the top; in-page hash links scroll to their target.
+- A floating scroll-to-top control appears after the visitor scrolls 360 pixels.
+- Public and workspace routes use a short fade-and-rise page-entry transition.
+- Smooth scrolling and transitions respect the operating system's reduced-motion preference.

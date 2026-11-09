@@ -9,7 +9,7 @@ export function WorkspaceReferenceUploadPage() {
   return <>
     <PageHeading eyebrow="WORKSPACE REFERENCE COLLECTION" title="Add reference documents" description="Add sources that can be used when analysing submissions in your active workspace." action={<Link className="button button-secondary" to="/app/workspaces"><ArrowLeft size={15}/> Back to workspaces</Link>} />
     <section className="panel form-panel">
-      <div className="panel-heading"><div><h2><BookOpen size={18}/> Reference document details</h2><p>These references remain private in an individual workspace or shared with members of an organisational workspace.</p></div></div>
+      <div className="panel-heading"><div><h2><BookOpen size={18}/> Reference document details</h2><p>These references remain private in your personal workspace or are shared with authorised members of this shared workspace.</p></div></div>
       {actionData?.error && <Notice tone="danger">{actionData.error}</Notice>}
       <Form method="post" encType="multipart/form-data" className="form-stack">
         <label htmlFor="title">Document title <span>Optional</span></label><input id="title" name="title" maxLength={255} placeholder="e.g. Research methodology handbook"/>

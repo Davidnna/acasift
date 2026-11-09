@@ -84,18 +84,48 @@ export interface AccountData {
 export interface WorkspaceRecord {
   id: number;
   name: string;
-  type: 'personal' | 'organization';
+  description: string | null;
+  type: 'personal' | 'shared';
   status: string;
   role: 'owner' | 'admin' | 'lecturer' | 'student' | 'member' | null;
+  is_owner: boolean;
+  member_count: number;
   created_at: string;
+}
+
+export interface WorkspaceInviteRecord {
+  id: number;
+  role: 'member' | 'student' | 'lecturer';
+  course_id: number | null;
+  course_title: string | null;
+  course_code: string | null;
+  status: 'active' | 'revoked' | 'expired' | 'used_up';
+  expires_at: string | null;
+  max_uses: number | null;
+  use_count: number;
+  created_at: string;
+  created_by: string | null;
 }
 
 export interface WorkspaceData {
   active_workspace_id: number;
   workspaces: WorkspaceRecord[];
-  pending_request: { id: number; organization_name: string; status: string; created_at: string } | null;
+  pending_request: null;
   can_manage_members: boolean;
+  is_workspace_owner: boolean;
   members: { id: number; full_name: string; email: string; role: string }[];
+  invites: WorkspaceInviteRecord[];
+  courses: { id: number; code: string; title: string; status: string }[];
+}
+
+export interface WorkspaceInvitePreviewData {
+  workspace: WorkspaceRecord;
+  role: 'member' | 'student' | 'lecturer';
+  course: { id: number; code: string; title: string } | null;
+  expires_at: string | null;
+  is_member: boolean;
+  is_course_member: boolean;
+  invited_by: string;
 }
 
 export interface WorkspaceRequestRecord {
@@ -126,7 +156,7 @@ export interface CourseRecord {
 }
 
 export interface CourseListData {
-  workspace: { id: number; name: string; type: 'personal' | 'organization' };
+  workspace: { id: number; name: string; type: 'personal' | 'shared' };
   courses: CourseRecord[];
   can_create: boolean;
   can_join: boolean;

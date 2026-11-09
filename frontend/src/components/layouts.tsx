@@ -2,7 +2,7 @@ import { useFetcher, useLoaderData, useNavigation, useRouteError, Outlet, NavLin
 import {
   Activity, ArrowUpRight, BookOpen, ChevronDown, CircleHelp, ClipboardList, FileCheck2,
   FileSearch, Files, Gauge, HelpCircle, LayoutDashboard, LogOut, Menu,
-  Settings2, ShieldCheck, Upload, Users, X, ArrowUp, Layers3, Building2,
+  Settings2, ShieldCheck, Upload, Users, X, ArrowUp, Layers3,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
@@ -215,7 +215,6 @@ const adminLinks: { to: string; label: string; icon: LucideIcon; end?: boolean }
   { to: '/app/admin/references', label: 'Reference repository', icon: BookOpen, end: true },
   { to: '/app/admin/references/new', label: 'Add reference', icon: FileCheck2, end: true },
   { to: '/app/admin/users', label: 'Manage users', icon: Users, end: true },
-  { to: '/app/admin/workspace-requests', label: 'Workspace requests', icon: Building2, end: true },
 ];
 
 export function AppLayout() {

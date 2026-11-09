@@ -245,3 +245,30 @@
 @media(max-width:900px){.academic-detail-grid{grid-template-columns:1fr}.academic-course-grid,.academic-assignment-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.academic-course-grid,.academic-assignment-grid{grid-template-columns:1fr}.academic-form-grid{grid-template-columns:1fr}.academic-fact-list{grid-template-columns:1fr}.join-code-panel{align-items:flex-start;flex-direction:column}.academic-analysis-banner{align-items:flex-start;flex-direction:column}.academic-analysis-banner .button{width:100%}.academic-submission-row{flex-wrap:wrap}.academic-submission-copy{flex-basis:calc(100% - 60px)}.academic-submission-row .status-pill{margin-left:45px}.academic-submission-row .text-link{margin-left:auto}.section-heading-inline{align-items:flex-start}.academic-context-strip{align-items:flex-start}.academic-report-overview>div{border-bottom:1px solid var(--line)}}
 .academic-status-form{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.academic-status-form select{min-width:240px;border:1px solid #dfe6ee;border-radius:8px;background:#fff;padding:10px 12px;color:var(--ink);font-size:11px}
+
+
+/* AcaSift 0.7.0 — flexible shared workspaces and invitation links */
+.workspace-invite-created{border-color:rgba(24,169,153,.38);background:linear-gradient(135deg,#f3fbf9 0%,#fff 72%)}
+.workspace-invite-row,.workspace-member-row{gap:12px;flex-wrap:wrap}
+.workspace-invite-icon,.workspace-invite-preview-icon{width:40px;height:40px;flex:0 0 40px;border-radius:12px;display:grid;place-items:center;background:#eaf7f5;color:var(--teal-dark)}
+.workspace-member-role-form{display:flex;align-items:center;gap:7px;margin-left:auto}
+.workspace-member-role-form select{min-width:115px;max-width:150px;padding:8px 10px;font-size:11px}
+.status-active{background:#eaf7f1;color:#237a52}
+.workspace-invite-preview{max-width:640px;margin:0 auto;padding:25px}
+.workspace-invite-preview-icon{width:52px;height:52px;margin-bottom:15px}
+.workspace-invite-preview h2{font-size:22px;margin:0 0 8px;color:var(--navy)}
+.workspace-invite-preview>p{color:var(--muted);font-size:13px;line-height:1.65}
+.workspace-invite-preview .academic-fact-list{grid-template-columns:1fr;gap:0;margin:20px 0}
+.workspace-invite-preview .academic-fact-list>div{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line)}
+.workspace-invite-preview .academic-fact-list strong{text-align:right}
+.workspace-invite-preview .form-hint{display:flex;align-items:flex-start;gap:7px;margin-top:16px}
+.workspace-invite-preview .button-block{width:100%;justify-content:center}
+.workspace-invite-created .form-stack{max-width:680px}
+.workspace-member-row .account-row-copy{min-width:150px}
+@media(max-width:700px){
+  .workspace-member-role-form{width:100%;margin-left:50px}
+  .workspace-member-role-form select{flex:1;max-width:none}
+  .workspace-invite-row .category-tag{margin-left:50px}
+}
+
+.panel-divider{height:1px;background:var(--line);margin:22px 0}

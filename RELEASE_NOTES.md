@@ -245,3 +245,61 @@
 - TypeScript/TSX syntax transpilation passed.
 - Backend regression tests added for course creation, role enforcement, enrolment, assignment submission, peer comparison, privacy, cohort reanalysis and lecturer assessment.
 - Full Flask integration tests and full TypeScript project type-check could not be executed in the authoring environment because Flask/Flask-SQLAlchemy and frontend npm dependencies were unavailable. They must be verified by the deployment build and the included test suite.
+
+
+# AcaSift 0.7.0 — Flexible shared workspaces
+
+## Workspace model
+- Replaces the organisation-specific workspace concept with a generic shared workspace.
+- Any verified account can create a shared workspace without institutional information or
+  platform-admin approval.
+- Existing `organization` workspace rows are migrated in place to `shared`; IDs and related
+  academic data remain unchanged.
+- Adds workspace descriptions and member counts.
+- Preserves private personal workspaces.
+
+## Roles and membership
+- Supports an owner and multiple administrators in each shared workspace.
+- Only the owner can appoint, change or remove administrators.
+- Workspace administrators can manage ordinary members and invitation links.
+- Adds member-role updates and member removal endpoints.
+- Platform administrator privileges remain separate from workspace roles.
+
+## Invitation links
+- Adds cryptographically random invitation tokens with SHA-256 hashes stored in the database.
+- Supports Member, Student and Lecturer invitation roles.
+- Supports optional course-scoped invitations that automatically create matching course
+  membership for Student or Lecturer recipients.
+- Supports optional expiration date/time and optional maximum-use counts.
+- Supports immediate revocation.
+- Requires recipients to sign in or register and verify their email before joining.
+- Invitation links cannot grant administrator or owner privileges.
+- Adds invite preview and acceptance routes and a React invitation landing page.
+
+## Academic workflow
+- Course creation and enrolment now operate in shared workspaces rather than requiring an
+  approved organisational workspace.
+- Student invitations establish workspace membership; course enrolment remains a separate
+  course-level permission step through course codes or lecturer assignment.
+- Existing assignments, submissions, similarity comparisons and assessment records are retained.
+
+## Deployment and migration
+- Adds the `workspace_invites` table through SQLAlchemy `create_all()`.
+- Adds `workspaces.description` when missing.
+- Updates legacy `organization` workspace types to `shared`.
+- No manual Neon SQL or new Render environment variables are required.
+- Existing Nylas email configuration is unchanged.
+
+## Security notes
+- Invite secrets are returned only once when generated; only token hashes are persisted.
+- Invite expiration, revocation and usage limits are checked on both preview and acceptance.
+- Acceptance is rate-limited and protected by authenticated session + CSRF.
+- Open invitation links grant only member/student/lecturer roles.
+- Workspace isolation and course-level access checks remain in force.
+
+## Validation notes
+- Added regression tests for shared workspace creation, hashed invitation tokens, invitation
+  preview, acceptance, usage limits, expiration, revocation and administrator privilege control.
+- Python and TypeScript source validation plus the Render Docker production build should be run
+  before treating this release as deployed. Full runtime integration depends on the configured
+  Flask and frontend dependencies.

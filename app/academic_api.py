@@ -181,7 +181,7 @@ def _make_join_code():
 
 def _workspace_can_create(workspace, membership):
     return bool(
-        workspace.workspace_type == "organization"
+        workspace.workspace_type == "shared"
         and membership
         and membership.role in {"owner", "admin", "lecturer"}
     )
@@ -212,8 +212,8 @@ def list_courses():
         "workspace": {"id": workspace.workspace_id, "name": workspace.name, "type": workspace.workspace_type},
         "courses": courses,
         "can_create": can_create,
-        "can_join": bool(workspace.workspace_type == "organization" and workspace_membership and workspace_membership.role == "student"),
-        "message": None if workspace.workspace_type == "organization" else "Switch to an approved organisational workspace to access courses.",
+        "can_join": bool(workspace.workspace_type == "shared" and workspace_membership and workspace_membership.role == "student"),
+        "message": None if workspace.workspace_type == "shared" else "Create or join a shared workspace to use courses and assignments.",
     })
 
 
@@ -223,7 +223,7 @@ def create_course():
     workspace = get_active_workspace(current_user)
     workspace_membership = membership_for(current_user, workspace.workspace_id)
     if not _workspace_can_create(workspace, workspace_membership):
-        return _error("Only workspace owners, administrators and lecturers can create courses in an organisational workspace.", 403)
+        return _error("Only workspace owners, administrators and lecturers can create courses in a shared workspace.", 403)
     data = request.get_json(silent=True) or {}
     code = str(data.get("code", "")).strip().upper()
     title = str(data.get("title", "")).strip()
@@ -277,8 +277,8 @@ def join_course():
         return response
     workspace = get_active_workspace(current_user)
     workspace_membership = membership_for(current_user, workspace.workspace_id)
-    if workspace.workspace_type != "organization" or not workspace_membership or workspace_membership.role != "student":
-        return _error("You must be a student member of an organisational workspace before joining a course.", 403)
+    if workspace.workspace_type != "shared" or not workspace_membership or workspace_membership.role != "student":
+        return _error("You must join a shared workspace with the Student role before joining a course.", 403)
     data = request.get_json(silent=True) or {}
     code = re.sub(r"\s+", "", str(data.get("join_code", ""))).upper()
     if not re.fullmatch(r"[A-F0-9]{16}", code):
@@ -373,7 +373,7 @@ def add_course_member(course_id):
         workspace_id=course.workspace_id, user_id=target.user_id, status="active"
     ).first()
     if not target_workspace_membership:
-        return _error("This person must first be added to the organisational workspace.", 409)
+        return _error("This person must first be a member of the shared workspace.", 409)
     if target_workspace_membership.role not in {role, "owner", "admin"}:
         return _error(f"The person's workspace role must be {role} before adding them to the course.", 409)
     existing = CourseMembership.query.filter_by(course_id=course.course_id, user_id=target.user_id).first()

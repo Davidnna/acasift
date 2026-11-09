@@ -1,48 +1,192 @@
+import { useState } from 'react';
 import { Form, Link, useActionData, useLoaderData, useNavigation } from 'react-router-dom';
-import { Building2, Layers3, Users, BookOpen } from 'lucide-react';
+import {
+  Layers3, Users, BookOpen, Copy, Link2, ShieldCheck,
+  Clock3, Ban, UserPlus, Plus,
+} from 'lucide-react';
 import { Notice, PageHeading } from '../components/ui';
 import type { WorkspaceData } from '../types';
 
+type WorkspaceActionData = {
+  error?: string;
+  success?: string;
+  inviteUrl?: string;
+};
+
+function displayDate(value: string | null) {
+  return value ? new Date(value).toLocaleString() : 'No expiration';
+}
+
 export function WorkspacesPage() {
   const data = useLoaderData() as WorkspaceData;
-  const actionData = useActionData() as { error?: string; success?: string } | undefined;
+  const actionData = useActionData() as WorkspaceActionData | undefined;
   const navigation = useNavigation();
   const busy = navigation.state === 'submitting';
+  const [copied, setCopied] = useState(false);
+  const [inviteRole, setInviteRole] = useState('member');
   const active = data.workspaces.find(item => item.id === data.active_workspace_id);
+  const isShared = active?.type === 'shared';
+
+  async function copyInvite() {
+    if (!actionData?.inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(actionData.inviteUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   return <>
-    <PageHeading eyebrow="WORKSPACE MANAGEMENT" title="Your workspaces" description="Keep individual work private and collaborate through approved organisational workspaces." />
+    <PageHeading
+      eyebrow="WORKSPACE MANAGEMENT"
+      title="Your workspaces"
+      description="Keep personal work private or create shared spaces for any group, class, project or team."
+    />
     {actionData?.error && <Notice tone="danger">{actionData.error}</Notice>}
     {actionData?.success && <Notice tone="success">{actionData.success}</Notice>}
+    {actionData?.inviteUrl && <section className="panel workspace-invite-created">
+      <div className="panel-heading">
+        <div><h2><Link2 size={17}/> Invitation link created</h2><p>Copy and share this link. It will only work while it remains active.</p></div>
+      </div>
+      <div className="form-stack">
+        <input aria-label="Workspace invitation URL" readOnly value={actionData.inviteUrl} onFocus={event => event.currentTarget.select()} />
+        <button type="button" className="button button-primary" onClick={copyInvite}>
+          <Copy size={15}/> {copied ? 'Copied' : 'Copy invitation link'}
+        </button>
+      </div>
+      <p className="form-hint">For security, the invitation secret is stored as a hash and cannot be displayed again after this response. Create another link if you lose this one.</p>
+    </section>}
+
     <section className="panel">
-      <div className="panel-heading"><div><h2><Layers3 size={17}/> Available workspaces</h2><p>Choose where new documents and comparisons should be stored.</p></div></div>
+      <div className="panel-heading">
+        <div><h2><Layers3 size={17}/> Available workspaces</h2><p>Choose where new documents and comparisons should be stored.</p></div>
+      </div>
       <div className="workspace-card-list">
         {data.workspaces.map(workspace => <div className={`workspace-choice ${workspace.id === data.active_workspace_id ? 'workspace-choice-active' : ''}`} key={workspace.id}>
-          <div className="workspace-choice-icon">{workspace.type === 'organization' ? <Building2 size={19}/> : <Layers3 size={19}/>}</div>
-          <div className="workspace-choice-copy"><strong>{workspace.name}</strong><span>{workspace.type === 'personal' ? 'Private individual workspace' : 'Approved organisational workspace'} · {workspace.role}</span></div>
+          <div className="workspace-choice-icon">{workspace.type === 'shared' ? <Users size={19}/> : <Layers3 size={19}/>}</div>
+          <div className="workspace-choice-copy">
+            <strong>{workspace.name}</strong>
+            <span>{workspace.type === 'personal' ? 'Private personal workspace' : `Shared workspace · ${workspace.member_count} members`} · {workspace.role}</span>
+            {workspace.description && <span>{workspace.description}</span>}
+          </div>
           {workspace.id === data.active_workspace_id ? <span className="category-tag">Current workspace</span> : <Form method="post"><input type="hidden" name="_intent" value="switch"/><input type="hidden" name="workspace_id" value={workspace.id}/><button className="button button-secondary button-small" disabled={busy}>Switch workspace</button></Form>}
         </div>)}
       </div>
-      {active && <p className="form-hint">New submissions will be associated with <strong>{active.name}</strong>.</p>}
-      {data.can_manage_members && <div className="form-actions"><Link className="button button-secondary" to="/app/references/new"><BookOpen size={15}/> Add workspace reference</Link></div>}
+      {active && <p className="form-hint">New submissions and comparisons will be associated with <strong>{active.name}</strong>.</p>}
+      {data.can_manage_members && isShared && <div className="form-actions"><Link className="button button-secondary" to="/app/references/new"><BookOpen size={15}/> Add shared reference</Link></div>}
     </section>
+
     <div className="admin-content-grid">
       <section className="panel form-panel">
-        <div className="panel-heading"><div><h2><Building2 size={17}/> Request an organisational workspace</h2><p>For a university, school, research group, company or other organisation.</p></div></div>
-        {data.pending_request ? <Notice tone="info">Your request for <strong>{data.pending_request.organization_name}</strong> is awaiting review. You can submit another request after it has been reviewed.</Notice> : <Form method="post" className="form-stack">
-          <input type="hidden" name="_intent" value="request"/>
-          <label htmlFor="organization_name">Organisation name</label><input id="organization_name" name="organization_name" maxLength={180} required/>
-          <label htmlFor="organization_type">Organisation type</label><select id="organization_type" name="organization_type"><option value="university">University</option><option value="college">College</option><option value="school">School</option><option value="research_group">Research group</option><option value="company">Company</option><option value="other">Other</option></select>
-          <label htmlFor="website">Official website <span>Optional</span></label><input id="website" name="website" type="url" placeholder="https://example.org"/>
-          <label htmlFor="reason">How will the organisation use AcaSift?</label><textarea id="reason" name="reason" minLength={20} maxLength={2000} rows={4} required/>
-          <div className="form-hint">Requests are reviewed before an organisational workspace is activated.</div>
-          <button className="button button-primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit workspace request'}</button>
-        </Form>}
+        <div className="panel-heading">
+          <div><h2><Plus size={17}/> Create a shared workspace</h2><p>Start a space for a class, research group, project team, organisation or any other collaboration.</p></div>
+        </div>
+        <Form method="post" className="form-stack">
+          <input type="hidden" name="_intent" value="create"/>
+          <label htmlFor="workspace-name">Workspace name</label>
+          <input id="workspace-name" name="name" maxLength={180} required placeholder="e.g. CSC 401 Project Submissions"/>
+          <label htmlFor="workspace-description">Description <span>Optional</span></label>
+          <textarea id="workspace-description" name="description" rows={3} maxLength={2000} placeholder="What will this workspace be used for?"/>
+          <div className="form-hint">You will become the workspace owner. You can appoint additional administrators and invite as many collaborators as you need.</div>
+          <button className="button button-primary" disabled={busy}>{busy ? 'Creating workspace…' : 'Create shared workspace'} <Plus size={15}/></button>
+        </Form>
       </section>
-      {data.can_manage_members && active?.type === 'organization' && <section className="panel form-panel">
-        <div className="panel-heading"><div><h2><Users size={17}/> Workspace members</h2><p>{data.members.length} active members.</p></div></div>
-        <div className="account-list">{data.members.map(member => <div className="account-row" key={member.id}><span className="avatar">{member.full_name.slice(0,1)}</span><span className="account-row-copy"><strong>{member.full_name}</strong><small>{member.email}</small></span><span className="category-tag">{member.role}</span></div>)}</div>
-        <Form method="post" className="form-stack"><input type="hidden" name="_intent" value="add-member"/><label htmlFor="member_email">Existing AcaSift account email</label><input id="member_email" name="email" type="email" required/><label htmlFor="member_role">Workspace role</label><select id="member_role" name="role"><option value="student">Student</option><option value="lecturer">Lecturer</option><option value="member">Member</option><option value="admin">Workspace administrator</option></select><button className="button button-secondary" disabled={busy}>Add member</button></Form>
-      </section>}
+
+      {isShared && data.can_manage_members && <>
+        <section className="panel form-panel">
+          <div className="panel-heading">
+            <div><h2><Link2 size={17}/> Invite people with a link</h2><p>Anyone with the link can join while it is active.</p></div>
+          </div>
+          <Form method="post" className="form-stack">
+            <input type="hidden" name="_intent" value="create-invite"/>
+            <label htmlFor="invite-role">Role granted by this link</label>
+            <select id="invite-role" name="role" value={inviteRole} onChange={event => setInviteRole(event.target.value)}>
+              <option value="member">Member</option>
+              <option value="student">Student</option>
+              <option value="lecturer">Lecturer</option>
+            </select>
+            <label htmlFor="invite-course">Course access <span>Optional</span></label>
+            <select id="invite-course" name="course_id" defaultValue="" disabled={inviteRole === 'member'}>
+              <option value="">Workspace access only</option>
+              {data.courses.map(course => <option key={course.id} value={course.id}>{course.code} — {course.title}</option>)}
+            </select>
+            <p className="form-hint">Choose Student or Lecturer to enable course-specific invitations. Recipients are enrolled in the selected course automatically when they join.</p>
+            <label htmlFor="invite-expiry">Expiration date and time <span>Optional</span></label>
+            <input id="invite-expiry" name="expires_at" type="datetime-local"/>
+            <label htmlFor="invite-max-uses">Maximum number of uses <span>Optional</span></label>
+            <input id="invite-max-uses" name="max_uses" type="number" min="1" max="10000" placeholder="Leave blank for unlimited uses"/>
+            <div className="form-hint">Invitation links cannot grant administrator or owner privileges. The workspace owner can appoint administrators directly.</div>
+            <button className="button button-primary" disabled={busy}>{busy ? 'Creating link…' : 'Create invitation link'} <Link2 size={15}/></button>
+          </Form>
+        </section>
+
+        <section className="panel">
+          <div className="panel-heading">
+            <div><h2><Clock3 size={17}/> Invitation links</h2><p>{data.invites.length} links created for this workspace.</p></div>
+          </div>
+          {data.invites.length ? <div className="account-list">
+            {data.invites.map(invite => <div className="account-row workspace-invite-row" key={invite.id}>
+              <span className="workspace-invite-icon"><Link2 size={17}/></span>
+              <span className="account-row-copy">
+                <strong>{invite.role.charAt(0).toUpperCase() + invite.role.slice(1)} invitation</strong>
+                <small>{invite.use_count}{invite.max_uses === null ? ' uses' : ` of ${invite.max_uses} uses`}{invite.course_title ? ` · ${invite.course_code} — ${invite.course_title}` : ''} · Expires: {displayDate(invite.expires_at)}</small>
+              </span>
+              <span className={`category-tag ${invite.status === 'active' ? 'status-active' : ''}`}>{invite.status.replace('_', ' ')}</span>
+              {invite.status === 'active' && <Form method="post">
+                <input type="hidden" name="_intent" value="revoke-invite"/>
+                <input type="hidden" name="invite_id" value={invite.id}/>
+                <button className="button button-secondary button-small" disabled={busy}><Ban size={14}/> Revoke</button>
+              </Form>}
+            </div>)}
+          </div> : <p className="muted-note">No invitation links have been created yet.</p>}
+        </section>
+
+        <section className="panel">
+          <div className="panel-heading">
+            <div><h2><Users size={17}/> Workspace members</h2><p>{data.members.length} active members.</p></div>
+          </div>
+          <div className="account-list">
+            {data.members.map(member => <div className="account-row workspace-member-row" key={member.id}>
+              <span className="avatar">{member.full_name.slice(0,1).toUpperCase()}</span>
+              <span className="account-row-copy"><strong>{member.full_name}</strong><small>{member.email}</small></span>
+              <span className="category-tag">{member.role}</span>
+              {member.role !== 'owner' && (data.is_workspace_owner || member.role !== 'admin') && <>
+                <Form method="post" className="workspace-member-role-form">
+                  <input type="hidden" name="_intent" value="update-role"/>
+                  <input type="hidden" name="user_id" value={member.id}/>
+                  <select name="role" aria-label={`Role for ${member.full_name}`} defaultValue={member.role}>
+                    <option value="member">Member</option>
+                    <option value="student">Student</option>
+                    <option value="lecturer">Lecturer</option>
+                    {data.is_workspace_owner && <option value="admin">Administrator</option>}
+                  </select>
+                  <button className="button button-secondary button-small" disabled={busy}>Save</button>
+                </Form>
+                <Form method="post">
+                  <input type="hidden" name="_intent" value="remove-member"/>
+                  <input type="hidden" name="user_id" value={member.id}/>
+                  <button className="button button-secondary button-small" disabled={busy} title={`Remove ${member.full_name}`}><Ban size={14}/></button>
+                </Form>
+              </>}
+            </div>)}
+          </div>
+          <div className="form-actions"><ShieldCheck size={16}/><span className="form-hint">Only the workspace owner can appoint or remove administrators. Workspace administrators can manage ordinary members.</span></div>
+          <div className="panel-divider"/>
+          <div className="panel-heading"><div><h3><UserPlus size={16}/> Add an existing AcaSift user</h3><p>For people who already have an account.</p></div></div>
+          <Form method="post" className="form-stack">
+            <input type="hidden" name="_intent" value="add-member"/>
+            <label htmlFor="member-email">Email address</label><input id="member-email" name="email" type="email" required placeholder="person@example.com"/>
+            <label htmlFor="member-role">Workspace role</label>
+            <select id="member-role" name="role" defaultValue="member">
+              <option value="member">Member</option><option value="student">Student</option><option value="lecturer">Lecturer</option>
+              {data.is_workspace_owner && <option value="admin">Administrator</option>}
+            </select>
+            <button className="button button-secondary" disabled={busy}>Add member</button>
+          </Form>
+        </section>
+      </>}
     </div>
   </>;
 }

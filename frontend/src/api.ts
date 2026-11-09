@@ -5,6 +5,8 @@ import type {
   DocumentRecord,
   User,
   WorkspaceData,
+  WorkspaceInviteRecord,
+  WorkspaceInvitePreviewData,
   WorkspaceRequestRecord,
   CourseListData,
   CourseRecord,
@@ -183,6 +185,34 @@ export async function getWorkspaces(signal?: AbortSignal): Promise<WorkspaceData
 
 export async function switchWorkspace(workspace_id: number): Promise<void> {
   await request('/api/workspaces/current', { method: 'POST', body: JSON.stringify({ workspace_id }) });
+}
+
+export async function createSharedWorkspace(payload: { name: string; description: string }): Promise<{ workspace: WorkspaceData['workspaces'][number]; message: string }> {
+  return request('/api/workspaces', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function createWorkspaceInvite(workspaceId: number, payload: { role: string; course_id: number | null; expires_at: string | null; max_uses: number | null }): Promise<{ invite: WorkspaceInviteRecord; join_url: string; message: string }> {
+  return request(`/api/workspaces/${workspaceId}/invites`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function revokeWorkspaceInvite(workspaceId: number, inviteId: number): Promise<{ message: string }> {
+  return request(`/api/workspaces/${workspaceId}/invites/${inviteId}/revoke`, { method: 'POST', body: JSON.stringify({}) });
+}
+
+export async function getWorkspaceInvitePreview(token: string, signal?: AbortSignal): Promise<WorkspaceInvitePreviewData> {
+  return request(`/api/workspaces/invites/preview?token=${encodeURIComponent(token)}`, { signal });
+}
+
+export async function acceptWorkspaceInvite(token: string): Promise<{ message: string; workspace_id: number }> {
+  return request('/api/workspaces/invites/accept', { method: 'POST', body: JSON.stringify({ token }) });
+}
+
+export async function updateWorkspaceMemberRole(workspaceId: number, userId: number, role: string): Promise<{ message: string; role: string }> {
+  return request(`/api/workspaces/${workspaceId}/members/${userId}/role`, { method: 'POST', body: JSON.stringify({ role }) });
+}
+
+export async function removeWorkspaceMember(workspaceId: number, userId: number): Promise<{ message: string }> {
+  return request(`/api/workspaces/${workspaceId}/members/${userId}/remove`, { method: 'POST', body: JSON.stringify({}) });
 }
 
 export async function requestOrganizationWorkspace(payload: { organization_name: string; organization_type: string; website: string; reason: string }): Promise<void> {

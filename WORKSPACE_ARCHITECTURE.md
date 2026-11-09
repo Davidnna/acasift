@@ -1,48 +1,103 @@
-# AcaSift workspace architecture (0.5.0)
+# AcaSift 0.7.0 — Workspace architecture
 
-## Product model
+## 1. Workspace types
 
-AcaSift is institution-agnostic. A person can use an individual workspace without an institutional email, matriculation number, staff number or school affiliation. An organisation can request a separate shared workspace. A request remains pending until a platform administrator reviews it.
+AcaSift has two workspace types:
 
-## Roles
+- **Personal workspace**: created automatically for every account. Documents and comparisons
+  remain private to the user.
+- **Shared workspace**: created instantly by any verified account. It is a collaboration
+  container for a class, assignment cohort, research group, project, organisation or any group.
 
-### Platform role
+A shared workspace does not represent or require a registered institution. Name and description
+are user-defined. New shared workspaces do not require platform-administrator approval.
 
-- `user`: ordinary AcaSift account.
-- `admin`: AcaSift platform administrator. This role can review organisational workspace requests and manage platform-level reference sources and accounts.
+## 2. Workspace authority
 
-### Workspace membership role
+Each shared workspace has one owner and may have multiple administrators.
 
-- `owner`: controls the organisational workspace and membership.
-- `admin`: manages workspace membership.
-- `lecturer`: reserved for lecturer-facing academic workflows.
-- `student`: reserved for student-facing academic workflows.
-- `member`: ordinary workspace participant.
+| Role | Workspace permissions |
+|---|---|
+| Owner | Full control; appoint/change/remove administrators; manage members and invites |
+| Admin | Manage ordinary members and invitation links; manage shared workspace resources |
+| Lecturer | Create courses and manage courses to which they are assigned |
+| Student | Join courses and submit assignment work |
+| Member | Participate in ordinary shared workspace collaboration |
 
-A user's platform role and workspace role are separate. A user may be a lecturer in one workspace and a member in another.
+The platform administrator role is separate from workspace roles. An invitation link cannot grant
+owner or administrator access. A workspace owner can appoint an existing member as an admin after
+they join. An admin cannot appoint or remove another admin.
 
-## Workspace lifecycle
+## 3. Invitation links
 
-1. Every existing account receives one private personal workspace during the 0.5.0 migration.
-2. The user can submit an organisational workspace request with its name, type, website and intended use.
-3. The request remains pending. It does not create an active workspace.
-4. A platform administrator reviews the request and verifies that the requester is authorised to represent the organisation.
-5. Approval creates the organisation workspace and makes the requester its owner.
-6. The owner or a workspace administrator can add existing active AcaSift accounts and assign membership roles.
+A workspace owner or admin can create an invitation link for:
 
-## Data visibility rules in 0.5.0
+- Member
+- Student
+- Lecturer
 
-- A user's submissions are private to that user and their selected workspace.
-- A user sees their own submissions in the active workspace.
-- Platform-curated reference documents remain available as shared comparison sources.
-- Workspace-scoped reference documents are visible only to active members of that workspace. Workspace owners/admins can add references to an organisation workspace; personal workspace owners can add private references.
-- Private reference documents are visible only to their uploader.
-- Comparison reports are visible only to their owner in this release. Platform administrator status does not automatically grant access to another user's private report.
+Each invitation can have:
+- An optional expiration date and exact time.
+- An optional maximum-use count.
+- Unlimited uses when the maximum-use field is blank.
+- Immediate revocation by an owner or admin.
+- Optional access to one active course.
 
-## Deferred academic permissions
+A course-specific invitation must grant Student or Lecturer. Accepting it creates the workspace
+membership and the matching course membership in the same operation. This lets a lecturer create
+a shared workspace, create a course, generate a Student invitation for that course and share one
+link with a class. Students do not need to be entered one by one or separately type a course code.
 
-The `student` and `lecturer` workspace roles are stored now, but lecturer access to other members' submissions is intentionally not enabled yet. That permission must be implemented through course and assignment membership, with explicit assignment-level access checks. Student-to-student comparison (the selected Option C behaviour) will be introduced only after those boundaries exist.
+A workspace-only invitation joins the workspace but leaves course enrolment separate. This is
+useful for general collaboration spaces or workspaces containing several courses.
 
-## Migration safety
+### Token handling
 
-The startup migration is additive. It creates the new workspace tables, adds nullable workspace identifiers and visibility scopes to existing document/comparison tables, creates a personal workspace for each existing user, assigns legacy submissions and comparisons to their owner's personal workspace, and preserves existing administrator-curated reference documents as platform references. It does not delete users, documents, comparison results or reports.
+Invitation secrets are generated using a cryptographically secure random generator. The raw token
+is returned only once when the link is created. A SHA-256 hash is stored in PostgreSQL. Preview
+and acceptance check the hash, workspace status, revocation, expiration and use limit. Acceptance
+is authenticated, CSRF-protected and rate-limited.
+
+If a recipient is signed out, the invitation page redirects them to sign-in and preserves the
+invitation URL as the post-login destination. A new user must complete normal account registration
+and email verification before accepting. If the verification flow takes them away from the invite,
+they can reopen the original invitation link afterwards.
+
+## 4. Existing-workspace migration
+
+The 0.7.0 startup migration:
+1. Adds `workspaces.description` if it is missing.
+2. Changes existing `workspace_type='organization'` rows to `workspace_type='shared'`.
+3. Creates `workspace_invites` through SQLAlchemy `create_all()`.
+4. Adds `workspace_invites.course_id` if an earlier table exists without it.
+
+The migration preserves workspace IDs, owners, memberships, documents, comparisons, courses,
+assignments, submissions and assessments. Personal workspaces remain private. No manual SQL or
+new Render environment variables are required.
+
+## 5. Recommended lecturer workflow
+
+1. Create a shared workspace named for the class or assignment cohort.
+2. Create a course inside the shared workspace.
+3. Create an invitation link with the Student role.
+4. Select the course in the invitation form to enable automatic course enrolment.
+5. Optionally set an expiry date/time or maximum-use count.
+6. Share the link with the class.
+7. Students sign in or register, verify their email and accept the invitation.
+8. Create and publish assignments. Students submit their work from the assignment page.
+9. Run cohort analysis and review results.
+
+A lecturer who creates the workspace is its owner. A lecturer invited into another person's
+workspace can manage courses assigned to them; workspace owners/admins manage workspace-level
+invitation links and membership.
+
+## 6. Data boundaries
+
+- Personal documents remain private to their owners.
+- Shared workspace references are accessible only to active workspace members under the existing
+  reference permissions.
+- Course assignments and submissions remain scoped to the course and shared workspace.
+- Students can view their own submission records and anonymised similarity summaries.
+- Authorised course lecturers and workspace managers can review submissions and peer-source
+  evidence within the relevant course.
+- Similarity scores remain indicators for human review, not automatic plagiarism findings.

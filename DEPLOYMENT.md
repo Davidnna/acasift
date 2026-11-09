@@ -137,7 +137,7 @@ The existing Docker startup command runs `flask --app run.py init-db` before Gun
 
 After deployment, sign in with the existing account and open `/app/workspaces`. Confirm that the personal workspace appears. Submit a test document and verify it is associated with the active workspace. Use the platform-admin navigation to review `/app/admin/workspace-requests`.
 
-Organisational workspace approval is a manual platform-admin review. Confirm the requester's identity and authority to represent the organisation before approving. Workspace membership can currently be granted to existing active AcaSift accounts by email.
+This describes the original 0.5.0 rollout only. From 0.7.0 onward, shared workspaces are created directly by verified users and do not require platform-admin approval.
 
 
 ## AcaSift 0.5.1 — Nylas Transactional Send
@@ -209,7 +209,7 @@ preserved. No manual Neon SQL is required.
 
 All ordinary registrations receive the `user` platform role. Users cannot select or self-assign
 platform administrator privileges. Lecturer/student permissions continue to be assigned within
-approved organisational workspaces.
+shared workspaces.
 
 
 ## AcaSift 0.5.2 — Email verification hotfix and branded email
@@ -253,16 +253,20 @@ and Nylas configuration are preserved.
 
 ### After deployment
 
-1. Sign in with an account that belongs to an approved organisational workspace.
-2. Ensure the account's workspace role is `owner`, `admin`, or `lecturer` before creating a course.
-3. Open **Courses**, create a course and share its 16-character enrolment code with students.
-4. Ensure students have first been added to the same organisational workspace with the `student` role.
-5. Students open **Courses**, enter the enrolment code and join.
-6. The lecturer creates and publishes an assignment, configures its deadline and submission rules.
-7. Students submit PDF, DOCX or TXT files from the assignment page.
-8. The lecturer uses **Run cohort analysis** to compare all current submissions against one another.
-9. The lecturer opens each submission report, reviews matched passages and records an assessment.
-10. Confirm that students can see only their own submissions and aggregate similarity overview, not peer identities or matched text.
+1. Sign in and create a shared workspace, or switch to one where you are an active member.
+2. Ensure your workspace role is `owner`, `admin`, or `lecturer` before creating a course.
+3. Open **Courses** and create a course.
+4. Return to **Workspaces**, create an invitation link with the `Student` role, and select the course
+   to enrol recipients automatically. Set an optional expiration date/time or use limit.
+5. Share the invitation link. Students sign in or register, verify their email and accept the link;
+   they join the workspace and selected course in one step.
+6. Alternatively, use a workspace-only invitation and share the course's 16-character enrolment code
+   separately.
+7. Create and publish an assignment, then configure its deadline and submission rules.
+8. Students submit PDF, DOCX or TXT files from the assignment page.
+9. The lecturer uses **Run cohort analysis** to compare all current submissions against one another.
+10. The lecturer opens each submission report, reviews matched passages and records an assessment.
+11. Confirm that students can see only their own submissions and aggregate similarity overview, not peer identities or matched text.
 
 ### Important analysis behaviour
 
@@ -274,7 +278,80 @@ or the public internet. Similarity scores are indicators for human review, not m
 
 ### Role prerequisites
 
-Course creation is available only in an organisational workspace to workspace owners, administrators
+Course creation is available only in a shared workspace to workspace owners, administrators
 and lecturers. Students must have the `student` role in that same workspace before they can enrol
 using a course code. A lecturer can add an existing workspace member to a course when that person's
 workspace role matches the course role. Workspace membership is managed from the Workspaces page.
+
+
+## AcaSift 0.7.0 — Flexible shared workspaces and invitation links
+
+### What changes
+
+AcaSift now distinguishes only:
+- `personal`: private workspace automatically created for each account.
+- `shared`: a collaboration workspace that any verified user can create for any purpose.
+
+The 0.7.0 startup migration adds `workspaces.description` if it is missing and converts existing
+`workspace_type='organization'` rows to `workspace_type='shared'`. It does not change workspace
+IDs, owner IDs, memberships, documents, comparisons, courses, assignments, submissions or
+assessments. The new `workspace_invites` table is created automatically by SQLAlchemy `create_all()`.
+No manual Neon SQL and no new Render environment variables are required.
+
+Legacy workspace-request records are retained for history. New workspace creation is immediate and
+does not use the old platform-admin approval queue.
+
+### Shared workspace roles
+
+- `owner`: creator and highest workspace authority.
+- `admin`: can manage ordinary members and invitation links.
+- `lecturer`: can create and manage courses they teach.
+- `student`: can join courses using course enrolment codes.
+- `member`: ordinary shared-workspace collaborator.
+
+Only the owner can appoint, change or remove administrators. Invitation links cannot grant owner
+or administrator roles. The platform administrator role remains separate from workspace roles.
+
+### Invitation link behaviour
+
+Owners and administrators can create invitation links for `member`, `student` or `lecturer` roles.
+A link can optionally target one active course. If a Student or Lecturer accepts a course-specific
+link, AcaSift creates both the workspace membership and the matching course membership in the
+same acceptance flow. A workspace-only link leaves course enrolment separate.
+Each link can have:
+- An optional expiration date and exact time (the browser converts local date/time to an ISO
+  timestamp before sending it to the API).
+- An optional maximum-use count; leaving it blank allows unlimited uses until revoked.
+- Immediate revocation by a workspace owner or administrator.
+
+Invitation secrets are generated with a cryptographically secure random generator. Only the SHA-256
+hash is stored in the database. The raw link is displayed once when created; copy it at that time.
+A revoked, expired or exhausted link cannot be used.
+
+Recipients must sign in or create and verify an AcaSift account before accepting the invitation.
+When a signed-out recipient opens a link, AcaSift sends them to sign-in and preserves the invitation
+URL as the post-login destination. After joining as a Student, they use the course enrolment code to
+join a specific course; this keeps workspace access separate from course enrolment.
+
+### Post-deployment checks
+
+1. Sign in with an existing account and open `/app/workspaces`.
+2. Confirm existing personal workspaces still appear.
+3. Confirm each former organisational workspace now displays as a shared workspace with its
+   original members and academic data intact.
+4. Create a new shared workspace. The creator should become its owner and the workspace should
+   become active immediately.
+5. Create a Student invitation with an expiration time and a one-use limit.
+6. Create a course-specific Student invitation and select the course it should grant access to.
+7. Open the invitation URL in a private browser window, sign in as a different verified user and
+   accept it.
+8. Confirm the user joins the workspace and is automatically enrolled in the selected course.
+9. Confirm a second user cannot use a one-use invitation.
+10. Create an unlimited invitation, revoke it, and confirm it can no longer be accepted.
+11. Confirm a workspace administrator cannot appoint another administrator, while the owner can.
+12. Create an assignment, publish it and test a student submission.
+13. Confirm private personal documents remain private and workspace membership does not expose
+    another user's personal workspace.
+
+No new environment variables are required. Preserve the existing Neon `DATABASE_URL`, Render
+service, `SECRET_KEY`, `PUBLIC_APP_URL` and Nylas configuration.

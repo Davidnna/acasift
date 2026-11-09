@@ -31,7 +31,7 @@ def create_app(config_class=Config):
 
     from app.models import (
         AcademicSubmission, Assignment, AssignmentAssessment, Comparison, Course,
-        CourseMembership, Document, User, Workspace, WorkspaceMembership,
+        CourseMembership, Document, User, Workspace, WorkspaceInvite, WorkspaceMembership,
     )
 
     @login_manager.user_loader
@@ -125,6 +125,27 @@ def create_app(config_class=Config):
                                 "ALTER TABLE users ALTER COLUMN full_name TYPE VARCHAR(255)"
                             ))
             inspector = inspect(db.engine)
+            if inspector.has_table("workspace_invites"):
+                invite_columns = {column["name"] for column in inspector.get_columns("workspace_invites")}
+                if "course_id" not in invite_columns:
+                    with db.engine.begin() as connection:
+                        connection.execute(text(
+                            "ALTER TABLE workspace_invites ADD COLUMN course_id INTEGER"
+                        ))
+
+            # Shared workspaces replace institution-specific workspaces. Existing
+            # organisational workspaces keep their IDs, members, courses and data.
+            inspector = inspect(db.engine)
+            if inspector.has_table("workspaces"):
+                workspace_columns = {column["name"] for column in inspector.get_columns("workspaces")}
+                with db.engine.begin() as connection:
+                    if "description" not in workspace_columns:
+                        connection.execute(text("ALTER TABLE workspaces ADD COLUMN description TEXT"))
+                    connection.execute(text(
+                        "UPDATE workspaces SET workspace_type = 'shared' "
+                        "WHERE workspace_type = 'organization'"
+                    ))
+
             if inspector.has_table("documents"):
                 document_columns = {column["name"] for column in inspector.get_columns("documents")}
                 with db.engine.begin() as connection:

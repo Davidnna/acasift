@@ -161,6 +161,8 @@ class Workspace(db.Model):
 
     workspace_id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(180), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    # personal workspaces are private; shared workspaces support open collaboration.
     workspace_type = db.Column(db.String(24), nullable=False, default="personal", index=True)
     status = db.Column(db.String(24), nullable=False, default="active", index=True)
     owner_user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
@@ -185,6 +187,30 @@ class WorkspaceMembership(db.Model):
 
     workspace = db.relationship("Workspace", back_populates="memberships")
     user = db.relationship("User", backref=db.backref("workspace_memberships", lazy=True))
+
+
+class WorkspaceInvite(db.Model):
+    __tablename__ = "workspace_invites"
+    __table_args__ = (
+        Index("ix_workspace_invites_workspace_status", "workspace_id", "revoked_at", "expires_at"),
+    )
+
+    invite_id = db.Column(db.Integer, primary_key=True)
+    workspace_id = db.Column(db.Integer, db.ForeignKey("workspaces.workspace_id"), nullable=False, index=True)
+    course_id = db.Column(db.Integer, db.ForeignKey("courses.course_id"), nullable=True, index=True)
+    token_hash = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    role = db.Column(db.String(24), nullable=False, default="member")
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    max_uses = db.Column(db.Integer, nullable=True)
+    use_count = db.Column(db.Integer, nullable=False, default=0)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+
+    workspace = db.relationship("Workspace", backref=db.backref("invites", lazy=True))
+    course = db.relationship("Course", backref=db.backref("workspace_invites", lazy=True))
+    creator = db.relationship("User", foreign_keys=[created_by_user_id])
+
 
 
 class WorkspaceRequest(db.Model):

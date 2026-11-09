@@ -44,7 +44,7 @@ class AcademicWorkflowTests(unittest.TestCase):
 
         self.workspace = Workspace(
             name="Example University",
-            workspace_type="organization",
+            workspace_type="shared",
             status="active",
             owner_user_id=1,
         )

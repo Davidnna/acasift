@@ -91,6 +91,30 @@ class WorkspaceTests(unittest.TestCase):
         ).one()
         self.assertEqual(membership.role, "owner")
         self.assertEqual(workspace.status, "active")
+        self.assertEqual(workspace.workspace_type, "shared")
+
+    def test_init_db_migrates_existing_organisation_workspaces_to_shared(self):
+        legacy = Workspace(
+            name="Legacy University Workspace",
+            workspace_type="organization",
+            status="active",
+            owner_user_id=self.admin.user_id,
+        )
+        db.session.add(legacy)
+        db.session.flush()
+        db.session.add(WorkspaceMembership(
+            workspace_id=legacy.workspace_id,
+            user_id=self.admin.user_id,
+            role="owner",
+            status="active",
+        ))
+        db.session.commit()
+
+        result = self.app.test_cli_runner().invoke(args=["init-db"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        db.session.refresh(legacy)
+        self.assertEqual(legacy.workspace_type, "shared")
+        self.assertEqual(legacy.name, "Legacy University Workspace")
 
     def test_user_cannot_switch_to_workspace_without_membership(self):
         other = User(

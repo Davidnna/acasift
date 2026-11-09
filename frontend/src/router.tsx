@@ -13,8 +13,14 @@ import {
   resetPassword,
   getWorkspaces,
   switchWorkspace,
-  requestOrganizationWorkspace,
+  createSharedWorkspace,
+  createWorkspaceInvite,
+  revokeWorkspaceInvite,
+  getWorkspaceInvitePreview,
+  acceptWorkspaceInvite,
   addWorkspaceMember,
+  updateWorkspaceMemberRole,
+  removeWorkspaceMember,
   getWorkspaceRequests,
   decideWorkspaceRequest,
   createFirstAdmin,
@@ -168,6 +174,29 @@ async function passwordResetConfirmAction({ request }: ActionFunctionArgs) {
   }
 }
 
+async function workspaceInviteLoader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const token = url.searchParams.get('token') || '';
+  if (!token) throw new Response('Invitation link is missing.', { status: 404 });
+  const user = await getCurrentUser(request.signal);
+  if (!user) {
+    const next = `${url.pathname}${url.search}`;
+    throw redirect(`/login?next=${encodeURIComponent(next)}`);
+  }
+  return getWorkspaceInvitePreview(token, request.signal);
+}
+
+async function workspaceInviteAction({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  try {
+    await acceptWorkspaceInvite(String(formData.get('token') || ''));
+    throw redirect('/app/workspaces');
+  } catch (error) {
+    if (error instanceof Response) throw error;
+    return { error: error instanceof Error ? error.message : 'The invitation could not be accepted.' };
+  }
+}
+
 async function loginLoader({ request }: LoaderFunctionArgs) {
   const user = await getCurrentUser(request.signal);
   if (user) throw redirect('/app/dashboard');
@@ -232,14 +261,12 @@ async function workspacesAction({ request }: ActionFunctionArgs) {
       await switchWorkspace(Number(formData.get('workspace_id')));
       return { success: 'Active workspace changed.' };
     }
-    if (intent === 'request') {
-      await requestOrganizationWorkspace({
-        organization_name: String(formData.get('organization_name') || ''),
-        organization_type: String(formData.get('organization_type') || 'other'),
-        website: String(formData.get('website') || ''),
-        reason: String(formData.get('reason') || ''),
+    if (intent === 'create') {
+      const result = await createSharedWorkspace({
+        name: String(formData.get('name') || ''),
+        description: String(formData.get('description') || ''),
       });
-      return { success: 'Your organisational workspace request has been submitted.' };
+      return { success: result.message };
     }
     if (intent === 'add-member') {
       const data = await getWorkspaces();
@@ -248,6 +275,37 @@ async function workspacesAction({ request }: ActionFunctionArgs) {
         role: String(formData.get('role') || 'member'),
       });
       return { success: 'Workspace member added.' };
+    }
+    if (intent === 'create-invite') {
+      const data = await getWorkspaces();
+      const expiryValue = String(formData.get('expires_at') || '');
+      const maxValue = String(formData.get('max_uses') || '');
+      const result = await createWorkspaceInvite(data.active_workspace_id, {
+        role: String(formData.get('role') || 'member'),
+        course_id: String(formData.get('course_id') || '') ? Number(formData.get('course_id')) : null,
+        expires_at: expiryValue ? new Date(expiryValue).toISOString() : null,
+        max_uses: maxValue ? Number(maxValue) : null,
+      });
+      return { success: result.message, inviteUrl: result.join_url, invite: result.invite };
+    }
+    if (intent === 'revoke-invite') {
+      const data = await getWorkspaces();
+      const result = await revokeWorkspaceInvite(data.active_workspace_id, Number(formData.get('invite_id')));
+      return { success: result.message };
+    }
+    if (intent === 'update-role') {
+      const data = await getWorkspaces();
+      const result = await updateWorkspaceMemberRole(
+        data.active_workspace_id,
+        Number(formData.get('user_id')),
+        String(formData.get('role') || 'member'),
+      );
+      return { success: result.message };
+    }
+    if (intent === 'remove-member') {
+      const data = await getWorkspaces();
+      const result = await removeWorkspaceMember(data.active_workspace_id, Number(formData.get('user_id')));
+      return { success: result.message };
     }
     return { error: 'Unknown workspace action.' };
   } catch (error) {
@@ -436,6 +494,7 @@ export const router = createBrowserRouter([
           { path: 'resend-verification', action: resendVerificationAction, lazy: async () => ({ Component: (await import('./pages/auth')).ResendVerificationPage }) },
           { path: 'forgot-password', loader: loginLoader, action: passwordResetRequestAction, lazy: async () => ({ Component: (await import('./pages/auth')).ForgotPasswordPage }) },
           { path: 'reset-password', action: passwordResetConfirmAction, lazy: async () => ({ Component: (await import('./pages/auth')).ResetPasswordPage }) },
+          { path: 'join-workspace', loader: workspaceInviteLoader, action: workspaceInviteAction, lazy: async () => ({ Component: (await import('./pages/workspace-invite')).WorkspaceInvitePage }) },
         ],
       },
       { path: 'setup/first-admin', loader: firstAdminLoader, action: firstAdminAction, lazy: async () => ({ Component: (await import('./pages/setup')).FirstAdminSetupPage }) },

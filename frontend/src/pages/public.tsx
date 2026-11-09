@@ -14,7 +14,7 @@ export function HomePage() {
       <div className="hero-copy">
         <div className="eyebrow hero-eyebrow"><span className="eyebrow-pulse" /> ACADEMIC DOCUMENT SIMILARITY ANALYSIS</div>
         <h1>Understand text similarity.<br /><span>Review with context.</span></h1>
-        <p className="hero-lead">AcaSift helps individuals and academic organisations compare documents with authorised reference collections, identify overlapping passages and make more informed decisions during document review.</p>
+        <p className="hero-lead">AcaSift helps individuals and groups compare documents with authorised reference collections, identify overlapping passages and make more informed decisions during document review.</p>
         <div className="hero-actions"><Link viewTransition className="button button-primary button-lg" to="/how-it-works">Explore how it works <ArrowRight size={17} /></Link><Link viewTransition className="button button-outline button-lg" to="/register">Create a free account</Link></div>
         <div className="hero-footnote"><ShieldCheck size={16} /> Designed to support academic review, not replace human judgement.</div>
       </div>
@@ -42,9 +42,9 @@ export function HomePage() {
       </div>
       <div className="center-link"><Link viewTransition className="text-link" to="/features">Explore all features <ArrowRight size={16} /></Link></div>
     </section>
-    <section className="workflow-band"><div className="wrap workflow-home"><div className="workflow-intro"><Eyebrow>A CLEAR WORKFLOW</Eyebrow><h2>How AcaSift works</h2><p>Individuals work privately, while approved organisations can manage members and shared academic reference collections.</p><Link viewTransition className="text-link" to="/how-it-works">See the full process <ArrowRight size={16} /></Link></div><div className="workflow-mini-steps"><MiniStep number="01" title="Build the reference collection" text="An authorised workspace member adds reference documents to the appropriate collection." /><MiniStep number="02" title="Submit an academic document" text="A workspace member uploads a PDF, DOCX or TXT document." /><MiniStep number="03" title="Compare and review" text="AcaSift calculates similarity indicators and presents matching passages by source." /></div></div></section>
+    <section className="workflow-band"><div className="wrap workflow-home"><div className="workflow-intro"><Eyebrow>A CLEAR WORKFLOW</Eyebrow><h2>How AcaSift works</h2><p>Work privately in your personal space or create a shared workspace for a class, team, research group or any collaboration.</p><Link viewTransition className="text-link" to="/how-it-works">See the full process <ArrowRight size={16} /></Link></div><div className="workflow-mini-steps"><MiniStep number="01" title="Build the reference collection" text="A workspace owner or authorised member adds reference documents to the shared collection." /><MiniStep number="02" title="Submit an academic document" text="A workspace member uploads a PDF, DOCX or TXT document." /><MiniStep number="03" title="Compare and review" text="AcaSift calculates similarity indicators and presents matching passages by source." /></div></div></section>
     <section className="section wrap"><div className="integrity-panel"><div className="integrity-icon"><ShieldCheck size={24} /></div><div><Eyebrow>IMPORTANT TO UNDERSTAND</Eyebrow><h2>A similarity score is a signal, not a verdict.</h2><p>Text overlap can occur in properly cited quotations, references, standard terminology and commonly used phrases. AcaSift provides indicators and matching passages for human assessment. It does not independently determine whether plagiarism has occurred.</p></div><Link viewTransition className="button button-outline" to="/faq">Read the FAQs</Link></div></section>
-    <section className="closing-cta"><div className="wrap closing-cta-inner"><div><Eyebrow>ACASIFT WORKSPACE</Eyebrow><h2>Ready to review a document?</h2><p>Sign in to your AcaSift individual or organisational workspace.</p></div><Link viewTransition className="button button-light button-lg" to="/login">Sign in <ArrowRight size={17} /></Link></div></section>
+    <section className="closing-cta"><div className="wrap closing-cta-inner"><div><Eyebrow>ACASIFT WORKSPACE</Eyebrow><h2>Ready to review a document?</h2><p>Sign in to your personal or shared AcaSift workspace.</p></div><Link viewTransition className="button button-light button-lg" to="/login">Sign in <ArrowRight size={17} /></Link></div></section>
   </>;
 }
 
@@ -69,7 +69,7 @@ export function FeaturesPage() {
     { icon: <Layers3 />, title: 'TF-IDF and cosine similarity', text: 'Represent document text using TF-IDF features and calculate cosine similarity between a submission and available reference documents.' },
     { icon: <SearchCheck />, title: 'Word N-gram matching', text: 'Identify repeated sequences of words and calculate the proportion of unique submission N-grams that also occur in a reference document.' },
     { icon: <MessageSquareText />, title: 'Passage-level review', text: 'Present identified matching passages with their corresponding excerpts from the reference source.' },
-    { icon: <LockKeyhole />, title: 'Account-controlled workspace', text: 'Use private individual workspaces or collaborate through approved organisational workspaces with role-based access.' },
+    { icon: <LockKeyhole />, title: 'Account-controlled workspace', text: 'Use a private personal workspace or create shared workspaces with role-based access and invitation links.' },
     { icon: <Gauge />, title: 'Comparison history', text: 'Return to previous comparison records and review the results generated for each submitted document.' },
   ];
   return <PublicPage eyebrow="PLATFORM FEATURES" title="Tools for structured similarity review." intro="AcaSift combines text extraction, document-level comparison and passage matching in a single academic review workflow.">
@@ -101,7 +101,7 @@ const faqItems = [
   ['Does AcaSift require an institutional email?', 'No. Anyone can create an individual account using a personal or work email address. The email address must be verified before the account can be used.'],
   ['What methods does AcaSift use?', 'The current implementation uses TF-IDF vectorisation with cosine similarity for document-level comparison and word-based N-gram matching for identifying overlapping sequences.'],
   ['Does AcaSift detect paraphrased content?', 'The current release focuses on lexical overlap. It does not provide semantic paraphrase detection or cross-language plagiarism detection.'],
-  ['Who can view my comparison reports?', 'Individual submissions and reports are private to their owners. Organisational workspace access is limited to authorised members and permissions.'],
+  ['Who can view my comparison reports?', 'Individual submissions and reports are private to their owners. Shared workspace access is limited to invited members and their assigned permissions.'],
 ];
 
 export function FaqPage() {
@@ -115,7 +115,7 @@ export function FaqPage() {
 export function AccessPage() {
   return <PublicPage eyebrow="OPEN REGISTRATION" title="Start with your own private workspace." intro="AcaSift is open to individual users worldwide. You do not need a university affiliation, institutional email address or staff identification number.">
     <div className="access-panel"><div className="access-panel-icon"><LockKeyhole size={26} /></div><div><h2>Create an individual account.</h2><p>Register with your name, a valid email address and a password. We will send a verification link before activating the account. Your personal documents and reports remain private to you.</p><div className="access-steps"><div><span>1</span><p>Create an account using any valid email address.</p></div><div><span>2</span><p>Verify your email address using the link we send you.</p></div><div><span>3</span><p>Sign in and start using your private AcaSift workspace.</p></div></div><Link viewTransition className="button button-primary button-lg" to="/register">Create an account <ArrowRight size={16} /></Link></div></div>
-    <p className="access-note">Organisational workspaces are optional and require separate review and approval. Creating an individual account does not require organisational approval.</p>
+    <p className="access-note">Shared workspaces can be created instantly by any verified AcaSift user. Creating a personal account does not require institutional affiliation.</p>
   </PublicPage>;
 }
 

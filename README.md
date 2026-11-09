@@ -1,4 +1,4 @@
-# AcaSift 0.6.0 — React + Flask academic similarity analysis
+# AcaSift 0.7.0 — React + Flask collaborative similarity analysis
 
 **Tagline:** Find the overlap. Follow the source.
 
@@ -37,8 +37,10 @@ protection work without cross-origin authentication configuration.
 - Word N-gram overlap and matching passage offsets.
 - Comparison history and source-level reports.
 - Role-based API access for users and administrators.
-- Individual private workspaces and approved organisational workspaces.
-- Organisational course creation, lecturer/student course membership and enrolment codes.
+- Private personal workspaces and instantly-created shared workspaces for any group or purpose.
+- Shared-workspace owners and administrators, role-based members and revocable invitation links.
+- Optional invitation expiration date/time, use limits and role assignment (member, student or lecturer).
+- Shared-workspace course creation, lecturer/student course membership and enrolment codes.
 - Lecturer-managed assignments with draft, published and closed states, deadlines, late-submission and resubmission controls.
 - Student assignment submissions with attempt tracking and private document storage.
 - Assignment-specific student-to-student similarity comparisons, with lecturer-triggered cohort-wide reanalysis.
@@ -54,12 +56,13 @@ can run cohort-wide reanalysis after the submission window has progressed. It do
 entire internet or external academic databases. Scanned/image-only PDFs, OCR, semantic paraphrase
 detection, cross-language matching and source-code comparison are not included in this release.
 
-Academic access is scoped to the active organisational workspace. Workspace owners and
-administrators can manage courses; workspace lecturers can create and manage courses they teach;
-students must have the Student workspace role and join a course using its enrolment code or be
-added by a lecturer. Students can see only their own submission records and a privacy-preserving
-similarity summary. Authorised lecturers can see course submissions, peer-source evidence and
-record a human review. Similarity values do not determine plagiarism or misconduct.
+Academic access is scoped to the active shared workspace. Workspace owners and administrators
+can manage courses; workspace lecturers can create and manage courses they teach. Students can
+join a shared workspace through an invitation link and enrol in a specific course using a course
+code, lecturer enrolment or a course-specific invitation that enrols them automatically. Students
+can see only their own submission records and a privacy-preserving similarity summary. Authorised
+lecturers can see course submissions, peer-source evidence and record a human review. Similarity
+values do not determine plagiarism or misconduct.
 
 ## 3. Project structure
 
@@ -204,8 +207,15 @@ cookies with same-origin requests; no bearer token is stored in browser local st
 | POST | `/api/assignments/{id}/analyse` | Course lecturer/manager | Reanalyse the assignment cohort |
 | GET | `/api/submissions/{id}` | Submission owner or course lecturer | Privacy-aware student overview or lecturer evidence report |
 | POST | `/api/submissions/{id}/assessment` | Course lecturer/manager | Save review outcome and feedback |
+| POST | `/api/workspaces` | Authenticated user | Create a shared workspace instantly |
+| POST | `/api/workspaces/{id}/invites` | Workspace owner/admin | Create a role-based, expiring or usage-limited invitation |
+| GET | `/api/workspaces/invites/preview` | Authenticated invite recipient | Preview a workspace/course invitation |
+| POST | `/api/workspaces/invites/accept` | Authenticated invite recipient | Join a workspace and optionally enrol in a course |
+| POST | `/api/workspaces/{id}/invites/{invite_id}/revoke` | Workspace owner/admin | Revoke an invitation immediately |
+| POST | `/api/workspaces/{id}/members/{user_id}/role` | Workspace owner/admin | Change a member role; owner controls administrator roles |
+| POST | `/api/workspaces/{id}/members/{user_id}/remove` | Workspace owner/admin | Remove a workspace member |
 
-A new course is available only in an approved organisational workspace. The course creator is
+A new course is available in any active shared workspace. The course creator is
 added as a lecturer. Students must already be members of the same workspace with the Student
 workspace role. Enrolment codes are random 16-character codes; only their hashes are stored.
 Rotating a code invalidates the previous code.
@@ -370,23 +380,41 @@ profile; changing email safely requires a verification workflow, while roles/sta
 administrator-controlled. The account page shows personal document and comparison activity.
 
 
-## Global workspace foundation (0.5.0)
+## Workspace architecture
 
-AcaSift is being developed as an institution-agnostic platform. Each existing account receives a private personal workspace. Users can request an organisational workspace for a university, school, research group, company or other organisation; requests remain pending until a platform administrator reviews them.
+Every account receives a private personal workspace. Any verified user can also create a shared
+workspace immediately; no institution name, organisational proof or platform-admin approval is
+required. A shared workspace is a collaboration container for a class, assignment cohort,
+research group, project team, organisation or any other group.
 
-Workspace owners and administrators can add existing AcaSift accounts and assign workspace roles (student, lecturer, member or workspace administrator). The platform administrator role remains separate from workspace roles.
+The creator becomes the workspace owner. Owners can appoint one or more administrators. Workspace
+administrators can manage ordinary members and invitations; only the owner can appoint or remove
+administrators. Workspace roles are separate from the platform administrator role.
+
+### Invitation links
+
+Workspace owners and administrators can create invitation links for Member, Student or Lecturer
+roles. Links can have an optional expiration date and time, an optional maximum-use limit, and can
+be revoked immediately. Links with no expiry and no use limit remain active until revoked. An
+invitation link cannot grant owner or administrator privileges. The secret token is high-entropy
+and only its SHA-256 hash is stored in PostgreSQL.
+
+Recipients must sign in or create and verify an AcaSift account before accepting an invitation.
+An invitation can optionally target one active course. When it does, a Student or Lecturer is
+automatically enrolled in that course while joining the workspace; otherwise, course enrolment
+remains a separate step using the course code. This lets a lecturer share one invitation link for
+both workspace access and a specific class without requiring individual email entry.
 
 ### Data isolation and migration
 
-The startup `init-db` command adds `workspace_id` and `visibility_scope` columns to existing document/comparison tables. It creates a personal workspace for every existing user, moves that user's submissions and comparisons into it, and retains the existing administrator-curated reference repository as platform-wide references. This migration is additive and does not delete existing documents, comparison results or users.
+The 0.7.0 startup migration adds an optional description field to existing workspaces and changes
+legacy `organization` workspace types to `shared` without changing workspace IDs, memberships,
+courses, assignments, submissions, reports or documents. New invitation records are created in
+the `workspace_invites` table. Existing personal workspaces remain private. No manual Neon SQL
+execution or new Render environment variable is required.
 
-New submissions are private to the uploader and active workspace. The current release does not yet permit lecturers to view other users' submissions or run student-to-student comparisons; those permissions will be introduced with course and assignment boundaries in a later release.
-
-### Current rollout boundary
-
-Public self-registration and email verification are available in 0.5.1 once Nylas Transactional Send is configured in Render. New users start with an individual account; organisational workspace requests remain subject to platform review.
-
-Workspace owners can add references to their active workspace. Personal-workspace references remain private; organisational-workspace references are available to active workspace members.
+Legacy workspace-request records remain in the database for audit/history compatibility, but new
+shared workspaces are created directly and do not enter an approval queue.
 
 
 ## Email delivery: Nylas Transactional Send
@@ -425,3 +453,18 @@ continue to require CSRF protection.
 Verification and password-reset messages use branded HTML templates. The AcaSift logo is
 served from `/static/img/acasift-mark.png`; keep `PUBLIC_APP_URL` set to the canonical
 public application URL so email clients can load the logo and links.
+
+
+## AcaSift 0.7.0 — Flexible shared workspaces
+
+- Replaces institution-specific workspace semantics with generic shared workspaces.
+- Adds direct shared-workspace creation for any verified user.
+- Migrates existing organisational workspaces to the shared type in place.
+- Adds multiple workspace administrators with owner-controlled administrator appointment.
+- Adds secure invitation links with role selection, optional expiration date/time, optional usage
+  limits, revocation and invitation acceptance after sign-in.
+- Stores only SHA-256 hashes of invitation tokens.
+- Adds workspace member role updates and member removal with owner/admin separation.
+- Updates academic course permissions and public copy to use shared workspaces.
+- Keeps legacy workspace request records and routes for backward compatibility; new workspaces
+  do not require platform-admin approval.

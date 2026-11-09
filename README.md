@@ -357,3 +357,17 @@ only when a real monitored reply mailbox is available.
 
 Transactional Send is currently a beta feature. The free Nylas domain is suitable for initial
 testing; use an owned and DNS-verified sending domain before a broad production launch.
+
+
+## AcaSift 0.5.2 — Email verification and branded messages
+
+The email verification and password-reset confirmation endpoints use high-entropy, one-time,
+short-lived email bearer tokens. These two POST endpoints are deliberately exempt from the
+browser-session CSRF check because a person may open an email link in a new browser context
+that does not share the session used when they registered or requested a password reset.
+They remain rate-limited, expiry-checked and single-use. All other state-changing API routes
+continue to require CSRF protection.
+
+Verification and password-reset messages use branded HTML templates. The AcaSift logo is
+served from `/static/img/acasift-mark.png`; keep `PUBLIC_APP_URL` set to the canonical
+public application URL so email clients can load the logo and links.

@@ -78,6 +78,11 @@ class NylasEmailTests(unittest.TestCase):
         self.assertEqual(payload["to"][0]["email"], "ada@example.com")
         self.assertEqual(payload["reply_to"][0]["email"], "helpdesk@example.com")
         self.assertIn("raw-verification-token", payload["body"])
+        self.assertIn("static/img/acasift-mark.png", payload["body"])
+        self.assertIn("Find the overlap. Follow the source.", payload["body"])
+        self.assertIn("Confirm your email address", payload["body"])
+        self.assertIn("Verify my email address", payload["body"])
+        self.assertIn("Hello Ada", payload["body"])
 
     @patch("app.services.email_service.urlopen")
     def test_password_reset_uses_distinct_security_sender(self, mocked_urlopen):
@@ -88,6 +93,10 @@ class NylasEmailTests(unittest.TestCase):
         self.assertEqual(payload["from"]["email"], "security@acasift.nylas.email")
         self.assertEqual(payload["from"]["name"], "AcaSift Security")
         self.assertIn("raw-reset-token", payload["body"])
+        self.assertIn("static/img/acasift-mark.png", payload["body"])
+        self.assertIn("Choose a new password", payload["body"])
+        self.assertIn("Reset my password", payload["body"])
+        self.assertIn("AcaSift will never ask you to send your password by email.", payload["body"])
 
     def test_email_configuration_requires_api_key_and_valid_domain_sender(self):
         self.assertTrue(email_is_configured())

@@ -28,13 +28,15 @@ async function getCsrfToken(force = false): Promise<string> {
   return csrfToken as string;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}, options: { skipCsrf?: boolean } = {}): Promise<T> {
   const method = (init.method || 'GET').toUpperCase();
   const headers = new Headers(init.headers || {});
   headers.set('Accept', 'application/json');
 
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-    headers.set('X-CSRFToken', await getCsrfToken());
+    if (!options.skipCsrf) {
+      headers.set('X-CSRFToken', await getCsrfToken());
+    }
     if (!(init.body instanceof FormData) && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');
     }
@@ -212,7 +214,7 @@ export async function registerAccount(payload: {
 export async function verifyEmail(token: string): Promise<User> {
   const data = await request<{ user: User }>('/api/auth/verify-email', {
     method: 'POST', body: JSON.stringify({ token }),
-  });
+  }, { skipCsrf: true });
   return data.user;
 }
 
@@ -229,5 +231,8 @@ export async function resetPassword(payload: {
   new_password: string;
   confirm_password: string;
 }): Promise<{ message: string }> {
-  return request('/api/auth/password-reset/confirm', { method: 'POST', body: JSON.stringify(payload) });
+  return request('/api/auth/password-reset/confirm', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }, { skipCsrf: true });
 }

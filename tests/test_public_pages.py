@@ -61,6 +61,12 @@ class ReactAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers["Location"], "/app/dashboard")
 
+    def test_email_logo_is_served_as_png(self):
+        response = self.client.get("/static/img/acasift-mark.png")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("image/png", response.content_type)
+        self.assertGreater(len(response.data), 1000)
+
     def test_csrf_endpoint_returns_token(self):
         response = self.client.get("/api/csrf")
         self.assertEqual(response.status_code, 200)

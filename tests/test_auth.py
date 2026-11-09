@@ -118,6 +118,53 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertIn("verify your email", response.get_json()["error"].lower())
 
+    def test_verification_link_does_not_require_a_preexisting_browser_csrf_session(self):
+        self.app.config["WTF_CSRF_ENABLED"] = True
+        raw_token = "email-link-token-for-csrf-test"
+        user = User(
+            first_name="Grace", last_name="Hopper", full_name="Grace Hopper",
+            email="grace@example.test",
+            password_hash=generate_password_hash("a-strong-password-123"),
+            role="user", is_active=False,
+            email_verification_token_hash=hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
+            email_verification_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        # Deliberately make this request without first calling /api/csrf and without
+        # an X-CSRFToken header, as happens when a user opens an email link in a new browser.
+        response = self.app.test_client().post(
+            "/api/auth/verify-email",
+            json={"token": raw_token},
+        )
+        self.assertEqual(response.status_code, 200)
+        db.session.refresh(user)
+        self.assertTrue(user.is_active)
+        self.assertIsNotNone(user.email_verified_at)
+        self.assertIsNone(user.email_verification_token_hash)
+
+    def test_password_reset_link_does_not_require_a_preexisting_browser_csrf_session(self):
+        self.app.config["WTF_CSRF_ENABLED"] = True
+        raw_token = "password-reset-token-for-csrf-test"
+        user = self.create_verified_user(email="reset@example.test")
+        user.password_reset_token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+        user.password_reset_expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+        db.session.commit()
+
+        response = self.app.test_client().post(
+            "/api/auth/password-reset/confirm",
+            json={
+                "token": raw_token,
+                "new_password": "a-new-strong-password-456",
+                "confirm_password": "a-new-strong-password-456",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        db.session.refresh(user)
+        self.assertTrue(check_password_hash(user.password_hash, "a-new-strong-password-456"))
+        self.assertIsNone(user.password_reset_token_hash)
+
     def test_verification_token_activates_user_and_signs_them_in(self):
         with patch("app.api.send_verification_email") as send_email:
             created = self.client.post("/api/auth/register", json=self.register_payload())

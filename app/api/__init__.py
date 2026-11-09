@@ -12,7 +12,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from sqlalchemy import select, func, text
 
 from app.decorators import admin_required
-from app.extensions import db
+from app.extensions import csrf, db
 from app.models import Comparison, Document, User, Workspace, WorkspaceMembership, WorkspaceRequest
 from app.services.auth_security import consume_auth_limits
 from app.services.email_service import (
@@ -271,7 +271,15 @@ def register_account():
 
 
 @bp.post("/auth/verify-email")
+@csrf.exempt
 def verify_email():
+    """Verify a one-time email bearer token without requiring a prior browser session.
+
+    The 256-bit, single-use token is the proof of mailbox control. A browser-session
+    CSRF token is intentionally not required because email links are opened in a
+    fresh browser context and may not share the session that initiated registration.
+    The endpoint remains POST-only, rate-limited, expiry-checked and single-use.
+    """
     data = request.get_json(silent=True) or {}
     raw_token = str(data.get("token", ""))
     limited = _rate_limited("verify_email", None, ip_limit=20, window_seconds=900)
@@ -351,7 +359,13 @@ def request_password_reset():
 
 
 @bp.post("/auth/password-reset/confirm")
+@csrf.exempt
 def confirm_password_reset():
+    """Confirm a password reset using its one-time email bearer token.
+
+    The reset token is high-entropy, short-lived and single-use, so a browser
+    session CSRF token is not required for this email-link flow.
+    """
     data = request.get_json(silent=True) or {}
     raw_token = str(data.get("token", ""))
     limited = _rate_limited("password_reset_confirm", None, ip_limit=10, window_seconds=900)

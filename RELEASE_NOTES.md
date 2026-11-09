@@ -187,3 +187,27 @@
 - Added request timeouts, idempotency keys, provider error logging and domain-bound sender validation.
 - Added offline tests for endpoint, authentication header, payload, sender selection and reply-to behavior.
 - No SMTP username, password, host or port is required.
+
+
+# AcaSift 0.5.2 — Email verification and branded authentication messages
+
+## Verification flow correction
+- Exempted only the one-time email verification endpoint from browser-session CSRF validation.
+- Exempted only the one-time password-reset confirmation endpoint from browser-session CSRF validation.
+- Both endpoints remain POST-only, rate-limited, expiry-checked and single-use.
+- The high-entropy email bearer token is the proof of mailbox control; the frontend no longer requests a pre-existing CSRF session for these two email-link actions.
+- All other state-changing API routes continue to require CSRF protection.
+
+## Branded email design
+- Replaced the minimal verification and password-reset messages with responsive, table-based HTML templates.
+- Added AcaSift's navy and teal visual identity, tagline, clear calls to action, fallback URLs, expiry information and security guidance.
+- Added the AcaSift logo as a PNG asset for broad email-client compatibility.
+- The logo is served from `/static/img/acasift-mark.png`; `PUBLIC_APP_URL` must point to the public AcaSift origin.
+- Verification and password-reset sender identities remain separate.
+
+## Validation
+- Python source syntax parsed successfully.
+- TypeScript/TSX source transpilation passed.
+- Added backend regression tests for email-link requests without a pre-existing CSRF session.
+- Added email-template and public-logo asset tests.
+- Full Flask integration tests could not be executed in the authoring environment because Flask/Werkzeug dependencies were not installed; execute the included tests in Render's build/test environment or a configured Python environment.

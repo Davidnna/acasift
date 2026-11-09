@@ -210,3 +210,34 @@ preserved. No manual Neon SQL is required.
 All ordinary registrations receive the `user` platform role. Users cannot select or self-assign
 platform administrator privileges. Lecturer/student permissions continue to be assigned within
 approved organisational workspaces.
+
+
+## AcaSift 0.5.2 — Email verification hotfix and branded email
+
+This patch corrects the email-link confirmation flow. A verification or password-reset link
+can be opened in a fresh browser session, so the corresponding one-time-token POST endpoints
+do not require a prior Flask browser-session CSRF token. They remain POST-only, rate-limited,
+expiry-checked and single-use. Other state-changing API endpoints continue to require CSRF.
+
+The verification and password-reset emails now use branded responsive HTML, AcaSift's navy
+and teal colours, the tagline "Find the overlap. Follow the source.", clear action buttons,
+fallback links and security notices.
+
+The logo is hosted by the application at:
+
+`https://acasift.onrender.com/static/img/acasift-mark.png`
+
+No new Render environment variables are required. Preserve the existing Nylas settings and
+ensure `PUBLIC_APP_URL=https://acasift.onrender.com`. After deployment, open the logo URL in
+a browser and confirm that it displays the AcaSift mark.
+
+### Post-deployment checks
+
+1. Register a fresh test account and receive the verification email.
+2. Open the email link in a private/incognito browser window or a different browser.
+3. Select "Verify my email address"; it should activate the account and sign the user in.
+4. Confirm that the verification link cannot be reused.
+5. Request a password reset and open the reset link in a fresh browser context.
+6. Confirm the password reset succeeds without a CSRF/session-token error.
+7. Inspect the email in desktop and mobile clients; confirm the logo loads. Some email clients
+   block remote images until the recipient chooses to display them.

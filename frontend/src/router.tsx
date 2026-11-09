@@ -6,6 +6,12 @@ import {
 } from 'react-router-dom';
 import {
   createUser,
+  getWorkspaces,
+  switchWorkspace,
+  requestOrganizationWorkspace,
+  addWorkspaceMember,
+  getWorkspaceRequests,
+  decideWorkspaceRequest,
   createFirstAdmin,
   getAccount,
   updateAccountProfile,
@@ -21,6 +27,7 @@ import {
   signOut,
   uploadReference,
   uploadSubmission,
+  uploadWorkspaceReference,
 } from './api';
 import { AdminLayout, AppLayout, NotFoundPage, PublicLayout, RootLayout, RouteErrorBoundary } from './components/layouts';
 
@@ -134,6 +141,51 @@ async function createUserAction({ request }: ActionFunctionArgs) {
   }
 }
 
+
+async function workspacesAction({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  const intent = String(formData.get('_intent') || '');
+  try {
+    if (intent === 'switch') {
+      await switchWorkspace(Number(formData.get('workspace_id')));
+      return { success: 'Active workspace changed.' };
+    }
+    if (intent === 'request') {
+      await requestOrganizationWorkspace({
+        organization_name: String(formData.get('organization_name') || ''),
+        organization_type: String(formData.get('organization_type') || 'other'),
+        website: String(formData.get('website') || ''),
+        reason: String(formData.get('reason') || ''),
+      });
+      return { success: 'Your organisational workspace request has been submitted.' };
+    }
+    if (intent === 'add-member') {
+      const data = await getWorkspaces();
+      await addWorkspaceMember(data.active_workspace_id, {
+        email: String(formData.get('email') || ''),
+        role: String(formData.get('role') || 'member'),
+      });
+      return { success: 'Workspace member added.' };
+    }
+    return { error: 'Unknown workspace action.' };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Workspace action failed.' };
+  }
+}
+
+async function workspaceRequestDecisionAction({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  try {
+    await decideWorkspaceRequest(
+      Number(formData.get('request_id')),
+      String(formData.get('decision')) as 'approve' | 'reject',
+    );
+    return { success: 'Workspace request reviewed.' };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'The workspace request could not be reviewed.' };
+  }
+}
+
 async function accountAction({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = String(formData.get('_intent') || 'profile');
@@ -157,6 +209,17 @@ async function accountAction({ request }: ActionFunctionArgs) {
     return { intent, error: 'Unknown account action.' };
   } catch (error) {
     return { intent, error: error instanceof Error ? error.message : 'The account update could not be completed.' };
+  }
+}
+
+async function uploadWorkspaceReferenceAction({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  try {
+    await uploadWorkspaceReference(formData, request.signal);
+    throw redirect('/app/documents');
+  } catch (error) {
+    if (error instanceof Response) throw error;
+    return { error: error instanceof Error ? error.message : 'The workspace reference could not be saved.' };
   }
 }
 
@@ -200,9 +263,11 @@ export const router = createBrowserRouter([
         children: [
           { index: true, loader: () => redirect('/app/dashboard') },
           { path: 'account', loader: (args) => loadForUser(args, getAccount), action: accountAction, lazy: async () => ({ Component: (await import('./pages/account')).AccountPage }) },
+          { path: 'workspaces', loader: (args) => loadForUser(args, getWorkspaces), action: workspacesAction, lazy: async () => ({ Component: (await import('./pages/workspaces')).WorkspacesPage }) },
           { path: 'dashboard', loader: (args) => loadForUser(args, getDashboard), lazy: async () => ({ Component: (await import('./pages/app')).DashboardPage }) },
           { path: 'documents', loader: (args) => loadForUser(args, getDocuments), lazy: async () => ({ Component: (await import('./pages/app')).DocumentsPage }) },
           { path: 'documents/new', action: uploadSubmissionAction, lazy: async () => ({ Component: (await import('./pages/app')).UploadSubmissionPage }) },
+          { path: 'references/new', action: uploadWorkspaceReferenceAction, lazy: async () => ({ Component: (await import('./pages/workspace-reference')).WorkspaceReferenceUploadPage }) },
           { path: 'comparisons/:comparisonId', loader: (args) => loadForUser(args, (signal) => getComparison(args.params.comparisonId || '', signal)), lazy: async () => ({ Component: (await import('./pages/app')).ComparisonPage }) },
           {
             path: 'admin',
@@ -211,6 +276,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, loader: () => redirect('/app/admin/users') },
               { path: 'users', loader: (args) => loadForAdmin(args, getUsers), action: createUserAction, lazy: async () => ({ Component: (await import('./pages/app')).AdminUsersPage }) },
+              { path: 'workspace-requests', loader: (args) => loadForAdmin(args, getWorkspaceRequests), action: workspaceRequestDecisionAction, lazy: async () => ({ Component: (await import('./pages/workspace-requests')).WorkspaceRequestsPage }) },
               { path: 'references', loader: (args) => loadForAdmin(args, getReferences), lazy: async () => ({ Component: (await import('./pages/app')).AdminReferencesPage }) },
               { path: 'references/new', action: uploadReferenceAction, lazy: async () => ({ Component: (await import('./pages/app')).AdminUploadReferencePage }) },
             ],

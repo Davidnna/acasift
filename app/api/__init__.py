@@ -1,7 +1,8 @@
 import hmac
 import re
+from datetime import datetime, timezone
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, request, session
 
 from flask_login import current_user, login_user, login_required, logout_user
 from flask_wtf.csrf import generate_csrf
@@ -10,7 +11,8 @@ from sqlalchemy import select, func, text
 
 from app.decorators import admin_required
 from app.extensions import db
-from app.models import Comparison, Document, User
+from app.models import Comparison, Document, User, Workspace, WorkspaceMembership, WorkspaceRequest
+from app.services.workspace_service import ensure_personal_workspace, get_active_workspace, membership_for, is_workspace_manager
 from app.services.workflow_service import run_comparison, save_uploaded_document
 
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -63,6 +65,8 @@ def _document_payload(document):
         "original_filename": document.original_filename,
         "file_type": document.file_type,
         "document_type": document.document_type,
+        "workspace_id": document.workspace_id,
+        "visibility_scope": document.visibility_scope,
         "processing_status": document.processing_status,
         "uploaded_at": _date(document.uploaded_at),
     }
@@ -139,6 +143,9 @@ def login():
         return _error("Invalid email address or password, or the account is inactive.", 401)
 
     login_user(user)
+    personal = ensure_personal_workspace(user)
+    session["active_workspace_id"] = personal.workspace_id
+    db.session.commit()
     return jsonify({"user": _user_payload(user)})
 
 
@@ -207,45 +214,70 @@ def change_account_password():
 @bp.get("/dashboard")
 @login_required
 def dashboard():
-    if current_user.is_admin:
-        document_count = Document.query.filter_by(user_id=current_user.user_id).count()
-        comparison_count = Comparison.query.count()
-        recent_documents = Document.query.order_by(Document.uploaded_at.desc()).limit(6).all()
-        recent_comparisons = Comparison.query.order_by(Comparison.started_at.desc()).limit(6).all()
-    else:
-        document_count = Document.query.filter_by(user_id=current_user.user_id).count()
-        comparison_count = Comparison.query.filter_by(user_id=current_user.user_id).count()
-        recent_documents = (
-            Document.query.filter_by(user_id=current_user.user_id)
-            .order_by(Document.uploaded_at.desc()).limit(6).all()
-        )
-        recent_comparisons = (
-            Comparison.query.filter_by(user_id=current_user.user_id)
-            .order_by(Comparison.started_at.desc()).limit(6).all()
-        )
-
-    reference_count = Document.query.filter_by(
-        document_type="reference", processing_status="processed"
-    ).count()
+    workspace = get_active_workspace(current_user)
+    document_query = Document.query.filter_by(
+        user_id=current_user.user_id,
+        workspace_id=workspace.workspace_id,
+        document_type="submission",
+    )
+    comparison_query = Comparison.query.filter_by(
+        user_id=current_user.user_id,
+        workspace_id=workspace.workspace_id,
+    )
+    reference_query = Document.query.filter(
+        Document.document_type == "reference",
+        Document.processing_status == "processed",
+        (
+            (Document.visibility_scope == "platform")
+            | (
+                (Document.workspace_id == workspace.workspace_id)
+                & (Document.visibility_scope == "workspace")
+            )
+            | (
+                (Document.workspace_id == workspace.workspace_id)
+                & (Document.user_id == current_user.user_id)
+                & (Document.visibility_scope == "private")
+            )
+        ),
+    )
     return jsonify({
         "stats": {
-            "document_count": document_count,
-            "comparison_count": comparison_count,
-            "reference_count": reference_count,
+            "document_count": document_query.count(),
+            "comparison_count": comparison_query.count(),
+            "reference_count": reference_query.count(),
         },
-        "recent_documents": [_document_payload(item) for item in recent_documents],
-        "recent_comparisons": [_comparison_payload(item) for item in recent_comparisons],
+        "recent_documents": [_document_payload(item) for item in document_query.order_by(Document.uploaded_at.desc()).limit(6).all()],
+        "recent_comparisons": [_comparison_payload(item) for item in comparison_query.order_by(Comparison.started_at.desc()).limit(6).all()],
+        "workspace": _workspace_payload(workspace),
     })
 
 
 @bp.get("/documents")
 @login_required
 def documents():
-    query = Document.query
-    if not current_user.is_admin:
-        query = query.filter(
-            (Document.user_id == current_user.user_id) | (Document.document_type == "reference")
+    workspace = get_active_workspace(current_user)
+    query = Document.query.filter(
+        (
+            (Document.document_type == "submission")
+            & (Document.user_id == current_user.user_id)
+            & (Document.workspace_id == workspace.workspace_id)
         )
+        | (
+            (Document.document_type == "reference")
+            & (
+                (Document.visibility_scope == "platform")
+                | (
+                    (Document.workspace_id == workspace.workspace_id)
+                    & (Document.visibility_scope == "workspace")
+                )
+                | (
+                    (Document.workspace_id == workspace.workspace_id)
+                    & (Document.user_id == current_user.user_id)
+                    & (Document.visibility_scope == "private")
+                )
+            )
+        )
+    )
     records = query.order_by(Document.uploaded_at.desc()).all()
     return jsonify({"documents": [_document_payload(item) for item in records]})
 
@@ -277,8 +309,10 @@ def upload_submission():
 @login_required
 def comparison_detail(comparison_id):
     comparison = db.get_or_404(Comparison, comparison_id)
-    if not current_user.is_admin and comparison.user_id != current_user.user_id:
+    if comparison.user_id != current_user.user_id:
         return _error("You do not have permission to view this report.", 403)
+    if comparison.workspace_id and not membership_for(current_user, comparison.workspace_id):
+        return _error("This report belongs to a workspace you can no longer access.", 403)
     return jsonify({"comparison": _comparison_payload(comparison, include_results=True)})
 
 
@@ -323,14 +357,43 @@ def create_user():
         is_active=True,
     )
     db.session.add(user)
+    db.session.flush()
+    ensure_personal_workspace(user)
     db.session.commit()
     return jsonify({"message": "User account created successfully.", "user": _user_payload(user)}), 201
+
+
+@bp.post("/workspace/references")
+@login_required
+def upload_workspace_reference():
+    workspace = get_active_workspace(current_user)
+    membership = membership_for(current_user, workspace.workspace_id)
+    if not is_workspace_manager(membership):
+        return _error("Only the owner or an authorised workspace administrator can add reference documents.", 403)
+    scope = "private" if workspace.workspace_type == "personal" else "workspace"
+    try:
+        document = save_uploaded_document(
+            request.files.get("document"),
+            request.form.get("title", ""),
+            "reference",
+            workspace_id=workspace.workspace_id,
+            visibility_scope=scope,
+        )
+        return jsonify({
+            "message": f"Reference document '{document.title}' added to {workspace.name}.",
+            "document": _document_payload(document),
+        }), 201
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    except Exception:
+        current_app.logger.exception("Workspace reference upload failed.")
+        return _error("The reference document could not be saved.", 500)
 
 
 @bp.get("/admin/references")
 @admin_required
 def references():
-    records = Document.query.filter_by(document_type="reference").order_by(Document.uploaded_at.desc()).all()
+    records = Document.query.filter_by(document_type="reference", visibility_scope="platform").order_by(Document.uploaded_at.desc()).all()
     return jsonify({"documents": [_document_payload(item) for item in records]})
 
 
@@ -353,6 +416,193 @@ def upload_reference():
         from flask import current_app
         current_app.logger.exception("Reference document upload failed.")
         return _error("The reference document could not be saved.", 500)
+
+
+
+
+def _workspace_payload(workspace, membership=None):
+    return {
+        "id": workspace.workspace_id,
+        "name": workspace.name,
+        "type": workspace.workspace_type,
+        "status": workspace.status,
+        "role": membership.role if membership else None,
+        "created_at": _date(workspace.created_at),
+    }
+
+
+@bp.get("/workspaces")
+@login_required
+def workspaces():
+    active = get_active_workspace(current_user)
+    memberships = (
+        WorkspaceMembership.query.join(Workspace)
+        .filter(
+            WorkspaceMembership.user_id == current_user.user_id,
+            WorkspaceMembership.status == "active",
+            Workspace.status == "active",
+        ).order_by(Workspace.created_at.asc()).all()
+    )
+    pending = WorkspaceRequest.query.filter_by(user_id=current_user.user_id, status="pending").order_by(WorkspaceRequest.created_at.desc()).first()
+    active_membership = membership_for(current_user, active.workspace_id)
+    members = []
+    if is_workspace_manager(active_membership):
+        members = [{
+            "id": item.user.user_id,
+            "full_name": item.user.full_name,
+            "email": item.user.email,
+            "role": item.role,
+        } for item in WorkspaceMembership.query.filter_by(workspace_id=active.workspace_id, status="active").all()]
+    return jsonify({
+        "active_workspace_id": active.workspace_id,
+        "workspaces": [_workspace_payload(item.workspace, item) for item in memberships],
+        "pending_request": ({
+            "id": pending.request_id,
+            "organization_name": pending.organization_name,
+            "status": pending.status,
+            "created_at": _date(pending.created_at),
+        } if pending else None),
+        "can_manage_members": is_workspace_manager(active_membership),
+        "members": members,
+    })
+
+
+@bp.post("/workspaces/current")
+@login_required
+def switch_workspace():
+    data = request.get_json(silent=True) or {}
+    try:
+        workspace_id = int(data.get("workspace_id"))
+    except (TypeError, ValueError):
+        return _error("Select a valid workspace.")
+    membership = membership_for(current_user, workspace_id)
+    if not membership:
+        return _error("You are not an active member of that workspace.", 403)
+    session["active_workspace_id"] = workspace_id
+    return jsonify({"message": "Workspace changed successfully.", "workspace": _workspace_payload(membership.workspace, membership)})
+
+
+@bp.post("/workspaces/requests")
+@login_required
+def request_organization_workspace():
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("organization_name", "")).strip()
+    kind = str(data.get("organization_type", "other")).strip().lower()
+    website = str(data.get("website", "")).strip()
+    reason = str(data.get("reason", "")).strip()
+    allowed_types = {"university", "college", "school", "research_group", "company", "other"}
+    if not name or len(name) > 180:
+        return _error("Enter an organisation name (up to 180 characters).")
+    if kind not in allowed_types:
+        return _error("Select a valid organisation type.")
+    if website and (len(website) > 255 or not re.match(r"^https?://", website, re.I)):
+        return _error("Enter a website beginning with http:// or https://.")
+    if len(reason) < 20 or len(reason) > 2000:
+        return _error("Explain how you intend to use the workspace (20–2,000 characters).")
+    if WorkspaceRequest.query.filter_by(user_id=current_user.user_id, status="pending").first():
+        return _error("You already have an organisational workspace request awaiting review.", 409)
+    record = WorkspaceRequest(
+        user_id=current_user.user_id,
+        organization_name=name,
+        organization_type=kind,
+        website=website or None,
+        reason=reason,
+        status="pending",
+    )
+    db.session.add(record)
+    db.session.commit()
+    return jsonify({"message": "Your organisational workspace request has been submitted for review."}), 201
+
+
+@bp.get("/workspaces/<int:workspace_id>/members")
+@login_required
+def workspace_members(workspace_id):
+    membership = membership_for(current_user, workspace_id)
+    if not is_workspace_manager(membership):
+        return _error("Only workspace owners and administrators can manage members.", 403)
+    if membership.workspace.workspace_type != "organization":
+        return _error("Personal workspaces cannot have additional members.", 400)
+    records = WorkspaceMembership.query.filter_by(workspace_id=workspace_id, status="active").all()
+    return jsonify({"members": [{"id": item.user.user_id, "full_name": item.user.full_name, "email": item.user.email, "role": item.role} for item in records]})
+
+
+@bp.post("/workspaces/<int:workspace_id>/members")
+@login_required
+def add_workspace_member(workspace_id):
+    membership = membership_for(current_user, workspace_id)
+    if not is_workspace_manager(membership):
+        return _error("Only workspace owners and administrators can manage members.", 403)
+    if membership.workspace.workspace_type != "organization":
+        return _error("Personal workspaces cannot have additional members.", 400)
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    role = str(data.get("role", "member")).strip().lower()
+    if role not in {"admin", "lecturer", "student", "member"}:
+        return _error("Select a valid workspace role.")
+    target = User.query.filter_by(email=email, is_active=True).first()
+    if not target:
+        return _error("No active AcaSift account was found for that email address.", 404)
+    existing = WorkspaceMembership.query.filter_by(workspace_id=workspace_id, user_id=target.user_id).first()
+    if existing and existing.status == "active":
+        return _error("This user is already a member of the workspace.", 409)
+    if existing:
+        existing.role = role
+        existing.status = "active"
+    else:
+        db.session.add(WorkspaceMembership(workspace_id=workspace_id, user_id=target.user_id, role=role, status="active"))
+    db.session.commit()
+    return jsonify({"message": f"{target.full_name} was added to the workspace."}), 201
+
+
+@bp.get("/admin/workspace-requests")
+@admin_required
+def admin_workspace_requests():
+    records = WorkspaceRequest.query.order_by(WorkspaceRequest.created_at.desc()).all()
+    return jsonify({"requests": [{
+        "id": item.request_id,
+        "requester": item.requester.full_name,
+        "requester_email": item.requester.email,
+        "organization_name": item.organization_name,
+        "organization_type": item.organization_type,
+        "website": item.website,
+        "reason": item.reason,
+        "status": item.status,
+        "created_at": _date(item.created_at),
+        "review_notes": item.review_notes,
+    } for item in records]})
+
+
+@bp.post("/admin/workspace-requests/<int:request_id>/decision")
+@admin_required
+def decide_workspace_request(request_id):
+    record = db.get_or_404(WorkspaceRequest, request_id)
+    if record.status != "pending":
+        return _error("This request has already been reviewed.", 409)
+    data = request.get_json(silent=True) or {}
+    decision = str(data.get("decision", "")).lower()
+    notes = str(data.get("review_notes", "")).strip()
+    if decision not in {"approve", "reject"}:
+        return _error("Choose approve or reject.")
+    if len(notes) > 2000:
+        return _error("Review notes are too long.")
+    if decision == "approve":
+        workspace = Workspace(
+            name=record.organization_name,
+            workspace_type="organization",
+            status="active",
+            owner_user_id=record.user_id,
+        )
+        db.session.add(workspace)
+        db.session.flush()
+        db.session.add(WorkspaceMembership(workspace_id=workspace.workspace_id, user_id=record.user_id, role="owner", status="active"))
+        record.status = "approved"
+    else:
+        record.status = "rejected"
+    record.reviewed_by_user_id = current_user.user_id
+    record.review_notes = notes or None
+    record.reviewed_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"message": f"Workspace request {record.status} successfully."})
 
 
 @bp.get("/bootstrap/status")
@@ -426,6 +676,7 @@ def bootstrap_first_admin():
                     )
                     db.session.add(created_user)
                     db.session.flush()
+                    ensure_personal_workspace(created_user)
 
     except Exception:
         db.session.rollback()
@@ -439,6 +690,9 @@ def bootstrap_first_admin():
 
     # Sign in only after the database transaction commits successfully.
     login_user(created_user, remember=False, fresh=True)
+    personal = ensure_personal_workspace(created_user)
+    session["active_workspace_id"] = personal.workspace_id
+    db.session.commit()
     response = jsonify({
         "message": "Your AcaSift administrator account has been created.",
         "user": _user_payload(created_user),

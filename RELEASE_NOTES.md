@@ -128,3 +128,19 @@
 - Added current-password verification and password confirmation checks.
 - Added account navigation from the workspace sidebar and account identity control.
 - No open self-registration in this release; account provisioning policy remains unchanged.
+
+
+# AcaSift 0.5.0 — Global workspace foundation
+
+- Establishes AcaSift as an institution-agnostic platform architecture.
+- Adds private personal workspaces for every existing account.
+- Adds organisational workspace requests, with activation only after platform-admin approval.
+- Adds workspace membership roles: owner, admin, lecturer, student and member.
+- Adds workspace switching and member addition for workspace owners/admins.
+- Adds workspace-scoped document and comparison records.
+- Migrates existing submissions and comparisons into each owner's personal workspace.
+- Preserves existing administrator-curated reference documents as platform-wide reference sources.
+- Restricts comparison history to its owner; platform administrator status does not bypass private report ownership.
+- Does not yet implement public self-registration, email verification, course/assignment permissions or student-to-student comparison.
+
+- Adds workspace-scoped reference uploads: personal references remain private to the uploader; organisational references are shared with active workspace members.

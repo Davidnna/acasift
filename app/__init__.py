@@ -24,7 +24,7 @@ def create_app(config_class=Config):
     login_manager.login_view = "main.spa"
     login_manager.login_message_category = "warning"
 
-    from app.models import User
+    from app.models import User, Workspace, WorkspaceMembership, Document, Comparison
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -83,6 +83,87 @@ def create_app(config_class=Config):
                                 "ALTER TABLE users ALTER COLUMN full_name TYPE VARCHAR(255)"
                             ))
             inspector = inspect(db.engine)
+            if inspector.has_table("documents"):
+                document_columns = {column["name"] for column in inspector.get_columns("documents")}
+                with db.engine.begin() as connection:
+                    if "workspace_id" not in document_columns:
+                        connection.execute(text("ALTER TABLE documents ADD COLUMN workspace_id INTEGER"))
+                    if "visibility_scope" not in document_columns:
+                        connection.execute(text("ALTER TABLE documents ADD COLUMN visibility_scope VARCHAR(20) NOT NULL DEFAULT 'private'"))
+            inspector = inspect(db.engine)
+            if inspector.has_table("comparisons"):
+                comparison_columns = {column["name"] for column in inspector.get_columns("comparisons")}
+                if "workspace_id" not in comparison_columns:
+                    with db.engine.begin() as connection:
+                        connection.execute(text("ALTER TABLE comparisons ADD COLUMN workspace_id INTEGER"))
+
+            # Add referential constraints on existing PostgreSQL installations. SQLite
+            # cannot add a foreign key to an existing table without rebuilding it.
+            if db.engine.dialect.name == "postgresql":
+                for table_name, constraint_name in (
+                    ("documents", "fk_documents_workspace_id_workspaces"),
+                    ("comparisons", "fk_comparisons_workspace_id_workspaces"),
+                ):
+                    foreign_keys = inspect(db.engine).get_foreign_keys(table_name)
+                    if not any("workspace_id" in item.get("constrained_columns", []) for item in foreign_keys):
+                        with db.engine.begin() as connection:
+                            connection.execute(text(
+                                f"ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} "
+                                "FOREIGN KEY (workspace_id) REFERENCES workspaces (workspace_id)"
+                            ))
+
+            # Create one private personal workspace for each existing account.
+            # Existing submissions and comparisons are migrated into it. Existing
+            # administrator-curated references remain available as platform sources.
+            for existing_user in User.query.all():
+                membership = (
+                    WorkspaceMembership.query.join(Workspace)
+                    .filter(
+                        WorkspaceMembership.user_id == existing_user.user_id,
+                        Workspace.workspace_type == "personal",
+                    ).first()
+                )
+                if membership:
+                    personal = membership.workspace
+                else:
+                    personal = Workspace(
+                        name=f"{existing_user.full_name}'s workspace"[:180],
+                        workspace_type="personal",
+                        status="active",
+                        owner_user_id=existing_user.user_id,
+                    )
+                    db.session.add(personal)
+                    db.session.flush()
+                    db.session.add(WorkspaceMembership(
+                        workspace_id=personal.workspace_id,
+                        user_id=existing_user.user_id,
+                        role="owner",
+                        status="active",
+                    ))
+                Document.query.filter_by(
+                    user_id=existing_user.user_id,
+                    document_type="submission",
+                    workspace_id=None,
+                ).update(
+                    {"workspace_id": personal.workspace_id, "visibility_scope": "private"},
+                    synchronize_session=False,
+                )
+                Comparison.query.filter_by(
+                    user_id=existing_user.user_id,
+                    workspace_id=None,
+                ).update({"workspace_id": personal.workspace_id}, synchronize_session=False)
+
+            Document.query.filter_by(document_type="reference", workspace_id=None).update(
+                {"workspace_id": None, "visibility_scope": "platform"},
+                synchronize_session=False,
+            )
+            db.session.commit()
+            with db.engine.begin() as connection:
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_workspace_id ON documents (workspace_id)"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_visibility_scope ON documents (visibility_scope)"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_comparisons_workspace_id ON comparisons (workspace_id)"))
+
+            inspector = inspect(db.engine)
             if inspector.has_table("comparison_results"):
                 columns = {column["name"] for column in inspector.get_columns("comparison_results")}
                 if "coverage_method" not in columns:
@@ -127,6 +208,9 @@ def create_app(config_class=Config):
                 is_active=True,
             )
             db.session.add(user)
+            db.session.flush()
+            from app.services.workspace_service import ensure_personal_workspace
+            ensure_personal_workspace(user)
             db.session.commit()
         click.echo(f"Administrator account created for {email}.")
 

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from sqlalchemy import UniqueConstraint
 
 from flask_login import UserMixin
 from werkzeug.security import check_password_hash
@@ -52,6 +53,9 @@ class Document(db.Model):
     document_type = db.Column(db.String(30), nullable=False, index=True)
     extracted_text = db.Column(db.Text, nullable=False)
     file_hash = db.Column(db.String(64), nullable=False, index=True)
+    workspace_id = db.Column(db.Integer, db.ForeignKey("workspaces.workspace_id"), nullable=True, index=True)
+    # private: uploader only; workspace: authorised workspace members; platform: curated shared source.
+    visibility_scope = db.Column(db.String(20), nullable=False, default="private", index=True)
     processing_status = db.Column(db.String(30), nullable=False, default="processed")
     uploaded_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
 
@@ -78,6 +82,7 @@ class Comparison(db.Model):
         db.Integer, db.ForeignKey("documents.document_id"), nullable=False, index=True
     )
     user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
+    workspace_id = db.Column(db.Integer, db.ForeignKey("workspaces.workspace_id"), nullable=True, index=True)
     status = db.Column(db.String(30), nullable=False, default="processing")
     started_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
     completed_at = db.Column(db.DateTime(timezone=True))
@@ -141,3 +146,53 @@ class Report(db.Model):
     generated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
 
     comparison = db.relationship("Comparison", back_populates="report")
+
+
+class Workspace(db.Model):
+    __tablename__ = "workspaces"
+
+    workspace_id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(180), nullable=False)
+    workspace_type = db.Column(db.String(24), nullable=False, default="personal", index=True)
+    status = db.Column(db.String(24), nullable=False, default="active", index=True)
+    owner_user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+
+    memberships = db.relationship("WorkspaceMembership", back_populates="workspace", cascade="all, delete-orphan", lazy=True)
+    documents = db.relationship("Document", backref="workspace", lazy=True)
+    comparisons = db.relationship("Comparison", backref="workspace", lazy=True)
+
+
+class WorkspaceMembership(db.Model):
+    __tablename__ = "workspace_memberships"
+    __table_args__ = (UniqueConstraint("workspace_id", "user_id", name="uq_workspace_membership_user"),)
+
+    membership_id = db.Column(db.Integer, primary_key=True)
+    workspace_id = db.Column(db.Integer, db.ForeignKey("workspaces.workspace_id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
+    # owner, admin, lecturer, student, member
+    role = db.Column(db.String(24), nullable=False, default="member")
+    status = db.Column(db.String(24), nullable=False, default="active")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+
+    workspace = db.relationship("Workspace", back_populates="memberships")
+    user = db.relationship("User", backref=db.backref("workspace_memberships", lazy=True))
+
+
+class WorkspaceRequest(db.Model):
+    __tablename__ = "workspace_requests"
+
+    request_id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
+    organization_name = db.Column(db.String(180), nullable=False)
+    organization_type = db.Column(db.String(40), nullable=False)
+    website = db.Column(db.String(255), nullable=True)
+    reason = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(24), nullable=False, default="pending", index=True)
+    reviewed_by_user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=True)
+    review_notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+    reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    requester = db.relationship("User", foreign_keys=[user_id])
+    reviewer = db.relationship("User", foreign_keys=[reviewed_by_user_id])

@@ -292,3 +292,22 @@ Authenticated users can update their name details and change their password afte
 the current password. Email address, account role and account status are read-only in the
 profile; changing email safely requires a verification workflow, while roles/status remain
 administrator-controlled. The account page shows personal document and comparison activity.
+
+
+## Global workspace foundation (0.5.0)
+
+AcaSift is being developed as an institution-agnostic platform. Each existing account receives a private personal workspace. Users can request an organisational workspace for a university, school, research group, company or other organisation; requests remain pending until a platform administrator reviews them.
+
+Workspace owners and administrators can add existing AcaSift accounts and assign workspace roles (student, lecturer, member or workspace administrator). The platform administrator role remains separate from workspace roles.
+
+### Data isolation and migration
+
+The startup `init-db` command adds `workspace_id` and `visibility_scope` columns to existing document/comparison tables. It creates a personal workspace for every existing user, moves that user's submissions and comparisons into it, and retains the existing administrator-curated reference repository as platform-wide references. This migration is additive and does not delete existing documents, comparison results or users.
+
+New submissions are private to the uploader and active workspace. The current release does not yet permit lecturers to view other users' submissions or run student-to-student comparisons; those permissions will be introduced with course and assignment boundaries in a later release.
+
+### Current rollout boundary
+
+Public self-registration and email verification are not enabled in 0.5.0. They are the next implementation stage. Until then, existing accounts continue to use the current administrator-created account process.
+
+Workspace owners can add references to their active workspace. Personal-workspace references remain private; organisational-workspace references are available to active workspace members.

@@ -14,7 +14,7 @@ export function HomePage() {
       <div className="hero-copy">
         <div className="eyebrow hero-eyebrow"><span className="eyebrow-pulse" /> ACADEMIC DOCUMENT SIMILARITY ANALYSIS</div>
         <h1>Understand text similarity.<br /><span>Review with context.</span></h1>
-        <p className="hero-lead">AcaSift helps academic communities compare submitted documents with a curated reference collection, identify overlapping passages and make more informed decisions during document review.</p>
+        <p className="hero-lead">AcaSift helps individuals and academic organisations compare documents with authorised reference collections, identify overlapping passages and make more informed decisions during document review.</p>
         <div className="hero-actions"><Link viewTransition className="button button-primary button-lg" to="/how-it-works">Explore how it works <ArrowRight size={17} /></Link><Link viewTransition className="button button-outline button-lg" to="/login">Sign in to AcaSift</Link></div>
         <div className="hero-footnote"><ShieldCheck size={16} /> Designed to support academic review, not replace human judgement.</div>
       </div>
@@ -37,14 +37,14 @@ export function HomePage() {
     <section className="section wrap"><div className="section-title centered"><Eyebrow>WHAT ACASIFT DOES</Eyebrow><h2>From document submission<br />to evidence-led review.</h2><p>AcaSift brings document extraction, text comparison and source-level review into one straightforward workflow.</p></div>
       <div className="feature-cards">
         <FeatureCard icon={<FileText />} number="01" title="Document text extraction" text="Extract text from supported PDF, DOCX and TXT documents so their contents can be analysed." />
-        <FeatureCard icon={<Target />} number="02" title="Similarity comparison" text="Compare a submission with documents in the administrator-curated reference repository using text similarity methods." />
+        <FeatureCard icon={<Target />} number="02" title="Similarity comparison" text="Compare a submission with documents in the authorised reference collection using text similarity methods." />
         <FeatureCard icon={<SearchCheck />} number="03" title="Matching passage review" text="Inspect identified overlapping word sequences alongside their corresponding reference-source passages." />
       </div>
       <div className="center-link"><Link viewTransition className="text-link" to="/features">Explore all features <ArrowRight size={16} /></Link></div>
     </section>
-    <section className="workflow-band"><div className="wrap workflow-home"><div className="workflow-intro"><Eyebrow>A CLEAR WORKFLOW</Eyebrow><h2>How AcaSift works</h2><p>Administrators maintain the reference collection. Users submit documents for comparison and review the resulting report.</p><Link viewTransition className="text-link" to="/how-it-works">See the full process <ArrowRight size={16} /></Link></div><div className="workflow-mini-steps"><MiniStep number="01" title="Build the reference collection" text="An administrator adds reference documents to the repository." /><MiniStep number="02" title="Submit an academic document" text="An authorised user uploads a PDF, DOCX or TXT document." /><MiniStep number="03" title="Compare and review" text="AcaSift calculates similarity indicators and presents matching passages by source." /></div></div></section>
+    <section className="workflow-band"><div className="wrap workflow-home"><div className="workflow-intro"><Eyebrow>A CLEAR WORKFLOW</Eyebrow><h2>How AcaSift works</h2><p>Individuals work privately, while approved organisations can manage members and shared academic reference collections.</p><Link viewTransition className="text-link" to="/how-it-works">See the full process <ArrowRight size={16} /></Link></div><div className="workflow-mini-steps"><MiniStep number="01" title="Build the reference collection" text="An authorised workspace member adds reference documents to the appropriate collection." /><MiniStep number="02" title="Submit an academic document" text="A workspace member uploads a PDF, DOCX or TXT document." /><MiniStep number="03" title="Compare and review" text="AcaSift calculates similarity indicators and presents matching passages by source." /></div></div></section>
     <section className="section wrap"><div className="integrity-panel"><div className="integrity-icon"><ShieldCheck size={24} /></div><div><Eyebrow>IMPORTANT TO UNDERSTAND</Eyebrow><h2>A similarity score is a signal, not a verdict.</h2><p>Text overlap can occur in properly cited quotations, references, standard terminology and commonly used phrases. AcaSift provides indicators and matching passages for human assessment. It does not independently determine whether plagiarism has occurred.</p></div><Link viewTransition className="button button-outline" to="/faq">Read the FAQs</Link></div></section>
-    <section className="closing-cta"><div className="wrap closing-cta-inner"><div><Eyebrow>ACASIFT WORKSPACE</Eyebrow><h2>Ready to review a document?</h2><p>Sign in with an account provided by your institution's AcaSift administrator.</p></div><Link viewTransition className="button button-light button-lg" to="/login">Sign in <ArrowRight size={17} /></Link></div></section>
+    <section className="closing-cta"><div className="wrap closing-cta-inner"><div><Eyebrow>ACASIFT WORKSPACE</Eyebrow><h2>Ready to review a document?</h2><p>Sign in to your AcaSift individual or organisational workspace.</p></div><Link viewTransition className="button button-light button-lg" to="/login">Sign in <ArrowRight size={17} /></Link></div></section>
   </>;
 }
 
@@ -57,7 +57,7 @@ function MiniStep({ number, title, text }: { number: string; title: string; text
 
 export function AboutPage() {
   return <PublicPage eyebrow="ABOUT ACASIFT" title="A clearer way to review document similarity." intro="AcaSift is an academic document similarity analysis platform designed to support structured comparison and careful source review." >
-    <div className="prose-grid"><div><h2>Our purpose</h2><p>Academic work depends on the responsible use of sources. Reviewing a submitted document for textual overlap can be time-consuming when documents, reference materials and observations are kept in separate places.</p><p>AcaSift brings several parts of that review process together. It extracts text from supported document formats, compares a submission with an administrator-curated reference repository and presents similarity indicators alongside identified matching passages.</p></div><div className="side-note"><Fingerprint size={24} /><h3>Designed for informed review</h3><p>The platform is intended to help reviewers identify material that may deserve closer examination. It does not make disciplinary decisions or replace academic judgement.</p></div></div>
+    <div className="prose-grid"><div><h2>Our purpose</h2><p>Academic work depends on the responsible use of sources. Reviewing a submitted document for textual overlap can be time-consuming when documents, reference materials and observations are kept in separate places.</p><p>AcaSift brings several parts of that review process together. It extracts text from supported document formats, compares a submission with an authorised reference collection and presents similarity indicators alongside identified matching passages.</p></div><div className="side-note"><Fingerprint size={24} /><h3>Designed for informed review</h3><p>The platform is intended to help reviewers identify material that may deserve closer examination. It does not make disciplinary decisions or replace academic judgement.</p></div></div>
     <div className="section-subheading"><h2>What guides the platform</h2></div><div className="principle-grid"><Principle icon={<Target />} title="Clarity" text="Present comparison results in a way that users can inspect and understand." /><Principle icon={<BookOpen />} title="Source context" text="Show the reference documents and matching passages behind the indicators." /><Principle icon={<ShieldCheck />} title="Responsible interpretation" text="Treat similarity as evidence for review, not proof of plagiarism." /></div>
     <Notice tone="info"><strong>Current scope:</strong> AcaSift compares submissions with documents already stored in its internal reference repository. It does not currently crawl the internet or search external academic databases.</Notice>
   </PublicPage>;
@@ -69,7 +69,7 @@ export function FeaturesPage() {
     { icon: <Layers3 />, title: 'TF-IDF and cosine similarity', text: 'Represent document text using TF-IDF features and calculate cosine similarity between a submission and available reference documents.' },
     { icon: <SearchCheck />, title: 'Word N-gram matching', text: 'Identify repeated sequences of words and calculate the proportion of unique submission N-grams that also occur in a reference document.' },
     { icon: <MessageSquareText />, title: 'Passage-level review', text: 'Present identified matching passages with their corresponding excerpts from the reference source.' },
-    { icon: <LockKeyhole />, title: 'Account-controlled workspace', text: 'Use administrator-created accounts and role-based access to separate normal user and administrative functions.' },
+    { icon: <LockKeyhole />, title: 'Account-controlled workspace', text: 'Use private individual workspaces or collaborate through approved organisational workspaces with role-based access.' },
     { icon: <Gauge />, title: 'Comparison history', text: 'Return to previous comparison records and review the results generated for each submitted document.' },
   ];
   return <PublicPage eyebrow="PLATFORM FEATURES" title="Tools for structured similarity review." intro="AcaSift combines text extraction, document-level comparison and passage matching in a single academic review workflow.">
@@ -81,7 +81,7 @@ export function FeaturesPage() {
 
 export function HowItWorksPage() {
   const steps = [
-    { n: '01', icon: <BookOpen />, title: 'An administrator builds the reference repository', text: 'An authorised administrator uploads reference documents. These documents become the comparison sources available to the system.' },
+    { n: '01', icon: <BookOpen />, title: 'An authorised workspace member builds the reference collection', text: 'An authorised workspace member uploads reference documents. These become comparison sources available within the relevant workspace or platform scope.' },
     { n: '02', icon: <Upload />, title: 'A user submits a document', text: 'An authorised user signs in and uploads an academic document in PDF, DOCX or TXT format. AcaSift extracts its readable text.' },
     { n: '03', icon: <SearchCheck />, title: 'AcaSift compares the text', text: 'The system calculates TF-IDF cosine similarity and checks word-based N-gram overlap against the available reference documents.' },
     { n: '04', icon: <FileCheck2 />, title: 'The user reviews the report', text: 'The report ranks the compared sources and displays similarity indicators and matching passages for human assessment.' },
@@ -94,28 +94,28 @@ export function HowItWorksPage() {
 }
 
 const faqItems = [
-  ['What is AcaSift?', 'AcaSift is an academic document similarity analysis platform. It compares uploaded submissions with documents in an administrator-curated reference repository and reports textual similarity indicators and matching passages.'],
-  ['Does AcaSift search the entire internet?', 'No. The current release compares submissions with reference documents already uploaded to the AcaSift repository by an administrator. It does not crawl the internet or query external academic databases.'],
+  ['What is AcaSift?', 'AcaSift is an academic document similarity analysis platform. It compares uploaded submissions with documents in an authorised reference collection and reports textual similarity indicators and matching passages.'],
+  ['Does AcaSift search the entire internet?', 'No. The current release compares submissions with platform-curated reference documents and references available within the active workspace. It does not crawl the internet or query external academic databases.'],
   ['Does a high similarity score prove plagiarism?', 'No. A similarity score is an indicator of textual overlap, not a verdict. Properly cited quotations, references, standard terminology and common phrases can contribute to similarity. A qualified reviewer must interpret the results in context.'],
   ['Which file formats are supported?', 'The current release supports text-based PDF, DOCX and TXT documents. Scanned image-only PDFs are not supported because optical character recognition is not currently included.'],
-  ['Can anyone create an account?', 'No. Accounts are created by an authorised AcaSift administrator. Contact the administrator responsible for your institution or project to request access.'],
+  ['Does AcaSift require an institutional email?', 'No. AcaSift is institution-agnostic. Individual accounts will use personal or work email addresses. Email verification will be required when public registration is enabled.'],
   ['What methods does AcaSift use?', 'The current implementation uses TF-IDF vectorisation with cosine similarity for document-level comparison and word-based N-gram matching for identifying overlapping sequences.'],
   ['Does AcaSift detect paraphrased content?', 'The current release focuses on lexical overlap. It does not provide semantic paraphrase detection or cross-language plagiarism detection.'],
-  ['Who can view my comparison reports?', 'A normal user can view their own comparison reports. Administrators have broader access for managing the reference repository and user accounts.'],
+  ['Who can view my comparison reports?', 'Individual submissions and reports are private to their owners. Organisational workspace access is limited to authorised members and permissions.'],
 ];
 
 export function FaqPage() {
   const [open, setOpen] = useState<number | null>(0);
   return <PublicPage eyebrow="FREQUENTLY ASKED QUESTIONS" title="Questions about AcaSift." intro="Learn about the platform's capabilities, how similarity results should be interpreted and how to obtain an account.">
     <div className="faq-list">{faqItems.map(([question, answer], i) => <article className={`faq-item ${open === i ? 'faq-open' : ''}`} key={question}><button onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i}><span>{question}</span><ChevronDown size={19} /></button>{open === i && <div className="faq-answer"><p>{answer}</p></div>}</article>)}</div>
-    <div className="faq-contact"><div><CircleHelp size={22} /><div><h3>Still have a question?</h3><p>For account access, contact the administrator responsible for your AcaSift workspace.</p></div></div><Link viewTransition className="button button-primary" to="/access">How to get access <ArrowRight size={15} /></Link></div>
+    <div className="faq-contact"><div><CircleHelp size={22} /><div><h3>Still have a question?</h3><p>For account access, sign in with your existing account. Public registration is part of the next rollout.</p></div></div><Link viewTransition className="button button-primary" to="/access">How to get access <ArrowRight size={15} /></Link></div>
   </PublicPage>;
 }
 
 export function AccessPage() {
-  return <PublicPage eyebrow="WORKSPACE ACCESS" title="Get access to AcaSift." intro="AcaSift currently uses administrator-managed accounts. Public self-registration is not enabled.">
-    <div className="access-panel"><div className="access-panel-icon"><LockKeyhole size={26} /></div><div><h2>Accounts are created by an administrator.</h2><p>If your institution or project uses AcaSift, contact its designated administrator and request an account. Once your account has been created, you can sign in using the email address and password provided to you.</p><div className="access-steps"><div><span>1</span><p>Contact your AcaSift administrator.</p></div><div><span>2</span><p>Receive your account credentials.</p></div><div><span>3</span><p>Sign in and access your document workspace.</p></div></div><Link viewTransition className="button button-primary button-lg" to="/login">Go to sign in <ArrowRight size={16} /></Link></div></div>
-    <p className="access-note">Do not share your password with other users. If you cannot access your account, contact your administrator.</p>
+  return <PublicPage eyebrow="WORKSPACE ACCESS" title="Get access to AcaSift." intro="AcaSift supports private individual workspaces and approved organisational workspaces. Public registration is being introduced in stages.">
+    <div className="access-panel"><div className="access-panel-icon"><LockKeyhole size={26} /></div><div><h2>AcaSift is designed for independent use.</h2><p>Individual accounts will not require institutional email addresses, matriculation numbers or staff IDs. Public registration will be enabled in the next rollout after email verification delivery is configured. Organisational workspaces will remain subject to approval.</p><div className="access-steps"><div><span>1</span><p>Existing users can sign in with their current credentials.</p></div><div><span>2</span><p>Public individual registration will be enabled after email verification is configured.</p></div><div><span>3</span><p>Approved organisations can invite members and manage shared workspaces.</p></div></div><Link viewTransition className="button button-primary button-lg" to="/login">Go to sign in <ArrowRight size={16} /></Link></div></div>
+    <p className="access-note">Do not share your password with other users. Public self-registration will be enabled in the next rollout after email verification delivery is configured.</p>
   </PublicPage>;
 }
 

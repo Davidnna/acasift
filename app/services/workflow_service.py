@@ -14,9 +14,10 @@ from app.services.document_service import (
     make_storage_filename,
 )
 from app.services.similarity_service import compare_against_repository
+from app.services.workspace_service import get_active_workspace
 
 
-def save_uploaded_document(file_storage, title, document_type):
+def save_uploaded_document(file_storage, title, document_type, workspace_id=None, visibility_scope=None):
     if not file_storage or not file_storage.filename:
         raise ValueError("Choose a document to upload.")
 
@@ -37,8 +38,17 @@ def save_uploaded_document(file_storage, title, document_type):
     with open(storage_path, "wb") as stored_file:
         stored_file.write(file_bytes)
 
+    if document_type == "submission":
+        active_workspace = get_active_workspace(current_user)
+        resolved_workspace_id = active_workspace.workspace_id
+        resolved_scope = "private"
+    else:
+        resolved_workspace_id = workspace_id
+        resolved_scope = visibility_scope or "platform"
     document = Document(
         user_id=current_user.user_id,
+        workspace_id=resolved_workspace_id,
+        visibility_scope=resolved_scope,
         title=(title or os.path.splitext(original_filename)[0]).strip()[:255],
         original_filename=original_filename[:255],
         storage_path=storage_name,
@@ -57,17 +67,31 @@ def run_comparison(submitted_document):
     comparison = Comparison(
         submitted_document_id=submitted_document.document_id,
         user_id=current_user.user_id,
+        workspace_id=submitted_document.workspace_id,
         status="processing",
     )
     db.session.add(comparison)
     db.session.commit()
 
     try:
+        from sqlalchemy import and_, or_
+
+        reference_visibility = or_(
+            Document.visibility_scope == "platform",
+            and_(
+                Document.workspace_id == submitted_document.workspace_id,
+                or_(
+                    Document.visibility_scope == "workspace",
+                    and_(Document.visibility_scope == "private", Document.user_id == submitted_document.user_id),
+                ),
+            ),
+        )
         references = (
             Document.query.filter(
                 Document.document_id != submitted_document.document_id,
                 Document.document_type == "reference",
                 Document.processing_status == "processed",
+                reference_visibility,
             )
             .order_by(Document.uploaded_at.desc())
             .limit(current_app.config["MAX_COMPARISON_SOURCES"])

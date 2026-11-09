@@ -19,6 +19,8 @@ export interface DocumentRecord {
   original_filename: string;
   file_type: string;
   document_type: 'submission' | 'reference';
+  workspace_id?: number | null;
+  visibility_scope?: 'private' | 'workspace' | 'platform';
   processing_status: string;
   uploaded_at: string;
 }
@@ -75,4 +77,35 @@ export interface AccountData {
     recent_documents: DocumentRecord[];
     recent_comparisons: ComparisonSummary[];
   };
+}
+
+
+export interface WorkspaceRecord {
+  id: number;
+  name: string;
+  type: 'personal' | 'organization';
+  status: string;
+  role: 'owner' | 'admin' | 'lecturer' | 'student' | 'member' | null;
+  created_at: string;
+}
+
+export interface WorkspaceData {
+  active_workspace_id: number;
+  workspaces: WorkspaceRecord[];
+  pending_request: { id: number; organization_name: string; status: string; created_at: string } | null;
+  can_manage_members: boolean;
+  members: { id: number; full_name: string; email: string; role: string }[];
+}
+
+export interface WorkspaceRequestRecord {
+  id: number;
+  requester: string;
+  requester_email: string;
+  organization_name: string;
+  organization_type: string;
+  website: string | null;
+  reason: string;
+  status: string;
+  created_at: string;
+  review_notes: string | null;
 }

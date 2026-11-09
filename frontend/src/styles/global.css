@@ -197,3 +197,26 @@
 .account-empty{color:#97a2b0;font-size:10px}
 @media(max-width:900px){.account-layout-grid{grid-template-columns:1fr}}
 @media(max-width:600px){.account-hero{align-items:flex-start;flex-wrap:wrap;padding:17px}.account-avatar-large{width:54px;height:54px;border-radius:15px}.account-hero-copy{flex-basis:calc(100% - 75px)}.account-hero-meta{width:100%;padding:12px 0 0;border-left:0;border-top:1px solid var(--line)}.account-name-grid{grid-template-columns:1fr}.account-other-names{grid-column:auto}.account-panel{padding:15px}}
+
+
+/* AcaSift 0.5.0 workspace foundation */
+.workspace-card-list{display:grid;gap:12px}
+.workspace-choice{display:flex;align-items:center;gap:13px;padding:15px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.workspace-choice-active{border-color:var(--blue);background:#f2fbf9}
+.workspace-choice-icon{width:40px;height:40px;display:grid;place-items:center;border-radius:11px;background:#eaf7f5;color:var(--blue-dark);flex:none}
+.workspace-choice-copy{display:grid;gap:4px;flex:1;min-width:0}
+.workspace-choice-copy strong{color:var(--ink);font-size:13px}
+.workspace-choice-copy span{color:var(--muted);font-size:11px}
+.workspace-request-list{display:grid;gap:15px}
+.workspace-request-card{padding:19px 0;border-bottom:1px solid var(--line)}
+.workspace-request-card:last-child{border-bottom:0}
+.workspace-request-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.workspace-request-head h3{margin:0 0 5px;color:var(--ink);font-size:16px}
+.workspace-request-head p,.workspace-request-card>p{color:var(--muted);font-size:12px;line-height:1.7}
+.workspace-request-card>p{margin:10px 0}
+.workspace-request-card a{color:var(--blue-dark);font-size:12px}
+.workspace-request-card .form-actions{margin-top:14px}
+.status-pending{background:#fff7e8;color:#9a650d}
+.status-approved{background:#eaf7f0;color:#18734d}
+.status-rejected{background:#fff0ef;color:#a43f38}
+@media(max-width:680px){.workspace-choice{align-items:flex-start;flex-wrap:wrap}.workspace-choice-copy{min-width:calc(100% - 60px)}.workspace-choice>.category-tag{margin-left:53px}.workspace-request-head{flex-direction:column}}

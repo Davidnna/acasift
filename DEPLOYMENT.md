@@ -129,3 +129,12 @@ No manual SQL is required. On deployment, the existing `init-db` startup command
 all existing `full_name` values. On PostgreSQL, it also widens `users.full_name` to VARCHAR(255)
 when the current column is narrower. Existing accounts should sign in and complete their
 structured name fields under **My account**.
+
+
+## AcaSift 0.5.0 workspace migration
+
+The existing Docker startup command runs `flask --app run.py init-db` before Gunicorn. The command creates the new workspace tables and adds the workspace columns to existing documents and comparisons. It then creates one personal workspace for each existing user, assigns their old submissions and comparisons to that workspace, and labels existing reference documents as platform-curated. No manual SQL is required.
+
+After deployment, sign in with the existing account and open `/app/workspaces`. Confirm that the personal workspace appears. Submit a test document and verify it is associated with the active workspace. Use the platform-admin navigation to review `/app/admin/workspace-requests`.
+
+Organisational workspace approval is a manual platform-admin review. Confirm the requester's identity and authority to represent the organisation before approving. Workspace membership can currently be granted to existing active AcaSift accounts by email.

@@ -4,6 +4,8 @@ import type {
   DashboardData,
   DocumentRecord,
   User,
+  WorkspaceData,
+  WorkspaceRequestRecord,
 } from './types';
 
 export class ApiError extends Error {
@@ -162,4 +164,35 @@ export async function createFirstAdmin(payload: {
     body: JSON.stringify(payload),
   });
   return data.user;
+}
+
+
+export async function getWorkspaces(signal?: AbortSignal): Promise<WorkspaceData> {
+  return request('/api/workspaces', { signal });
+}
+
+export async function switchWorkspace(workspace_id: number): Promise<void> {
+  await request('/api/workspaces/current', { method: 'POST', body: JSON.stringify({ workspace_id }) });
+}
+
+export async function requestOrganizationWorkspace(payload: { organization_name: string; organization_type: string; website: string; reason: string }): Promise<void> {
+  await request('/api/workspaces/requests', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function addWorkspaceMember(workspaceId: number, payload: { email: string; role: string }): Promise<void> {
+  await request(`/api/workspaces/${workspaceId}/members`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function getWorkspaceRequests(signal?: AbortSignal): Promise<WorkspaceRequestRecord[]> {
+  const data = await request<{ requests: WorkspaceRequestRecord[] }>('/api/admin/workspace-requests', { signal });
+  return data.requests;
+}
+
+export async function decideWorkspaceRequest(requestId: number, decision: 'approve' | 'reject'): Promise<void> {
+  await request(`/api/admin/workspace-requests/${requestId}/decision`, { method: 'POST', body: JSON.stringify({ decision }) });
+}
+
+
+export async function uploadWorkspaceReference(formData: FormData, signal?: AbortSignal): Promise<void> {
+  await request('/api/workspace/references', { method: 'POST', body: formData, signal });
 }

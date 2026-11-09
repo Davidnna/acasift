@@ -28,10 +28,10 @@ export function AccountPage() {
     <section className="account-hero panel">
       <div className="account-avatar-large">{(user.first_name?.[0] || user.full_name[0] || 'A').toUpperCase()}</div>
       <div className="account-hero-copy">
-        <span className="eyebrow">{user.is_admin ? 'ADMINISTRATOR ACCOUNT' : 'ACADEMIC WORKSPACE ACCOUNT'}</span>
+        <span className="eyebrow">{user.is_admin ? 'PLATFORM ADMINISTRATOR ACCOUNT' : 'INDIVIDUAL ACCOUNT'}</span>
         <h2>{user.full_name}</h2>
         <p>{user.email}</p>
-        <div className="account-hero-tags"><span className={`category-tag ${user.is_active ? 'account-active' : 'account-inactive'}`}>{user.is_active ? 'Active account' : 'Inactive account'}</span><span className="category-tag">{user.is_admin ? 'Administrator' : 'Registered user'}</span></div>
+        <div className="account-hero-tags"><span className={`category-tag ${user.is_active ? 'account-active' : 'account-inactive'}`}>{user.is_active ? 'Active account' : 'Inactive account'}</span><span className="category-tag">{user.is_admin ? 'Platform administrator' : 'Individual account'}</span></div>
       </div>
       <div className="account-hero-meta"><span>Member since</span><strong>{user.created_at ? formatDate(user.created_at) : 'Date unavailable'}</strong></div>
     </section>
@@ -77,7 +77,7 @@ export function AccountPage() {
         <section className="panel account-panel">
           <div className="panel-heading"><div><h2><ShieldCheck size={17} /> Account details</h2><p>Information about your access.</p></div></div>
           <div className="account-detail-list">
-            <div><span>Account role</span><strong>{user.is_admin ? 'Administrator' : 'Registered user'}</strong></div>
+            <div><span>Account role</span><strong>{user.is_admin ? 'Platform administrator' : 'Individual account'}</strong></div>
             <div><span>Account status</span><strong>{user.is_active ? 'Active' : 'Inactive'}</strong></div>
             <div><span>Account ID</span><strong>#{user.id}</strong></div>
             <div><span>Created</span><strong>{user.created_at ? formatDateTime(user.created_at) : 'Unavailable'}</strong></div>

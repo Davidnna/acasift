@@ -81,6 +81,11 @@ export interface AccountData {
 }
 
 
+export interface AppShellData {
+    user: User;
+    activeWorkspace: WorkspaceRecord | null;
+}
+
 export interface WorkspaceRecord {
     id: number;
     name: string;
@@ -147,7 +152,6 @@ export interface CourseListData {
     courses: CourseRecord[];
     can_create: boolean;
     can_join: boolean;
-    message: string | null;
 }
 
 export interface CourseMemberRecord {

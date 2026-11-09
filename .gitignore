@@ -1,12 +1,25 @@
+# Local configuration and secrets
 .env
+backend/.env
+
+# Python
 .venv/
 venv/
+backend/.venv/
+backend/venv/
 __pycache__/
+backend/**/__pycache__/
 *.py[cod]
-instance/
+backend/instance/
 *.db
 .pytest_cache/
+backend/.pytest_cache/
 .coverage
-.DS_Store
+
+# Frontend
 frontend/node_modules/
 frontend/.vite/
+frontend/dist/
+
+# Operating system and editor files
+.DS_Store

@@ -1,11 +1,22 @@
+# Git and local configuration
 .git
 .github
+.env
+backend/.env
+
+# Python local state
 .venv
 venv
+backend/.venv
+backend/venv
 __pycache__
+backend/**/__pycache__
 *.py[cod]
-.env
-instance
+backend/instance
 .pytest_cache
+backend/.pytest_cache
+
+# Frontend local state
 frontend/node_modules
+frontend/.vite
 frontend/dist

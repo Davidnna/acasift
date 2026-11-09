@@ -46,7 +46,7 @@ export function WorkspacesPage() {
         />
         {actionData?.error && <Notice tone="danger">{actionData.error}</Notice>}
         {actionData?.success && <Notice tone="success">{actionData.success}</Notice>}
-        {actionData?.inviteUrl && <section className="panel workspace-invite-created">
+        {actionData?.inviteUrl && data.can_manage_members && isShared && <section className="panel workspace-invite-created">
             <div className="panel-heading">
                 <div><h2><Link2 size={17} /> Invitation link created</h2><p>Copy and share this link. It will only work while it remains active.</p></div>
             </div>
@@ -76,16 +76,18 @@ export function WorkspacesPage() {
             </div>
             {active && <p className="form-hint">New submissions and comparisons will be associated with <strong>{active.name}</strong>.</p>}
             {isShared && active && <section className="workspace-settings">
-                <div className="panel-divider" />
-                <div className="panel-heading"><div><h2>Workspace details</h2><p>Update the name and description shown to members.</p></div></div>
-                {data.can_manage_members ? <Form method="post" className="form-stack">
-                    <input type="hidden" name="_intent" value="manage" />
-                    <label htmlFor="edit-workspace-name">Workspace name</label>
-                    <input id="edit-workspace-name" name="name" defaultValue={active.name} maxLength={180} required />
-                    <label htmlFor="edit-workspace-description">Description <span>Optional</span></label>
-                    <textarea id="edit-workspace-description" name="description" defaultValue={active.description || ''} rows={2} maxLength={2000} />
-                    <button className="button button-secondary" disabled={busy}>Save workspace details</button>
-                </Form> : <p className="form-hint">Only workspace administrators can change these details.</p>}
+                {data.can_manage_members && <>
+                    <div className="panel-divider" />
+                    <div className="panel-heading"><div><h2>Workspace details</h2><p>Update the name and description shown to members.</p></div></div>
+                    <Form method="post" className="form-stack">
+                        <input type="hidden" name="_intent" value="manage" />
+                        <label htmlFor="edit-workspace-name">Workspace name</label>
+                        <input id="edit-workspace-name" name="name" defaultValue={active.name} maxLength={180} required />
+                        <label htmlFor="edit-workspace-description">Description <span>Optional</span></label>
+                        <textarea id="edit-workspace-description" name="description" defaultValue={active.description || ''} rows={2} maxLength={2000} />
+                        <button className="button button-secondary" disabled={busy}>Save workspace details</button>
+                    </Form>
+                </>}
                 <div className="panel-divider" />
                 <div className="workspace-danger-zone">
                     <div><strong>Leave this workspace</strong><p>You will lose access to its shared documents, courses and assignments. You can rejoin with a new invitation.</p></div>

@@ -626,9 +626,9 @@ def create_user():
 def upload_workspace_reference():
     workspace = get_active_workspace(current_user)
     membership = membership_for(current_user, workspace.workspace_id)
-    if not is_workspace_manager(membership):
-        return _error("Only the owner or an authorised workspace administrator can add reference documents.", 403)
-    scope = "private" if workspace.workspace_type == "personal" else "workspace"
+    if workspace.workspace_type != "shared" or not is_workspace_manager(membership):
+        return _error("Reference collections are available to owners and administrators of shared workspaces.", 403)
+    scope = "workspace"
     try:
         document = save_uploaded_document(
             request.files.get("document"),

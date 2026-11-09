@@ -155,6 +155,26 @@ class AcademicWorkflowTests(unittest.TestCase):
         self.assertEqual(detail.status_code, 200)
         self.assertEqual(detail.get_json()["assignments"][0]["title"], "Literature Review")
 
+    def test_academic_features_are_unavailable_in_personal_workspaces(self):
+        personal_workspace = ensure_personal_workspace(self.lecturer)
+        db.session.commit()
+        with self.lecturer_client.session_transaction() as session:
+            session["active_workspace_id"] = personal_workspace.workspace_id
+
+        self.assertEqual(self.lecturer_client.get("/api/courses").status_code, 403)
+        self.assertEqual(self.lecturer_client.get("/api/assignments").status_code, 403)
+        self.assertEqual(
+            self.lecturer_client.get(f"/api/courses/{self.course_id}").status_code,
+            404,
+        )
+        self.assertEqual(
+            self.lecturer_client.get(f"/api/assignments/{self.assignment_id}").status_code,
+            404,
+        )
+
+        # Restore the shared workspace so tear-down and later tests remain isolated.
+        self._activate_workspace(self.lecturer_client)
+
     def test_student_cannot_create_assignment_or_view_unenrolled_course(self):
         denied = self.student_one_client.post(
             f"/api/courses/{self.course_id}/assignments",
@@ -175,6 +195,8 @@ class AcademicWorkflowTests(unittest.TestCase):
         with other_client.session_transaction() as session:
             session["active_workspace_id"] = self.workspace.workspace_id
         self.assertEqual(other_client.get(f"/api/courses/{self.course_id}").status_code, 403)
+        self.assertEqual(other_client.get("/api/courses").status_code, 403)
+        self.assertEqual(other_client.get("/api/assignments").status_code, 403)
 
     def test_join_code_is_scoped_to_workspace_and_student_role(self):
         wrong = self.student_one_client.post("/api/courses/join", json={"join_code": "F" * 16})

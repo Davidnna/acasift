@@ -1,3 +1,4 @@
+import io
 import os
 import tempfile
 import unittest
@@ -97,6 +98,14 @@ class WorkspaceTests(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 403)
 
+
+    def test_personal_workspace_cannot_upload_shared_reference_documents(self):
+        response = self.client.post(
+            "/api/workspace/references",
+            data={"document": (io.BytesIO(b"Private workspace reference"), "reference.txt")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 403)
 
     def test_document_list_does_not_expose_another_users_private_submission(self):
         second = User(

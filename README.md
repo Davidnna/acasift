@@ -1,124 +1,105 @@
 # AcaSift
 
-AcaSift is a document similarity analysis and academic collaboration platform. It helps individuals and groups compare submitted documents with authorised reference materials, inspect overlapping passages and manage academic review workflows. Similarity measurements support human assessment; they do not independently establish plagiarism or academic misconduct.
+AcaSift is an academic document similarity analysis application. It helps individuals and groups
+compare documents with authorised reference materials, inspect matching passages and review
+similarity indicators. Results support human assessment; they do not automatically determine
+plagiarism or academic misconduct.
 
-## What AcaSift provides
+## What AcaSift does
 
-- Document upload and text extraction for PDF, DOCX and TXT files.
-- Document-level similarity analysis using TF-IDF cosine similarity and n-gram overlap.
-- Reports with matched passages and source-level measurements.
-- Private personal workspaces and shared workspaces for classes, teams, research groups and other collaborations.
-- Workspace ownership, administrators, member roles, workspace settings, member departure and ownership succession.
-- Invitation links with administrator-managed expiration, usage limits and revocation.
-- Optional course-specific invitations that enrol students or lecturers in a selected course when they join.
-- Courses, assignments, submissions, cohort comparison and lecturer assessment workflows.
-- Account registration, email verification, password recovery and role-based access controls.
+- Analyse PDF, DOCX and TXT documents for textual similarity.
+- Display comparison reports, matching passages and source information.
+- Keep personal documents and reports private to their owners.
+- Provide shared workspaces for classes, research groups, project teams and other collaborations.
+- Support workspace owners, administrators, lecturers, students and members with role-based access.
+- Manage workspace invitations, including revocation, optional expiry and usage limits.
+- Support courses, assignments, student submissions and lecturer review in eligible shared workspaces.
+- Maintain platform reference materials and authorised workspace reference collections.
+- Support account registration, email verification and password recovery.
 
-## Requirements for local use
+## Project folders
 
-Install the following software before running AcaSift:
+- `frontend/` contains the AcaSift user interface.
+- `backend/` contains application services, data access, authentication and analysis features.
+
+## Run AcaSift locally
+
+### Requirements
 
 - Python 3.11 or later.
 - Node.js 20 or later and npm.
-- SQLite (included with Python) for a simple local run, or PostgreSQL 14 or later for a production-like setup.
-- Git (optional, for cloning the repository).
+- SQLite for a simple local installation, or PostgreSQL for a persistent shared database.
 
-## Run locally
+### 1. Configure the backend
 
-1. Clone or download the repository and open its root directory.
-2. Create and activate a Python virtual environment:
-
-   ```bash
-   python -m venv .venv
-   ```
-
-   On Windows PowerShell:
-
-   ```powershell
-   .venv\Scripts\Activate.ps1
-   ```
-
-   On macOS or Linux:
-
-   ```bash
-   source .venv/bin/activate
-   ```
-
-3. Install the Python dependencies:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Copy `.env.example` to `.env`. The example uses a local SQLite database, so no database server is required for a basic run. Provide a long, unique `SECRET_KEY` and set `PUBLIC_APP_URL` to `http://localhost:5000`. If you prefer PostgreSQL, replace `DATABASE_URL` with your PostgreSQL connection string. Configure the email provider only if you want to test registration verification and password recovery emails.
-
-5. Install frontend dependencies and build the application:
-
-   ```bash
-   cd frontend
-   npm install
-   npm run build
-   cd ..
-   ```
-
-6. Initialise the database and create the first administrator:
-
-   ```bash
-   flask --app run.py init-db
-   flask --app run.py create-admin
-   ```
-
-   Follow the prompts to create the administrator account. If the project configuration exposes a different first-administrator setup command, use the setup page shown by the application.
-
-7. Start the application:
-
-   ```bash
-   python run.py
-   ```
-
-8. Open `http://localhost:5000` in your browser and sign in.
-
-The first build compiles the frontend into the application’s static directory. Re-run `npm run build` after frontend changes. For active frontend development, run `npm run dev` from the `frontend` directory while the Flask application is running.
-
-## Configuration
-
-The application reads environment settings from `.env` in local development. At minimum, configure:
-
-- `SECRET_KEY`: a unique secret used to protect sessions and security tokens.
-- `DATABASE_URL`: the PostgreSQL connection string.
-- `PUBLIC_APP_URL`: the base URL used when generating account and workspace links.
-- `MAX_CONTENT_LENGTH_MB`: the maximum upload size in megabytes. The default is 15 MB.
-
-Email delivery settings are optional for basic local exploration, but required for end-to-end testing of email verification and password recovery. Never commit `.env` or production credentials to source control.
-
-## Supported documents and limitations
-
-AcaSift currently accepts PDF, DOCX and TXT documents, subject to the configured upload-size limit. Text extraction is required for analysis; scanned image-only PDFs may not produce usable text. Similarity results identify textual overlap and require review of context, quotations, citations and source attribution.
-
-## Project layout
-
-- `app/`: Flask application, API endpoints, data models, services and static assets.
-- `frontend/`: React application, routes, components, pages and styles.
-- `tests/`: automated backend regression tests.
-- `scripts/`: maintenance and evaluation utilities.
-- `sample_documents/`: small sample text files for local evaluation.
-- `render.yaml`: deployment service configuration.
-
-## Run tests
-
-With the Python virtual environment active and dependencies installed:
+Open a terminal in the project folder and run:
 
 ```bash
-python -m unittest discover -s tests -v
+cd backend
+python -m venv .venv
 ```
 
-To validate the frontend production build:
+Activate the virtual environment:
+
+```bash
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+
+# macOS / Linux
+source .venv/bin/activate
+```
+
+Install the Python packages:
+
+```bash
+pip install -r requirements.txt
+```
+
+Copy `.env.example` to `.env` and set a private `SECRET_KEY`. The example uses a local SQLite
+database. Email verification and password recovery require valid Nylas email settings; without
+those settings, public registration is unavailable.
+
+Initialise the database and start the backend:
+
+```bash
+flask --app run.py init-db
+flask --app run.py run --debug
+```
+
+The backend runs at `http://127.0.0.1:5000`.
+
+### 2. Start the frontend
+
+Open a second terminal in the project folder:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the local address printed by Vite, normally `http://127.0.0.1:5173`. During local development,
+frontend API requests are forwarded to the backend at `http://127.0.0.1:5000`.
+
+### 3. Build the application
+
+To create the production frontend bundle:
 
 ```bash
 cd frontend
 npm run build
 ```
 
-## Privacy and responsible use
+The production bundle is placed in `backend/app/static/spa` and is served by the backend in the
+current single-origin deployment.
 
-Workspace content is available according to membership and role permissions. Personal documents remain private to their owners. Similarity reports should be interpreted by authorised reviewers and should not be used as the sole basis for academic misconduct decisions.
+## Deployment
+
+The frontend and backend source code are maintained in separate folders. The current hosted
+configuration builds the frontend and backend together so that authentication sessions and
+security checks remain same-origin. A separate frontend and API deployment can be introduced when
+a shared custom domain and the required cross-origin session configuration are available.
+
+For hosted deployments, configure the database connection, application secret and email delivery
+settings in the hosting provider's private environment settings. Never commit real credentials,
+API keys or private database connection strings to the repository.

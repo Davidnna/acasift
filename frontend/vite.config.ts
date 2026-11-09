@@ -5,7 +5,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [react()],
   base: mode === 'production' ? '/static/spa/' : '/',
   build: {
-    outDir: '../app/static/spa',
+    outDir: '../backend/app/static/spa',
     emptyOutDir: true,
     assetsDir: 'assets',
     sourcemap: false,

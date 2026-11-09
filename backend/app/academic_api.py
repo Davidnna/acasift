@@ -19,7 +19,6 @@ from app.models import (
     CourseMembership,
     Document,
     User,
-    Workspace,
     WorkspaceMembership,
 )
 from app.services.academic_service import run_assignment_comparison
@@ -28,6 +27,19 @@ from app.services.document_service import calculate_sha256, extract_text, is_all
 from app.services.workspace_service import get_active_workspace, is_workspace_manager, membership_for
 
 bp = Blueprint("academic_api", __name__, url_prefix="/api")
+
+ACADEMIC_WORKSPACE_ROLES = {"owner", "admin", "lecturer", "student"}
+
+
+def _academic_workspace_access():
+    workspace = get_active_workspace(current_user)
+    membership = membership_for(current_user, workspace.workspace_id)
+    allowed = bool(
+        workspace.workspace_type == "shared"
+        and membership
+        and membership.role in ACADEMIC_WORKSPACE_ROLES
+    )
+    return workspace, membership, allowed
 
 
 def _error(message, status=400):
@@ -63,7 +75,9 @@ def _bool(value, default=False):
 
 
 def _course_context(course_id, require_member=True):
-    workspace = get_active_workspace(current_user)
+    workspace, workspace_membership, _allowed = _academic_workspace_access()
+    if workspace.workspace_type != "shared" or not workspace_membership:
+        return None, workspace_membership, None, False
     course = Course.query.filter_by(
         course_id=course_id,
         workspace_id=workspace.workspace_id,
@@ -71,9 +85,8 @@ def _course_context(course_id, require_member=True):
     ).first()
     if not course:
         return None, None, None, False
-    workspace_membership = membership_for(current_user, course.workspace_id)
-    if not workspace_membership:
-        return course, None, None, False
+    if workspace_membership.role not in ACADEMIC_WORKSPACE_ROLES:
+        return course, workspace_membership, None, False
     course_membership = CourseMembership.query.filter_by(
         course_id=course.course_id,
         user_id=current_user.user_id,
@@ -88,7 +101,9 @@ def _course_context(course_id, require_member=True):
 
 
 def _assignment_context(assignment_id):
-    workspace = get_active_workspace(current_user)
+    workspace, workspace_membership, allowed = _academic_workspace_access()
+    if workspace.workspace_type != "shared" or not workspace_membership:
+        return None, None, workspace_membership, False
     assignment = (
         Assignment.query.join(Course)
         .filter(
@@ -99,6 +114,8 @@ def _assignment_context(assignment_id):
     )
     if not assignment:
         return None, None, None, False
+    if not allowed:
+        return assignment, None, workspace_membership, False
     course, workspace_membership, course_membership, instructor = _course_context(assignment.course_id)
     if not course or (not instructor and not course_membership):
         return assignment, None, None, False
@@ -190,8 +207,9 @@ def _workspace_can_create(workspace, membership):
 @bp.get("/courses")
 @login_required
 def list_courses():
-    workspace = get_active_workspace(current_user)
-    workspace_membership = membership_for(current_user, workspace.workspace_id)
+    workspace, workspace_membership, allowed = _academic_workspace_access()
+    if not allowed:
+        return _error("Courses are available to eligible members of a shared workspace.", 403)
     manager = is_workspace_manager(workspace_membership)
     can_create = _workspace_can_create(workspace, workspace_membership)
     query = Course.query.filter_by(workspace_id=workspace.workspace_id, status="active")
@@ -212,8 +230,7 @@ def list_courses():
         "workspace": {"id": workspace.workspace_id, "name": workspace.name, "type": workspace.workspace_type},
         "courses": courses,
         "can_create": can_create,
-        "can_join": bool(workspace.workspace_type == "shared" and workspace_membership and workspace_membership.role == "student"),
-        "message": None if workspace.workspace_type == "shared" else "Create or join a shared workspace to use courses and assignments.",
+        "can_join": bool(workspace_membership.role == "student"),
     })
 
 
@@ -399,8 +416,9 @@ def add_course_member(course_id):
 @bp.get("/assignments")
 @login_required
 def list_assignments():
-    workspace = get_active_workspace(current_user)
-    workspace_membership = membership_for(current_user, workspace.workspace_id)
+    workspace, workspace_membership, allowed = _academic_workspace_access()
+    if not allowed:
+        return _error("Assignments are available to eligible members of a shared workspace.", 403)
     manager = is_workspace_manager(workspace_membership)
     query = Assignment.query.join(Course).filter(
         Course.workspace_id == workspace.workspace_id,

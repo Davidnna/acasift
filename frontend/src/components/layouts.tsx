@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import type { User } from '../types';
+import type { AppShellData, User } from '../types';
 
 function Brand({ inverse = false }: { inverse?: boolean; }) {
     return (
@@ -202,13 +202,15 @@ function PublicFooter() {
     </footer>;
 }
 
-const workspaceLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; }[] = [
+const baseWorkspaceLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; }[] = [
     { to: '/app/dashboard', label: 'Overview', icon: LayoutDashboard, end: true },
-    { to: '/app/courses', label: 'Courses', icon: BookOpen, end: true },
-    { to: '/app/assignments', label: 'Assignments', icon: ClipboardList, end: true },
     { to: '/app/documents', label: 'My documents', icon: Files, end: true },
     { to: '/app/account', label: 'My account', icon: Settings2, end: true },
     { to: '/app/workspaces', label: 'Workspaces', icon: Layers3, end: true },
+];
+const academicWorkspaceLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; }[] = [
+    { to: '/app/courses', label: 'Courses', icon: BookOpen, end: true },
+    { to: '/app/assignments', label: 'Assignments', icon: ClipboardList, end: true },
 ];
 const adminLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; }[] = [
     { to: '/app/admin/references', label: 'Reference repository', icon: BookOpen, end: true },
@@ -216,10 +218,18 @@ const adminLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; 
 ];
 
 export function AppLayout() {
-    const user = useLoaderData() as User;
+    const { user, activeWorkspace } = useLoaderData() as AppShellData;
     const fetcher = useFetcher();
     const [mobileNav, setMobileNav] = useState(false);
     const signingOut = fetcher.state !== 'idle';
+    const canUseAcademicFeatures = Boolean(
+        activeWorkspace
+        && activeWorkspace.type === 'shared'
+        && ['owner', 'admin', 'lecturer', 'student'].includes(activeWorkspace.role || ''),
+    );
+    const visibleWorkspaceLinks = canUseAcademicFeatures
+        ? [baseWorkspaceLinks[0], ...academicWorkspaceLinks, ...baseWorkspaceLinks.slice(1)]
+        : baseWorkspaceLinks;
     return <div className="app-shell">
         <header className="app-topbar">
             <div className="app-topbar-left">
@@ -227,14 +237,14 @@ export function AppLayout() {
                 <Brand />
             </div>
             <div className="app-topbar-right">
-                <Link viewTransition to="/app/account" className="account-chip" aria-label="Open account settings"><span className="avatar">{(user.first_name?.[0] || user.full_name.slice(0, 1)).toUpperCase()}</span><span className="account-details"><strong>{user.full_name}</strong><small>{user.is_admin ? 'Platform administrator' : 'Individual account'}</small></span><ChevronDown size={15} /></Link>
+                <Link viewTransition to="/app/account" className="account-chip" aria-label="Open account settings"><span className="avatar">{(user.first_name?.[0] || user.full_name.slice(0, 1)).toUpperCase()}</span><span className="account-details"><strong>{user.full_name}</strong><small>{user.is_admin ? 'Platform administrator' : activeWorkspace?.type === 'shared' ? `${activeWorkspace.role} · Shared workspace` : 'Personal workspace'}</small></span><ChevronDown size={15} /></Link>
                 <fetcher.Form method="post" action="/logout"><button className="icon-button signout-button" type="submit" disabled={signingOut} title="Sign out"><LogOut size={17} /><span>Sign out</span></button></fetcher.Form>
             </div>
         </header>
         <div className="workspace-frame">
             <aside className={`workspace-sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
                 <div className="sidebar-label">WORKSPACE</div>
-                {workspaceLinks.map(item => <NavLink viewTransition key={item.to} to={item.to} end={item.end} onClick={() => setMobileNav(false)} className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}><item.icon size={17} /><span>{item.label}</span></NavLink>)}
+                {visibleWorkspaceLinks.map(item => <NavLink viewTransition key={item.to} to={item.to} end={item.end} onClick={() => setMobileNav(false)} className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}><item.icon size={17} /><span>{item.label}</span></NavLink>)}
                 {user.is_admin && <>
                     <div className="sidebar-label sidebar-label-spaced">ADMINISTRATION</div>
                     {adminLinks.map(item => <NavLink viewTransition key={item.to} to={item.to} onClick={() => setMobileNav(false)} className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}><item.icon size={17} /><span>{item.label}</span></NavLink>)}

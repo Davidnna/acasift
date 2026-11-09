@@ -71,6 +71,44 @@ async function requireUser({ request }: LoaderFunctionArgs) {
     return user;
 }
 
+const academicWorkspaceRoles = ['owner', 'admin', 'lecturer', 'student'];
+const workspaceManagerRoles = ['owner', 'admin'];
+
+async function appLoader(args: LoaderFunctionArgs) {
+    const user = await requireUser(args);
+    const workspaceData = await getWorkspaces(args.request.signal);
+    const activeWorkspace = workspaceData.workspaces.find(
+        workspace => workspace.id === workspaceData.active_workspace_id,
+    ) || null;
+    return { user, activeWorkspace };
+}
+
+async function requireWorkspaceRoles(args: LoaderFunctionArgs, allowedRoles: string[]) {
+    await requireUser(args);
+    const workspaceData = await getWorkspaces(args.request.signal);
+    const activeWorkspace = workspaceData.workspaces.find(
+        workspace => workspace.id === workspaceData.active_workspace_id,
+    );
+    if (
+        !activeWorkspace
+        || activeWorkspace.type !== 'shared'
+        || !activeWorkspace.role
+        || !allowedRoles.includes(activeWorkspace.role)
+    ) {
+        throw redirect('/app/dashboard');
+    }
+    return activeWorkspace;
+}
+
+async function loadForWorkspaceRoles<T>(
+    args: LoaderFunctionArgs,
+    allowedRoles: string[],
+    load: (signal: AbortSignal) => Promise<T>,
+) {
+    await requireWorkspaceRoles(args, allowedRoles);
+    return load(args.request.signal);
+}
+
 async function requireAdmin(args: LoaderFunctionArgs) {
     const user = await requireUser(args);
     if (!user.is_admin) throw redirect('/app/dashboard');
@@ -508,21 +546,22 @@ export const router = createBrowserRouter([
             {
                 id: 'app',
                 path: 'app',
-                loader: requireUser,
+                loader: appLoader,
+                shouldRevalidate: () => true,
                 element: <AppLayout />,
                 children: [
                     { index: true, loader: () => redirect('/app/dashboard') },
                     { path: 'account', loader: (args) => loadForUser(args, getAccount), action: accountAction, lazy: async () => ({ Component: (await import('./pages/account')).AccountPage }) },
                     { path: 'workspaces', loader: (args) => loadForUser(args, getWorkspaces), action: workspacesAction, lazy: async () => ({ Component: (await import('./pages/workspaces')).WorkspacesPage }) },
-                    { path: 'courses', loader: (args) => loadForUser(args, getCourses), action: coursesAction, lazy: async () => ({ Component: (await import('./pages/academic')).CoursesPage }) },
-                    { path: 'courses/:courseId', loader: (args) => loadForUser(args, (signal) => getCourse(args.params.courseId || '', signal)), action: courseAction, lazy: async () => ({ Component: (await import('./pages/academic')).CourseDetailPage }) },
-                    { path: 'assignments', loader: (args) => loadForUser(args, getAssignments), lazy: async () => ({ Component: (await import('./pages/academic')).AssignmentsPage }) },
-                    { path: 'assignments/:assignmentId', loader: (args) => loadForUser(args, (signal) => getAssignment(args.params.assignmentId || '', signal)), action: assignmentAction, lazy: async () => ({ Component: (await import('./pages/academic')).AssignmentDetailPage }) },
-                    { path: 'submissions/:submissionId', loader: (args) => loadForUser(args, (signal) => getAcademicSubmission(args.params.submissionId || '', signal)), action: academicSubmissionAction, lazy: async () => ({ Component: (await import('./pages/academic')).AcademicSubmissionPage }) },
+                    { path: 'courses', loader: (args) => loadForWorkspaceRoles(args, academicWorkspaceRoles, getCourses), action: coursesAction, lazy: async () => ({ Component: (await import('./pages/academic')).CoursesPage }) },
+                    { path: 'courses/:courseId', loader: (args) => loadForWorkspaceRoles(args, academicWorkspaceRoles, (signal) => getCourse(args.params.courseId || '', signal)), action: courseAction, lazy: async () => ({ Component: (await import('./pages/academic')).CourseDetailPage }) },
+                    { path: 'assignments', loader: (args) => loadForWorkspaceRoles(args, academicWorkspaceRoles, getAssignments), lazy: async () => ({ Component: (await import('./pages/academic')).AssignmentsPage }) },
+                    { path: 'assignments/:assignmentId', loader: (args) => loadForWorkspaceRoles(args, academicWorkspaceRoles, (signal) => getAssignment(args.params.assignmentId || '', signal)), action: assignmentAction, lazy: async () => ({ Component: (await import('./pages/academic')).AssignmentDetailPage }) },
+                    { path: 'submissions/:submissionId', loader: (args) => loadForWorkspaceRoles(args, academicWorkspaceRoles, (signal) => getAcademicSubmission(args.params.submissionId || '', signal)), action: academicSubmissionAction, lazy: async () => ({ Component: (await import('./pages/academic')).AcademicSubmissionPage }) },
                     { path: 'dashboard', loader: (args) => loadForUser(args, getDashboard), lazy: async () => ({ Component: (await import('./pages/dashboard')).DashboardPage }) },
                     { path: 'documents', loader: (args) => loadForUser(args, getDocuments), action: uploadSubmissionAction, lazy: async () => ({ Component: (await import('./pages/documents')).DocumentsPage }) },
                     { path: 'documents/new', loader: () => redirect('/app/documents') },
-                    { path: 'references/new', action: uploadWorkspaceReferenceAction, lazy: async () => ({ Component: (await import('./pages/workspace-reference')).WorkspaceReferenceUploadPage }) },
+                    { path: 'references/new', loader: (args) => requireWorkspaceRoles(args, workspaceManagerRoles), action: uploadWorkspaceReferenceAction, lazy: async () => ({ Component: (await import('./pages/workspace-reference')).WorkspaceReferenceUploadPage }) },
                     { path: 'comparisons/:comparisonId', loader: (args) => loadForUser(args, (signal) => getComparison(args.params.comparisonId || '', signal)), lazy: async () => ({ Component: (await import('./pages/documents')).ComparisonPage }) },
                     {
                         path: 'admin',

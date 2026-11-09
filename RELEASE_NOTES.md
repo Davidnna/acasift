@@ -211,3 +211,37 @@
 - Added backend regression tests for email-link requests without a pre-existing CSRF session.
 - Added email-template and public-logo asset tests.
 - Full Flask integration tests could not be executed in the authoring environment because Flask/Werkzeug dependencies were not installed; execute the included tests in Render's build/test environment or a configured Python environment.
+
+
+# AcaSift 0.6.0 — Academic collaboration and assessment
+
+## Academic workspace
+- Added organisational courses with course codes, descriptions and secure enrolment codes.
+- Added course-level lecturer and student membership, scoped to active organisational workspace membership.
+- Added assignment lifecycle states: draft, published and closed.
+- Added assignment deadlines, late-submission and resubmission controls.
+- Added private student assignment submissions with attempt tracking and file-hash duplicate prevention.
+- Added assignment-specific peer similarity comparisons using the existing TF-IDF cosine and N-gram analysis engine.
+- Added lecturer-triggered cohort-wide reanalysis so earlier submissions can be compared with later cohort submissions.
+- Course enrolment codes use 64-bit random values (16 hexadecimal characters), are stored only as SHA-256 hashes and are protected by database-backed attempt throttling.
+- Added lecturer assessment outcomes and written feedback.
+
+## Privacy and access control
+- Students can list only their own submissions for an assignment and view only an aggregate similarity overview.
+- Student-facing reports do not expose peer names, filenames, documents or matched passages.
+- Course lecturers and authorised workspace managers can view submissions and peer-source evidence for courses in their active organisational workspace.
+- Generic personal comparison routes and dashboard history exclude assignment-based comparison reports.
+- Course creation and membership require the appropriate organisational workspace role.
+- Course enrolment codes are stored as SHA-256 hashes and can be rotated.
+
+## Database and deployment
+- Added `courses`, `course_memberships`, `assignments`, `academic_submissions` and `assignment_assessments` tables.
+- Tables are created by the existing `flask init-db` startup command through SQLAlchemy `create_all()`.
+- No existing tables are dropped or rebuilt. No new Render environment variables are required.
+- Existing accounts, workspaces, documents, comparisons and Nylas settings are retained.
+
+## Validation
+- Python source syntax compilation passed.
+- TypeScript/TSX syntax transpilation passed.
+- Backend regression tests added for course creation, role enforcement, enrolment, assignment submission, peer comparison, privacy, cohort reanalysis and lecturer assessment.
+- Full Flask integration tests and full TypeScript project type-check could not be executed in the authoring environment because Flask/Flask-SQLAlchemy and frontend npm dependencies were unavailable. They must be verified by the deployment build and the included test suite.

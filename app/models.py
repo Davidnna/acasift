@@ -216,3 +216,110 @@ class AuthRateLimitEvent(db.Model):
     action = db.Column(db.String(40), nullable=False, index=True)
     key_hash = db.Column(db.String(64), nullable=False, index=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, index=True)
+
+
+class Course(db.Model):
+    __tablename__ = "courses"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "code", name="uq_course_workspace_code"),
+        Index("ix_courses_workspace_status", "workspace_id", "status"),
+    )
+
+    course_id = db.Column(db.Integer, primary_key=True)
+    workspace_id = db.Column(db.Integer, db.ForeignKey("workspaces.workspace_id"), nullable=False, index=True)
+    code = db.Column(db.String(40), nullable=False)
+    title = db.Column(db.String(180), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="active", index=True)
+    join_code_hash = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+    workspace = db.relationship("Workspace", backref=db.backref("courses", lazy=True))
+    creator = db.relationship("User", foreign_keys=[created_by_user_id])
+    memberships = db.relationship("CourseMembership", back_populates="course", cascade="all, delete-orphan", lazy=True)
+    assignments = db.relationship("Assignment", back_populates="course", cascade="all, delete-orphan", lazy=True)
+
+
+class CourseMembership(db.Model):
+    __tablename__ = "course_memberships"
+    __table_args__ = (
+        UniqueConstraint("course_id", "user_id", name="uq_course_membership_user"),
+        Index("ix_course_memberships_user_status", "user_id", "status"),
+    )
+
+    membership_id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey("courses.course_id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
+    # lecturer or student. Workspace owner/admin permissions are inherited separately.
+    role = db.Column(db.String(20), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="active", index=True)
+    added_by_user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=True)
+    enrolled_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+
+    course = db.relationship("Course", back_populates="memberships")
+    user = db.relationship("User", foreign_keys=[user_id])
+    added_by = db.relationship("User", foreign_keys=[added_by_user_id])
+
+
+class Assignment(db.Model):
+    __tablename__ = "assignments"
+    __table_args__ = (Index("ix_assignments_course_status_due", "course_id", "status", "due_at"),)
+
+    assignment_id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey("courses.course_id"), nullable=False, index=True)
+    title = db.Column(db.String(180), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    instructions = db.Column(db.Text, nullable=True)
+    due_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    status = db.Column(db.String(20), nullable=False, default="draft", index=True)
+    allow_late_submissions = db.Column(db.Boolean, nullable=False, default=False)
+    allow_resubmissions = db.Column(db.Boolean, nullable=False, default=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+    course = db.relationship("Course", back_populates="assignments")
+    creator = db.relationship("User", foreign_keys=[created_by_user_id])
+    submissions = db.relationship("AcademicSubmission", back_populates="assignment", cascade="all, delete-orphan", lazy=True)
+
+
+class AcademicSubmission(db.Model):
+    __tablename__ = "academic_submissions"
+    __table_args__ = (
+        UniqueConstraint("assignment_id", "student_user_id", "attempt_number", name="uq_assignment_student_attempt"),
+        Index("ix_academic_submissions_assignment_status", "assignment_id", "status"),
+        Index("ix_academic_submissions_student_submitted", "student_user_id", "submitted_at"),
+    )
+
+    submission_id = db.Column(db.Integer, primary_key=True)
+    assignment_id = db.Column(db.Integer, db.ForeignKey("assignments.assignment_id"), nullable=False, index=True)
+    student_user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
+    document_id = db.Column(db.Integer, db.ForeignKey("documents.document_id"), nullable=False, unique=True, index=True)
+    comparison_id = db.Column(db.Integer, db.ForeignKey("comparisons.comparison_id"), nullable=True, unique=True, index=True)
+    attempt_number = db.Column(db.Integer, nullable=False, default=1)
+    status = db.Column(db.String(24), nullable=False, default="submitted", index=True)
+    is_late = db.Column(db.Boolean, nullable=False, default=False)
+    submitted_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, index=True)
+
+    assignment = db.relationship("Assignment", back_populates="submissions")
+    student = db.relationship("User", foreign_keys=[student_user_id])
+    document = db.relationship("Document", foreign_keys=[document_id])
+    comparison = db.relationship("Comparison", foreign_keys=[comparison_id])
+    assessment = db.relationship("AssignmentAssessment", back_populates="submission", uselist=False, cascade="all, delete-orphan")
+
+
+class AssignmentAssessment(db.Model):
+    __tablename__ = "assignment_assessments"
+
+    assessment_id = db.Column(db.Integer, primary_key=True)
+    submission_id = db.Column(db.Integer, db.ForeignKey("academic_submissions.submission_id"), nullable=False, unique=True, index=True)
+    assessor_user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
+    # no_concern, discuss_with_student, further_review
+    decision = db.Column(db.String(32), nullable=False)
+    feedback = db.Column(db.Text, nullable=True)
+    reviewed_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+
+    submission = db.relationship("AcademicSubmission", back_populates="assessment")
+    assessor = db.relationship("User", foreign_keys=[assessor_user_id])

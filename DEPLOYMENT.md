@@ -241,3 +241,40 @@ a browser and confirm that it displays the AcaSift mark.
 6. Confirm the password reset succeeds without a CSRF/session-token error.
 7. Inspect the email in desktop and mobile clients; confirm the logo loads. Some email clients
    block remote images until the recipient chooses to display them.
+
+
+## AcaSift 0.6.0 — Academic collaboration and assessment
+
+This release adds the academic workflow to the existing application. The existing Docker startup
+command runs `flask --app run.py init-db` before Gunicorn. The command uses SQLAlchemy
+`create_all()` to create the new academic tables. No manual Neon SQL script or additional Render
+environment variable is required. Existing accounts, workspaces, documents, comparison history
+and Nylas configuration are preserved.
+
+### After deployment
+
+1. Sign in with an account that belongs to an approved organisational workspace.
+2. Ensure the account's workspace role is `owner`, `admin`, or `lecturer` before creating a course.
+3. Open **Courses**, create a course and share its 16-character enrolment code with students.
+4. Ensure students have first been added to the same organisational workspace with the `student` role.
+5. Students open **Courses**, enter the enrolment code and join.
+6. The lecturer creates and publishes an assignment, configures its deadline and submission rules.
+7. Students submit PDF, DOCX or TXT files from the assignment page.
+8. The lecturer uses **Run cohort analysis** to compare all current submissions against one another.
+9. The lecturer opens each submission report, reviews matched passages and records an assessment.
+10. Confirm that students can see only their own submissions and aggregate similarity overview, not peer identities or matched text.
+
+### Important analysis behaviour
+
+A new submission is initially compared against peer submissions already received for that assignment.
+It does not automatically rewrite every earlier student's report. When the cohort has progressed, the
+lecturer should run cohort-wide analysis to refresh each submission against the current set of peers.
+The analysis is scoped to the same assignment and course; it does not compare against other courses
+or the public internet. Similarity scores are indicators for human review, not misconduct findings.
+
+### Role prerequisites
+
+Course creation is available only in an organisational workspace to workspace owners, administrators
+and lecturers. Students must have the `student` role in that same workspace before they can enrol
+using a course code. A lecturer can add an existing workspace member to a course when that person's
+workspace role matches the course role. Workspace membership is managed from the Workspaces page.

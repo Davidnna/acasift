@@ -29,7 +29,10 @@ def create_app(config_class=Config):
     login_manager.login_view = "main.spa"
     login_manager.login_message_category = "warning"
 
-    from app.models import User, Workspace, WorkspaceMembership, Document, Comparison
+    from app.models import (
+        AcademicSubmission, Assignment, AssignmentAssessment, Comparison, Course,
+        CourseMembership, Document, User, Workspace, WorkspaceMembership,
+    )
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -50,9 +53,11 @@ def create_app(config_class=Config):
             return None
 
     from app.api import bp as api_bp
+    from app.academic_api import bp as academic_api_bp
     from app.routes.main import bp as main_bp
 
     app.register_blueprint(api_bp)
+    app.register_blueprint(academic_api_bp)
     app.register_blueprint(main_bp)
 
     @login_manager.unauthorized_handler

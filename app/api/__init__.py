@@ -13,7 +13,7 @@ from sqlalchemy import select, func, text
 
 from app.decorators import admin_required
 from app.extensions import csrf, db
-from app.models import Comparison, Document, User, Workspace, WorkspaceMembership, WorkspaceRequest
+from app.models import AcademicSubmission, Comparison, Document, User, Workspace, WorkspaceMembership, WorkspaceRequest
 from app.services.auth_security import consume_auth_limits
 from app.services.email_service import (
     email_is_configured, send_password_reset_email, send_verification_email,
@@ -468,9 +468,13 @@ def dashboard():
         workspace_id=workspace.workspace_id,
         document_type="submission",
     )
-    comparison_query = Comparison.query.filter_by(
-        user_id=current_user.user_id,
-        workspace_id=workspace.workspace_id,
+    academic_comparison_ids = db.session.query(AcademicSubmission.comparison_id).filter(
+        AcademicSubmission.comparison_id.isnot(None)
+    )
+    comparison_query = Comparison.query.filter(
+        Comparison.user_id == current_user.user_id,
+        Comparison.workspace_id == workspace.workspace_id,
+        ~Comparison.comparison_id.in_(academic_comparison_ids),
     )
     reference_query = Document.query.filter(
         Document.document_type == "reference",
@@ -556,6 +560,9 @@ def upload_submission():
 @bp.get("/comparisons/<int:comparison_id>")
 @login_required
 def comparison_detail(comparison_id):
+    # Assignment-based peer comparisons have their own privacy-aware report route.
+    if AcademicSubmission.query.filter_by(comparison_id=comparison_id).first():
+        return _error("Assignment comparison reports must be opened from the relevant course submission page.", 403)
     comparison = db.get_or_404(Comparison, comparison_id)
     if comparison.user_id != current_user.user_id:
         return _error("You do not have permission to view this report.", 403)

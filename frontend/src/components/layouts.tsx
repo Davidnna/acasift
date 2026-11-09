@@ -1,6 +1,6 @@
 import { useFetcher, useLoaderData, useNavigation, useRouteError, Outlet, NavLink, Link, useLocation } from 'react-router-dom';
 import {
-  Activity, ArrowUpRight, BookOpen, ChevronDown, CircleHelp, FileCheck2,
+  Activity, ArrowUpRight, BookOpen, ChevronDown, CircleHelp, ClipboardList, FileCheck2,
   FileSearch, Files, Gauge, HelpCircle, LayoutDashboard, LogOut, Menu,
   Settings2, ShieldCheck, Upload, Users, X, ArrowUp, Layers3, Building2,
 } from 'lucide-react';
@@ -204,6 +204,8 @@ function PublicFooter() {
 
 const workspaceLinks: { to: string; label: string; icon: LucideIcon; end?: boolean }[] = [
   { to: '/app/dashboard', label: 'Overview', icon: LayoutDashboard, end: true },
+  { to: '/app/courses', label: 'Courses', icon: BookOpen, end: true },
+  { to: '/app/assignments', label: 'Assignments', icon: ClipboardList, end: true },
   { to: '/app/documents', label: 'My documents', icon: Files, end: true },
   { to: '/app/documents/new', label: 'Check a document', icon: Upload, end: true },
   { to: '/app/account', label: 'My account', icon: Settings2, end: true },

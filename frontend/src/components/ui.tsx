@@ -16,7 +16,7 @@ export function Notice({ children, tone = 'info' }: { children: ReactNode; tone?
 
 export function StatusPill({ value }: { value: string }) {
   const normal = value.toLowerCase();
-  const tone = normal === 'completed' || normal === 'processed' || normal === 'active' ? 'success' : normal === 'failed' ? 'danger' : 'neutral';
+  const tone = normal === 'completed' || normal === 'processed' || normal === 'active' || normal === 'analysed' || normal === 'published' ? 'success' : normal.includes('failed') ? 'danger' : 'neutral';
   return <span className={`status-pill status-${tone}`}>{value}</span>;
 }
 

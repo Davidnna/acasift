@@ -6,6 +6,14 @@ import type {
   User,
   WorkspaceData,
   WorkspaceRequestRecord,
+  CourseListData,
+  CourseRecord,
+  CourseDetailData,
+  AssignmentRecord,
+  AssignmentDetailData,
+  AcademicSubmissionRecord,
+  AcademicSubmissionDetailData,
+  AcademicAssessment,
 } from './types';
 
 export class ApiError extends Error {
@@ -235,4 +243,71 @@ export async function resetPassword(payload: {
     method: 'POST',
     body: JSON.stringify(payload),
   }, { skipCsrf: true });
+}
+
+export async function getCourses(signal?: AbortSignal): Promise<CourseListData> {
+  return request('/api/courses', { signal });
+}
+
+export async function createCourse(payload: { code: string; title: string; description: string }): Promise<{ course: CourseRecord; join_code: string }> {
+  return request('/api/courses', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function joinCourse(join_code: string): Promise<{ message: string; course_id: number }> {
+  return request('/api/courses/join', { method: 'POST', body: JSON.stringify({ join_code }) });
+}
+
+export async function getCourse(courseId: string, signal?: AbortSignal): Promise<CourseDetailData> {
+  return request(`/api/courses/${courseId}`, { signal });
+}
+
+export async function rotateCourseJoinCode(courseId: string): Promise<{ join_code: string; message: string }> {
+  return request(`/api/courses/${courseId}/join-code`, { method: 'POST', body: '{}' });
+}
+
+export async function addCourseMember(courseId: string, payload: { email: string; role: 'student' | 'lecturer' }): Promise<{ message: string }> {
+  return request(`/api/courses/${courseId}/members`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function getAssignments(signal?: AbortSignal): Promise<{ assignments: AssignmentRecord[]; workspace: { name: string; type: string } }> {
+  return request('/api/assignments', { signal });
+}
+
+export async function createAssignment(courseId: string, payload: {
+  title: string;
+  description: string;
+  instructions: string;
+  due_at: string | null;
+  status: 'draft' | 'published';
+  allow_late_submissions: boolean;
+  allow_resubmissions: boolean;
+}): Promise<{ assignment: AssignmentRecord; message: string }> {
+  return request(`/api/courses/${courseId}/assignments`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function getAssignment(assignmentId: string, signal?: AbortSignal): Promise<AssignmentDetailData> {
+  return request(`/api/assignments/${assignmentId}`, { signal });
+}
+
+export async function submitAssignment(assignmentId: string, formData: FormData): Promise<{ submission: AcademicSubmissionRecord; message: string }> {
+  return request(`/api/assignments/${assignmentId}/submit`, { method: 'POST', body: formData });
+}
+
+export async function analyseAssignment(assignmentId: string): Promise<{ message: string; completed: number; total: number }> {
+  return request(`/api/assignments/${assignmentId}/analyse`, { method: 'POST', body: '{}' });
+}
+
+export async function getAcademicSubmission(submissionId: string, signal?: AbortSignal): Promise<AcademicSubmissionDetailData> {
+  return request(`/api/submissions/${submissionId}`, { signal });
+}
+
+export async function saveAcademicAssessment(submissionId: string, payload: {
+  decision: 'no_concern' | 'discuss_with_student' | 'further_review';
+  feedback: string;
+}): Promise<{ message: string; assessment: AcademicAssessment }> {
+  return request(`/api/submissions/${submissionId}/assessment`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateAssignmentStatus(assignmentId: string, status: 'draft' | 'published' | 'closed'): Promise<{ message: string; assignment: AssignmentRecord }> {
+  return request(`/api/assignments/${assignmentId}/status`, { method: 'POST', body: JSON.stringify({ status }) });
 }

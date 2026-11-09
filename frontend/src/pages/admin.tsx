@@ -1,6 +1,6 @@
 import { Form, useActionData, useLoaderData, useNavigation } from 'react-router-dom';
 import { ArrowRight, BookOpen, Users } from 'lucide-react';
-import { Notice, PageHeading } from '../components/ui';
+import { EmptyState, Notice, PageHeading } from '../components/ui';
 import { DocumentTable } from '../components/document-table';
 import type { DocumentRecord, User } from '../types';
 

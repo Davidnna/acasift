@@ -8,6 +8,7 @@ export interface User {
   role: 'admin' | 'user';
   is_admin: boolean;
   is_active?: boolean;
+  email_verified?: boolean;
   created_at?: string;
 }
 

@@ -144,3 +144,33 @@
 - Does not yet implement public self-registration, email verification, course/assignment permissions or student-to-student comparison.
 
 - Adds workspace-scoped reference uploads: personal references remain private to the uploader; organisational references are shared with active workspace members.
+
+
+# AcaSift 0.5.1 — Open registration and account security
+
+## Public account access
+- Added public individual registration using personal or work email addresses.
+- No institutional email, matriculation number, staff ID or organisation membership is required.
+- Every new account starts with the ordinary `user` platform role. Privileged platform roles are not selectable at registration.
+- A personal workspace is created with the pending account.
+
+## Email verification and recovery
+- Added one-time email verification links with configurable expiry.
+- Added verification-email resend flow.
+- Added password-reset request and one-time reset confirmation.
+- Password reset invalidates existing login sessions through an authentication-version field.
+- Reset-request and resend responses do not disclose whether an email address has an account.
+- Email links require an explicit POST confirmation; a GET request alone does not consume the token.
+
+## Authentication security
+- Verification and reset tokens are stored as SHA-256 hashes, not plaintext.
+- Added database-backed rate limits for login, registration, verification, resend and password reset.
+- Added `Retry-After` headers for throttled requests.
+- Added no-store and no-referrer response headers on sensitive authentication routes.
+- Existing active accounts are marked verified during additive migration to preserve access.
+- Existing sessions remain valid until their credentials change; password changes and resets revoke older sessions.
+
+## Deployment requirements
+- SMTP environment variables must be configured in Render before public registration can send email.
+- The migration is additive and runs through the existing `init-db` startup command.
+- No manual Neon SQL or external Redis service is required.

@@ -74,6 +74,23 @@ class AccountTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(check_password_hash(self.user.password_hash, "new-password-456"))
 
+    def test_password_change_invalidates_other_authenticated_sessions(self):
+        second_client = self.app.test_client()
+        second_login = second_client.post("/api/auth/login", json={
+            "email": "ada@example.edu", "password": "old-password-123",
+        })
+        self.assertEqual(second_login.status_code, 200)
+        self.assertEqual(second_client.get("/api/auth/me").status_code, 200)
+
+        changed = self.client.post("/api/account/password", json={
+            "current_password": "old-password-123",
+            "new_password": "new-password-456",
+            "confirm_password": "new-password-456",
+        })
+        self.assertEqual(changed.status_code, 200)
+        self.assertEqual(self.client.get("/api/auth/me").status_code, 200)
+        self.assertEqual(second_client.get("/api/auth/me").status_code, 401)
+
     def test_password_change_rejects_wrong_current_password(self):
         response = self.client.post("/api/account/password", json={
             "current_password": "incorrect-password",
@@ -113,6 +130,7 @@ class AccountTests(unittest.TestCase):
         self.assertEqual(created.other_names, "Brewster")
         self.assertEqual(created.last_name, "Murray Hopper")
         self.assertEqual(created.full_name, "Grace Brewster Murray Hopper")
+        self.assertIsNotNone(created.email_verified_at)
 
 
 if __name__ == "__main__":

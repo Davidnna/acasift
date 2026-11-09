@@ -6,6 +6,11 @@ import {
 } from 'react-router-dom';
 import {
   createUser,
+  registerAccount,
+  verifyEmail,
+  resendVerification,
+  requestPasswordReset,
+  resetPassword,
   getWorkspaces,
   switchWorkspace,
   requestOrganizationWorkspace,
@@ -83,6 +88,69 @@ async function firstAdminAction({ request }: ActionFunctionArgs) {
   } catch (error) {
     if (error instanceof Response) throw error;
     return { error: error instanceof Error ? error.message : 'The administrator account could not be created.' };
+  }
+}
+
+
+async function registerAction({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  try {
+    const result = await registerAccount({
+      first_name: String(formData.get('first_name') || ''),
+      last_name: String(formData.get('last_name') || ''),
+      other_names: String(formData.get('other_names') || ''),
+      email: String(formData.get('email') || ''),
+      password: String(formData.get('password') || ''),
+      confirm_password: String(formData.get('confirm_password') || ''),
+    });
+    return { success: result.message, email: result.email };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Registration could not be completed.' };
+  }
+}
+
+async function verifyEmailAction({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  try {
+    await verifyEmail(String(formData.get('token') || ''));
+    throw redirect('/app/dashboard');
+  } catch (error) {
+    if (error instanceof Response) throw error;
+    return { error: error instanceof Error ? error.message : 'Email verification failed.' };
+  }
+}
+
+async function resendVerificationAction({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  try {
+    const result = await resendVerification(String(formData.get('email') || ''));
+    return { success: result.message };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'The request could not be completed.' };
+  }
+}
+
+async function passwordResetRequestAction({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  try {
+    const result = await requestPasswordReset(String(formData.get('email') || ''));
+    return { success: result.message };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'The request could not be completed.' };
+  }
+}
+
+async function passwordResetConfirmAction({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  try {
+    const result = await resetPassword({
+      token: String(formData.get('token') || ''),
+      new_password: String(formData.get('new_password') || ''),
+      confirm_password: String(formData.get('confirm_password') || ''),
+    });
+    return { success: result.message };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Your password could not be reset.' };
   }
 }
 
@@ -251,6 +319,11 @@ export const router = createBrowserRouter([
           { path: 'faq', lazy: async () => ({ Component: (await import('./pages/public')).FaqPage }) },
           { path: 'access', lazy: async () => ({ Component: (await import('./pages/public')).AccessPage }) },
           { path: 'login', loader: loginLoader, action: loginAction, lazy: async () => ({ Component: (await import('./pages/login')).LoginPage }) },
+          { path: 'register', loader: loginLoader, action: registerAction, lazy: async () => ({ Component: (await import('./pages/auth')).RegisterPage }) },
+          { path: 'verify-email', action: verifyEmailAction, lazy: async () => ({ Component: (await import('./pages/auth')).VerifyEmailPage }) },
+          { path: 'resend-verification', action: resendVerificationAction, lazy: async () => ({ Component: (await import('./pages/auth')).ResendVerificationPage }) },
+          { path: 'forgot-password', loader: loginLoader, action: passwordResetRequestAction, lazy: async () => ({ Component: (await import('./pages/auth')).ForgotPasswordPage }) },
+          { path: 'reset-password', action: passwordResetConfirmAction, lazy: async () => ({ Component: (await import('./pages/auth')).ResetPasswordPage }) },
         ],
       },
       { path: 'setup/first-admin', loader: firstAdminLoader, action: firstAdminAction, lazy: async () => ({ Component: (await import('./pages/setup')).FirstAdminSetupPage }) },

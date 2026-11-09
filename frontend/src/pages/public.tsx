@@ -15,7 +15,7 @@ export function HomePage() {
         <div className="eyebrow hero-eyebrow"><span className="eyebrow-pulse" /> ACADEMIC DOCUMENT SIMILARITY ANALYSIS</div>
         <h1>Understand text similarity.<br /><span>Review with context.</span></h1>
         <p className="hero-lead">AcaSift helps individuals and academic organisations compare documents with authorised reference collections, identify overlapping passages and make more informed decisions during document review.</p>
-        <div className="hero-actions"><Link viewTransition className="button button-primary button-lg" to="/how-it-works">Explore how it works <ArrowRight size={17} /></Link><Link viewTransition className="button button-outline button-lg" to="/login">Sign in to AcaSift</Link></div>
+        <div className="hero-actions"><Link viewTransition className="button button-primary button-lg" to="/how-it-works">Explore how it works <ArrowRight size={17} /></Link><Link viewTransition className="button button-outline button-lg" to="/register">Create a free account</Link></div>
         <div className="hero-footnote"><ShieldCheck size={16} /> Designed to support academic review, not replace human judgement.</div>
       </div>
       <div className="hero-art" aria-label="Illustrative AcaSift similarity report">
@@ -98,7 +98,7 @@ const faqItems = [
   ['Does AcaSift search the entire internet?', 'No. The current release compares submissions with platform-curated reference documents and references available within the active workspace. It does not crawl the internet or query external academic databases.'],
   ['Does a high similarity score prove plagiarism?', 'No. A similarity score is an indicator of textual overlap, not a verdict. Properly cited quotations, references, standard terminology and common phrases can contribute to similarity. A qualified reviewer must interpret the results in context.'],
   ['Which file formats are supported?', 'The current release supports text-based PDF, DOCX and TXT documents. Scanned image-only PDFs are not supported because optical character recognition is not currently included.'],
-  ['Does AcaSift require an institutional email?', 'No. AcaSift is institution-agnostic. Individual accounts will use personal or work email addresses. Email verification will be required when public registration is enabled.'],
+  ['Does AcaSift require an institutional email?', 'No. Anyone can create an individual account using a personal or work email address. The email address must be verified before the account can be used.'],
   ['What methods does AcaSift use?', 'The current implementation uses TF-IDF vectorisation with cosine similarity for document-level comparison and word-based N-gram matching for identifying overlapping sequences.'],
   ['Does AcaSift detect paraphrased content?', 'The current release focuses on lexical overlap. It does not provide semantic paraphrase detection or cross-language plagiarism detection.'],
   ['Who can view my comparison reports?', 'Individual submissions and reports are private to their owners. Organisational workspace access is limited to authorised members and permissions.'],
@@ -108,14 +108,14 @@ export function FaqPage() {
   const [open, setOpen] = useState<number | null>(0);
   return <PublicPage eyebrow="FREQUENTLY ASKED QUESTIONS" title="Questions about AcaSift." intro="Learn about the platform's capabilities, how similarity results should be interpreted and how to obtain an account.">
     <div className="faq-list">{faqItems.map(([question, answer], i) => <article className={`faq-item ${open === i ? 'faq-open' : ''}`} key={question}><button onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i}><span>{question}</span><ChevronDown size={19} /></button>{open === i && <div className="faq-answer"><p>{answer}</p></div>}</article>)}</div>
-    <div className="faq-contact"><div><CircleHelp size={22} /><div><h3>Still have a question?</h3><p>For account access, sign in with your existing account. Public registration is part of the next rollout.</p></div></div><Link viewTransition className="button button-primary" to="/access">How to get access <ArrowRight size={15} /></Link></div>
+    <div className="faq-contact"><div><CircleHelp size={22} /><div><h3>Still have a question?</h3><p>Create an individual account using any valid email address. No institutional affiliation is required.</p></div></div><Link viewTransition className="button button-primary" to="/register">Create an account <ArrowRight size={15} /></Link></div>
   </PublicPage>;
 }
 
 export function AccessPage() {
-  return <PublicPage eyebrow="WORKSPACE ACCESS" title="Get access to AcaSift." intro="AcaSift supports private individual workspaces and approved organisational workspaces. Public registration is being introduced in stages.">
-    <div className="access-panel"><div className="access-panel-icon"><LockKeyhole size={26} /></div><div><h2>AcaSift is designed for independent use.</h2><p>Individual accounts will not require institutional email addresses, matriculation numbers or staff IDs. Public registration will be enabled in the next rollout after email verification delivery is configured. Organisational workspaces will remain subject to approval.</p><div className="access-steps"><div><span>1</span><p>Existing users can sign in with their current credentials.</p></div><div><span>2</span><p>Public individual registration will be enabled after email verification is configured.</p></div><div><span>3</span><p>Approved organisations can invite members and manage shared workspaces.</p></div></div><Link viewTransition className="button button-primary button-lg" to="/login">Go to sign in <ArrowRight size={16} /></Link></div></div>
-    <p className="access-note">Do not share your password with other users. Public self-registration will be enabled in the next rollout after email verification delivery is configured.</p>
+  return <PublicPage eyebrow="OPEN REGISTRATION" title="Start with your own private workspace." intro="AcaSift is open to individual users worldwide. You do not need a university affiliation, institutional email address or staff identification number.">
+    <div className="access-panel"><div className="access-panel-icon"><LockKeyhole size={26} /></div><div><h2>Create an individual account.</h2><p>Register with your name, a valid email address and a password. We will send a verification link before activating the account. Your personal documents and reports remain private to you.</p><div className="access-steps"><div><span>1</span><p>Create an account using any valid email address.</p></div><div><span>2</span><p>Verify your email address using the link we send you.</p></div><div><span>3</span><p>Sign in and start using your private AcaSift workspace.</p></div></div><Link viewTransition className="button button-primary button-lg" to="/register">Create an account <ArrowRight size={16} /></Link></div></div>
+    <p className="access-note">Organisational workspaces are optional and require separate review and approval. Creating an individual account does not require organisational approval.</p>
   </PublicPage>;
 }
 

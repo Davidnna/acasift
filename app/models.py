@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import UniqueConstraint, Index
 
 from flask_login import UserMixin
 from werkzeug.security import check_password_hash
@@ -26,12 +26,20 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(30), nullable=False, default="user")
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+    email_verified_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    email_verification_token_hash = db.Column(db.String(64), nullable=True, unique=True)
+    email_verification_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    password_reset_token_hash = db.Column(db.String(64), nullable=True, unique=True)
+    password_reset_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    auth_version = db.Column(db.Integer, nullable=False, default=0)
 
     documents = db.relationship("Document", back_populates="uploader", lazy=True)
     comparisons = db.relationship("Comparison", back_populates="user", lazy=True)
 
     def get_id(self):
-        return str(self.user_id)
+        # Versioned session identifiers allow password-reset flows to revoke
+        # previously issued sessions without a separate session store.
+        return f"{self.user_id}:{self.auth_version or 0}"
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
@@ -196,3 +204,15 @@ class WorkspaceRequest(db.Model):
 
     requester = db.relationship("User", foreign_keys=[user_id])
     reviewer = db.relationship("User", foreign_keys=[reviewed_by_user_id])
+
+
+class AuthRateLimitEvent(db.Model):
+    __tablename__ = "auth_rate_limit_events"
+    __table_args__ = (
+        Index("ix_auth_rate_action_key_created", "action", "key_hash", "created_at"),
+    )
+
+    event_id = db.Column(db.Integer, primary_key=True)
+    action = db.Column(db.String(40), nullable=False, index=True)
+    key_hash = db.Column(db.String(64), nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, index=True)

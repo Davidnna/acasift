@@ -1,8 +1,10 @@
 import os
+from datetime import datetime, timezone
 
 import click
 from sqlalchemy import inspect, text
 from flask import Flask, jsonify, redirect, request, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash
 
 from config import Config
@@ -13,6 +15,9 @@ from flask_wtf.csrf import CSRFError
 def create_app(config_class=Config):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(config_class)
+    # Render terminates TLS and forwards one trusted proxy hop. ProxyFix restores
+    # the client IP and original HTTPS scheme used for secure cookies/rate limits.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     os.makedirs(app.instance_path, exist_ok=True)
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
@@ -28,7 +33,21 @@ def create_app(config_class=Config):
 
     @login_manager.user_loader
     def load_user(user_id):
-        return db.session.get(User, int(user_id))
+        try:
+            if ":" in str(user_id):
+                raw_id, raw_version = str(user_id).split(":", 1)
+                user = db.session.get(User, int(raw_id))
+                if not user or int(raw_version) != int(user.auth_version or 0):
+                    return None
+                return user
+            # Legacy cookies used only the integer user ID. Preserve them for
+            # version-zero users; password changes invalidate these old cookies.
+            user = db.session.get(User, int(user_id))
+            if not user or int(user.auth_version or 0) != 0:
+                return None
+            return user
+        except (TypeError, ValueError):
+            return None
 
     from app.api import bp as api_bp
     from app.routes.main import bp as main_bp
@@ -74,6 +93,24 @@ def create_app(config_class=Config):
                             connection.execute(text(
                                 f"ALTER TABLE users ADD COLUMN {column_name} VARCHAR(80)"
                             ))
+                    user_column_names = {column["name"] for column in inspect(connection).get_columns("users")}
+                    user_additions = {
+                        "email_verified_at": "TIMESTAMP",
+                        "email_verification_token_hash": "VARCHAR(64)",
+                        "email_verification_expires_at": "TIMESTAMP",
+                        "password_reset_token_hash": "VARCHAR(64)",
+                        "password_reset_expires_at": "TIMESTAMP",
+                        "auth_version": "INTEGER NOT NULL DEFAULT 0",
+                    }
+                    for column_name, sql_type in user_additions.items():
+                        if column_name not in user_column_names:
+                            connection.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {sql_type}"))
+                    # Existing active accounts predate email verification. Preserve
+                    # access by marking them verified during this additive migration.
+                    connection.execute(text(
+                        "UPDATE users SET email_verified_at = COALESCE(email_verified_at, created_at) "
+                        "WHERE is_active = TRUE AND email_verified_at IS NULL"
+                    ))
                     # PostgreSQL enforces VARCHAR lengths; widen the cached display name
                     # for structured first/other/last names. SQLite does not require this.
                     if db.engine.dialect.name == "postgresql":
@@ -206,6 +243,7 @@ def create_app(config_class=Config):
                 password_hash=generate_password_hash(password),
                 role="admin",
                 is_active=True,
+                email_verified_at=datetime.now(timezone.utc),
             )
             db.session.add(user)
             db.session.flush()
@@ -213,6 +251,13 @@ def create_app(config_class=Config):
             ensure_personal_workspace(user)
             db.session.commit()
         click.echo(f"Administrator account created for {email}.")
+
+    @app.after_request
+    def secure_auth_response_headers(response):
+        if request.path in {"/verify-email", "/reset-password"} or request.path.startswith("/api/auth/"):
+            response.headers["Referrer-Policy"] = "no-referrer"
+            response.headers["Cache-Control"] = "no-store, max-age=0"
+        return response
 
     @app.errorhandler(413)
     def file_too_large(_error):

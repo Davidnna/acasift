@@ -196,3 +196,38 @@ export async function decideWorkspaceRequest(requestId: number, decision: 'appro
 export async function uploadWorkspaceReference(formData: FormData, signal?: AbortSignal): Promise<void> {
   await request('/api/workspace/references', { method: 'POST', body: formData, signal });
 }
+
+
+export async function registerAccount(payload: {
+  first_name: string;
+  last_name: string;
+  other_names: string;
+  email: string;
+  password: string;
+  confirm_password: string;
+}): Promise<{ message: string; email: string }> {
+  return request('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function verifyEmail(token: string): Promise<User> {
+  const data = await request<{ user: User }>('/api/auth/verify-email', {
+    method: 'POST', body: JSON.stringify({ token }),
+  });
+  return data.user;
+}
+
+export async function resendVerification(email: string): Promise<{ message: string }> {
+  return request('/api/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+export async function requestPasswordReset(email: string): Promise<{ message: string }> {
+  return request('/api/auth/password-reset/request', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+export async function resetPassword(payload: {
+  token: string;
+  new_password: string;
+  confirm_password: string;
+}): Promise<{ message: string }> {
+  return request('/api/auth/password-reset/confirm', { method: 'POST', body: JSON.stringify(payload) });
+}

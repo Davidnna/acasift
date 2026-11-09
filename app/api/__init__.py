@@ -1,6 +1,8 @@
 import hmac
 import re
-from datetime import datetime, timezone
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, current_app, jsonify, request, session
 
@@ -12,6 +14,10 @@ from sqlalchemy import select, func, text
 from app.decorators import admin_required
 from app.extensions import db
 from app.models import Comparison, Document, User, Workspace, WorkspaceMembership, WorkspaceRequest
+from app.services.auth_security import consume_auth_limits
+from app.services.email_service import (
+    email_is_configured, send_password_reset_email, send_verification_email,
+)
 from app.services.workspace_service import ensure_personal_workspace, get_active_workspace, membership_for, is_workspace_manager
 from app.services.workflow_service import run_comparison, save_uploaded_document
 
@@ -33,6 +39,7 @@ def _user_payload(user):
         "role": user.role,
         "is_admin": user.is_admin,
         "is_active": user.is_active,
+        "email_verified": bool(user.email_verified_at),
         "created_at": _date(user.created_at),
     }
 
@@ -117,6 +124,41 @@ def _error(message, status=400):
     return jsonify({"error": message}), status
 
 
+def _token_hash(raw_token):
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+def _token_expired(value):
+    if value is None:
+        return True
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value < datetime.now(timezone.utc)
+
+
+def _rate_limited(action, identity=None, ip_limit=30, identity_limit=None, window_seconds=900):
+    result = consume_auth_limits(
+        action, identity=identity, ip_limit=ip_limit,
+        identity_limit=identity_limit, window_seconds=window_seconds,
+    )
+    if result is None:
+        return None
+    payload, status, retry_after = result
+    response = jsonify(payload)
+    response.status_code = status
+    response.headers["Retry-After"] = str(retry_after)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _valid_email(value):
+    return len(value) <= 150 and bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value))
+
+
+def _valid_password(value):
+    return 10 <= len(value) <= 256
+
+
 @bp.get("/csrf")
 def csrf_token():
     return jsonify({"csrf_token": generate_csrf()})
@@ -137,16 +179,204 @@ def login():
     data = request.get_json(silent=True) or {}
     email = str(data.get("email", "")).strip().lower()
     password = str(data.get("password", ""))
+    limited = _rate_limited("login", email or None, ip_limit=30, identity_limit=8, window_seconds=900)
+    if limited:
+        return limited
+
     user = User.query.filter_by(email=email).first()
+    if not user or not user.check_password(password):
+        return _error("Invalid email address or password.", 401)
+    if not user.email_verified_at:
+        # Active accounts created before email verification was introduced are
+        # trusted legacy accounts. New public registrations are inactive until verified.
+        if user.is_active:
+            user.email_verified_at = user.created_at or datetime.now(timezone.utc)
+            db.session.commit()
+        else:
+            return _error("Please verify your email address before signing in. You can request a new verification email.", 403)
+    if not user.is_active:
+        return _error("This account is currently inactive. Contact AcaSift support.", 403)
 
-    if not user or not user.is_active or not user.check_password(password):
-        return _error("Invalid email address or password, or the account is inactive.", 401)
-
-    login_user(user)
+    login_user(user, remember=False, fresh=True)
     personal = ensure_personal_workspace(user)
     session["active_workspace_id"] = personal.workspace_id
     db.session.commit()
-    return jsonify({"user": _user_payload(user)})
+    response = jsonify({"user": _user_payload(user)})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@bp.post("/auth/register")
+def register_account():
+    if current_user.is_authenticated:
+        return _error("You are already signed in. Sign out before creating another account.", 409)
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    limited = _rate_limited("register", email or None, ip_limit=10, identity_limit=3, window_seconds=3600)
+    if limited:
+        return limited
+
+    if not email_is_configured():
+        return _error("Public registration is temporarily unavailable because email delivery has not been configured. Please try again later.", 503)
+
+    name_parts, name_error = _validated_name_parts(data)
+    if name_error:
+        return name_error
+    password = str(data.get("password", ""))
+    confirm_password = str(data.get("confirm_password", ""))
+    if not _valid_email(email):
+        return _error("Enter a valid email address.")
+    if not _valid_password(password):
+        return _error("Use a password containing between 10 and 256 characters.")
+    if password != confirm_password:
+        return _error("The password and confirmation do not match.")
+    if User.query.filter_by(email=email).first():
+        return _error("An account with that email address already exists. Try signing in or resetting your password.", 409)
+
+    raw_token = secrets.token_urlsafe(32)
+    user = User(
+        **name_parts,
+        email=email,
+        password_hash=generate_password_hash(password),
+        role="user",
+        is_active=False,
+        email_verification_token_hash=_token_hash(raw_token),
+        email_verification_expires_at=datetime.now(timezone.utc) + timedelta(hours=current_app.config["EMAIL_VERIFICATION_HOURS"]),
+    )
+    try:
+        db.session.add(user)
+        db.session.flush()
+        ensure_personal_workspace(user)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Public account registration failed.")
+        return _error("We could not complete registration. Please try again later.", 500)
+
+    # Commit the pending account before sending. If SMTP delivery fails, the
+    # account remains recoverable through the resend-verification workflow.
+    try:
+        send_verification_email(user, raw_token)
+    except Exception as exc:
+        current_app.logger.warning("Registration email delivery was not completed: %s", type(exc).__name__)
+        return _error("Your account was created, but the verification email could not be delivered. Use the resend-verification page to try again.", 503)
+
+    response = jsonify({
+        "message": "Your account has been created. Check your email for a verification link before signing in.",
+        "email": email,
+    })
+    response.status_code = 201
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@bp.post("/auth/verify-email")
+def verify_email():
+    data = request.get_json(silent=True) or {}
+    raw_token = str(data.get("token", ""))
+    limited = _rate_limited("verify_email", None, ip_limit=20, window_seconds=900)
+    if limited:
+        return limited
+    if not raw_token or len(raw_token) > 512:
+        return _error("This verification link is invalid or has expired.", 400)
+    user = User.query.filter_by(email_verification_token_hash=_token_hash(raw_token)).first()
+    if not user or _token_expired(user.email_verification_expires_at):
+        return _error("This verification link is invalid or has expired. Request a new verification email.", 400)
+
+    user.email_verified_at = datetime.now(timezone.utc)
+    user.email_verification_token_hash = None
+    user.email_verification_expires_at = None
+    user.is_active = True
+    personal = ensure_personal_workspace(user)
+    db.session.commit()
+    login_user(user, remember=False, fresh=True)
+    session["active_workspace_id"] = personal.workspace_id
+    response = jsonify({"message": "Your email address has been verified.", "user": _user_payload(user)})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@bp.post("/auth/resend-verification")
+def resend_verification():
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    limited = _rate_limited("resend_verification", email or None, ip_limit=5, identity_limit=3, window_seconds=3600)
+    if limited:
+        return limited
+    generic = {"message": "If an unverified account exists for that address, a verification email will be sent."}
+    if not email_is_configured():
+        return _error("Email delivery is temporarily unavailable. Please contact AcaSift support.", 503)
+    if not _valid_email(email):
+        return jsonify(generic)
+    user = User.query.filter_by(email=email).first()
+    if not user or user.email_verified_at or user.is_active:
+        return jsonify(generic)
+
+    raw_token = secrets.token_urlsafe(32)
+    user.email_verification_token_hash = _token_hash(raw_token)
+    user.email_verification_expires_at = datetime.now(timezone.utc) + timedelta(hours=current_app.config["EMAIL_VERIFICATION_HOURS"])
+    db.session.commit()
+    try:
+        send_verification_email(user, raw_token)
+    except Exception:
+        current_app.logger.warning("Verification resend could not be delivered.")
+    return jsonify(generic)
+
+
+@bp.post("/auth/password-reset/request")
+def request_password_reset():
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    limited = _rate_limited("password_reset_request", email or None, ip_limit=5, identity_limit=3, window_seconds=3600)
+    if limited:
+        return limited
+    generic = {"message": "If an active verified account exists for that address, password reset instructions will be sent."}
+    if not email_is_configured():
+        return _error("Email delivery is temporarily unavailable. Please contact AcaSift support.", 503)
+    if not _valid_email(email):
+        return jsonify(generic)
+    user = User.query.filter_by(email=email).first()
+    if not user or not user.is_active or not user.email_verified_at:
+        return jsonify(generic)
+
+    raw_token = secrets.token_urlsafe(32)
+    user.password_reset_token_hash = _token_hash(raw_token)
+    user.password_reset_expires_at = datetime.now(timezone.utc) + timedelta(hours=current_app.config["PASSWORD_RESET_HOURS"])
+    db.session.commit()
+    try:
+        send_password_reset_email(user, raw_token)
+    except Exception:
+        current_app.logger.warning("Password reset email could not be delivered.")
+    return jsonify(generic)
+
+
+@bp.post("/auth/password-reset/confirm")
+def confirm_password_reset():
+    data = request.get_json(silent=True) or {}
+    raw_token = str(data.get("token", ""))
+    limited = _rate_limited("password_reset_confirm", None, ip_limit=10, window_seconds=900)
+    if limited:
+        return limited
+    new_password = str(data.get("new_password", ""))
+    confirm_password = str(data.get("confirm_password", ""))
+    if not raw_token or len(raw_token) > 512:
+        return _error("This password reset link is invalid or has expired.", 400)
+    if not _valid_password(new_password):
+        return _error("Use a password containing between 10 and 256 characters.")
+    if new_password != confirm_password:
+        return _error("The password and confirmation do not match.")
+    user = User.query.filter_by(password_reset_token_hash=_token_hash(raw_token)).first()
+    if not user or _token_expired(user.password_reset_expires_at) or not user.is_active:
+        return _error("This password reset link is invalid or has expired. Request a new one.", 400)
+
+    user.password_hash = generate_password_hash(new_password)
+    user.password_reset_token_hash = None
+    user.password_reset_expires_at = None
+    user.auth_version = int(user.auth_version or 0) + 1
+    db.session.commit()
+    response = jsonify({"message": "Your password has been reset. Sign in using your new password."})
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @bp.post("/auth/logout")
@@ -207,7 +437,11 @@ def change_account_password():
     if check_password_hash(current_user.password_hash, new_password):
         return _error("Choose a password different from your current password.")
     current_user.password_hash = generate_password_hash(new_password)
+    current_user.password_reset_token_hash = None
+    current_user.password_reset_expires_at = None
+    current_user.auth_version = int(current_user.auth_version or 0) + 1
     db.session.commit()
+    login_user(current_user, remember=False, fresh=True)
     return jsonify({"message": "Your password has been changed successfully."})
 
 
@@ -323,6 +557,7 @@ def users():
     return jsonify({"users": [{
         **_user_payload(user),
         "is_active": user.is_active,
+        "email_verified": bool(user.email_verified_at),
         "created_at": _date(user.created_at),
     } for user in records]})
 
@@ -355,6 +590,7 @@ def create_user():
         password_hash=generate_password_hash(password),
         role=role,
         is_active=True,
+        email_verified_at=datetime.now(timezone.utc),
     )
     db.session.add(user)
     db.session.flush()
@@ -673,6 +909,7 @@ def bootstrap_first_admin():
                         password_hash=generate_password_hash(password),
                         role="admin",
                         is_active=True,
+                        email_verified_at=datetime.now(timezone.utc),
                     )
                     db.session.add(created_user)
                     db.session.flush()

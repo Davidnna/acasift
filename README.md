@@ -1,4 +1,4 @@
-# AcaSift 0.4.0 — React + Flask academic similarity analysis
+# AcaSift 0.5.1 — React + Flask academic similarity analysis
 
 **Tagline:** Find the overlap. Follow the source.
 
@@ -28,8 +28,8 @@ protection work without cross-origin authentication configuration.
 
 ## 2. Current capabilities
 
-- Public product website: Home, About, Features, How it Works, FAQ and Get Access.
-- Administrator-created accounts; public self-registration is not enabled.
+- Public product website: Home, About, Features, How it Works, FAQ and open registration.
+- Public self-registration with personal or work email addresses. Email verification is required before activation.
 - Administrator-managed reference document repository.
 - User submission uploads for PDF, DOCX and TXT files.
 - Text extraction and normalisation.
@@ -37,6 +37,9 @@ protection work without cross-origin authentication configuration.
 - Word N-gram overlap and matching passage offsets.
 - Comparison history and source-level reports.
 - Role-based API access for users and administrators.
+- Individual private workspaces and approved organisational workspaces.
+- Email verification, verification resend and password recovery.
+- Hashed one-time tokens, expiry, database-backed authentication rate limits and session revocation after password resets.
 
 The current system compares submissions only against administrator-curated documents in its
 internal reference repository. It does not search the entire internet or external academic
@@ -73,7 +76,24 @@ acasift/
 └── run.py
 ```
 
-## 4. Local development
+## 4. Authentication and email configuration
+
+Public registration and account recovery require SMTP delivery. Configure the following in
+Render Environment (never commit SMTP credentials):
+
+- `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`
+- `MAIL_USE_TLS` or `MAIL_USE_SSL` (use one transport mode)
+- `MAIL_DEFAULT_SENDER`
+- `PUBLIC_APP_URL` (the canonical HTTPS application URL)
+- `EMAIL_VERIFICATION_HOURS` (default 24)
+- `PASSWORD_RESET_HOURS` (default 1)
+
+A new account remains inactive until its one-time verification link is used. Verification and
+password-reset tokens are stored as SHA-256 hashes and expire. Password reset increments the
+account authentication version, invalidating previously issued login sessions. Authentication
+endpoints use database-backed rate limiting, so the limits apply across workers and restarts.
+
+## 5. Local development
 
 ### Prerequisites
 
@@ -308,6 +328,6 @@ New submissions are private to the uploader and active workspace. The current re
 
 ### Current rollout boundary
 
-Public self-registration and email verification are not enabled in 0.5.0. They are the next implementation stage. Until then, existing accounts continue to use the current administrator-created account process.
+Public self-registration and email verification are available in 0.5.1 once SMTP is configured in Render. New users start with an individual account; organisational workspace requests remain subject to platform review.
 
 Workspace owners can add references to their active workspace. Personal-workspace references remain private; organisational-workspace references are available to active workspace members.

@@ -84,6 +84,7 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(user.last_name, "Administrator")
         self.assertEqual(user.full_name, "AcaSift Administrator")
         self.assertTrue(user.is_active)
+        self.assertIsNotNone(user.email_verified_at)
         self.assertTrue(check_password_hash(user.password_hash, "a-strong-password-123"))
         self.assertNotEqual(user.password_hash, "a-strong-password-123")
 

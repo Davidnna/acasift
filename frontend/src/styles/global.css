@@ -220,3 +220,22 @@
 .status-approved{background:#eaf7f0;color:#18734d}
 .status-rejected{background:#fff0ef;color:#a43f38}
 @media(max-width:680px){.workspace-choice{align-items:flex-start;flex-wrap:wrap}.workspace-choice-copy{min-width:calc(100% - 60px)}.workspace-choice>.category-tag{margin-left:53px}.workspace-request-head{flex-direction:column}}
+
+/* AcaSift 0.5.1 — open registration and account recovery */
+.auth-form{gap:9px}
+.auth-name-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.auth-name-grid>div{min-width:0;display:flex;flex-direction:column;gap:7px}
+.auth-form-hint{margin:1px 0 0;color:#8794a5;font-size:10px;line-height:1.65}
+.auth-password-label{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px}
+.auth-password-label label{margin:0}
+.auth-password-label a{font-size:10px;font-weight:750;color:var(--teal-dark)}
+.auth-success-panel{display:flex;flex-direction:column;align-items:flex-start;gap:9px;padding:17px;border:1px solid #c9e9d9;border-radius:11px;background:#f0faf4;color:#246c4c;font-size:12px;line-height:1.7}
+.auth-success-panel>svg{color:#21875b}
+.auth-success-panel strong{color:#185b3d}
+.auth-success-panel p{margin:0;color:#4e6e5e}
+.auth-success-panel .button{align-self:stretch}
+.login-footnote+.login-footnote{border-top:0;margin-top:10px;padding-top:0}
+.account-email-status{display:inline-flex;align-items:center;gap:5px;margin-left:7px;font-size:9px;font-weight:750}
+.account-email-status.is-verified{color:#21875b}
+.account-email-status.is-unverified{color:#ad6c16}
+@media(max-width:520px){.auth-name-grid{grid-template-columns:1fr}.auth-name-grid>div{gap:6px}}

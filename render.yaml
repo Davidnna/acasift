@@ -21,3 +21,23 @@ services:
         value: "15"
       - key: SESSION_COOKIE_SECURE
         value: "true"
+      - key: MAIL_SERVER
+        sync: false
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_USE_TLS
+        value: "true"
+      - key: MAIL_USE_SSL
+        value: "false"
+      - key: MAIL_DEFAULT_SENDER
+        sync: false
+      - key: PUBLIC_APP_URL
+        value: "https://acasift.onrender.com"
+      - key: EMAIL_VERIFICATION_HOURS
+        value: "24"
+      - key: PASSWORD_RESET_HOURS
+        value: "1"

@@ -138,3 +138,53 @@ The existing Docker startup command runs `flask --app run.py init-db` before Gun
 After deployment, sign in with the existing account and open `/app/workspaces`. Confirm that the personal workspace appears. Submit a test document and verify it is associated with the active workspace. Use the platform-admin navigation to review `/app/admin/workspace-requests`.
 
 Organisational workspace approval is a manual platform-admin review. Confirm the requester's identity and authority to represent the organisation before approving. Workspace membership can currently be granted to existing active AcaSift accounts by email.
+
+
+## AcaSift 0.5.1 — public registration and account security
+
+Before enabling public registration, configure these Render Environment variables using SMTP
+credentials from an email provider:
+
+- `MAIL_SERVER` — SMTP host name.
+- `MAIL_PORT` — normally `587` for STARTTLS or `465` for implicit SSL.
+- `MAIL_USERNAME` and `MAIL_PASSWORD` — SMTP credentials.
+- `MAIL_USE_TLS=true` and `MAIL_USE_SSL=false` for STARTTLS; use the inverse for SSL.
+- `MAIL_DEFAULT_SENDER` — a sender address authorised by the provider.
+- `PUBLIC_APP_URL=https://acasift.onrender.com`.
+- `EMAIL_VERIFICATION_HOURS=24`.
+- `PASSWORD_RESET_HOURS=1`.
+
+Do not put SMTP credentials in GitHub, source files, screenshots or this chat. The source package
+contains only environment-variable names and example placeholders.
+
+The existing Docker startup command runs `flask --app run.py init-db` before Gunicorn. This
+release adds email-verification and password-reset columns to `users` and creates the
+`auth_rate_limit_events` table. Existing active accounts are marked verified using their original
+creation timestamp so current users can continue signing in. Existing accounts, workspaces,
+documents and reports are preserved. No manual Neon SQL is required.
+
+### Authentication verification checklist
+
+1. Configure SMTP and wait for Render to redeploy.
+2. Open `/register` and create a test account with an email address you can access.
+3. Confirm the account remains inactive until the verification email link is used.
+4. Open the email link. The page asks for an explicit confirmation; the GET request alone does
+   not consume the token, which helps avoid email security scanners consuming it automatically.
+5. Confirm successful verification signs the user in and opens their private workspace.
+6. Sign out and use `/forgot-password`; confirm the reset email arrives.
+7. Use the one-time reset link and confirm the old password no longer works.
+8. Confirm the old authenticated session is invalidated after the reset.
+9. Confirm login throttling returns HTTP 429 with a `Retry-After` header after repeated failures.
+10. Confirm existing administrator sign-in, workspace management, documents and reports still work.
+
+### Public authentication routes
+
+- `/register` — create an individual account.
+- `/verify-email` — confirm email ownership.
+- `/resend-verification` — request another verification email.
+- `/forgot-password` — request a password reset.
+- `/reset-password` — set a new password using a one-time token.
+
+All ordinary registrations receive the `user` platform role. Users cannot select or self-assign
+platform administrator privileges. Lecturer/student permissions continue to be assigned within
+approved organisational workspaces.

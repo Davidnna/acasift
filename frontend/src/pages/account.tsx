@@ -51,7 +51,7 @@ export function AccountPage() {
               <div><label htmlFor="account-last-name">Last name</label><input id="account-last-name" name="last_name" defaultValue={user.last_name || ''} maxLength={80} autoComplete="family-name" required /></div>
               <div className="account-other-names"><label htmlFor="account-other-names">Other names <span>Optional</span></label><input id="account-other-names" name="other_names" defaultValue={user.other_names || ''} maxLength={80} autoComplete="additional-name" /></div>
             </div>
-            <div className="account-readonly-field"><Mail size={16} /><div><span>Email address</span><strong>{user.email}</strong><small>Email changes are restricted until account email verification is implemented.</small></div></div>
+            <div className="account-readonly-field"><Mail size={16} /><div><span>Email address</span><strong>{user.email}</strong><small>{user.email_verified ? 'This email address has been verified. Email changes require a separate verification-protected update.' : 'This email address has not yet been verified.'}</small></div></div>
             <div className="form-actions"><button className="button button-primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save personal information'} <CheckCircle2 size={15} /></button></div>
           </Form>
         </section>
@@ -79,6 +79,7 @@ export function AccountPage() {
           <div className="account-detail-list">
             <div><span>Account role</span><strong>{user.is_admin ? 'Platform administrator' : 'Individual account'}</strong></div>
             <div><span>Account status</span><strong>{user.is_active ? 'Active' : 'Inactive'}</strong></div>
+            <div><span>Email verification</span><strong>{user.email_verified ? 'Verified' : 'Not verified'}</strong></div>
             <div><span>Account ID</span><strong>#{user.id}</strong></div>
             <div><span>Created</span><strong>{user.created_at ? formatDateTime(user.created_at) : 'Unavailable'}</strong></div>
           </div>

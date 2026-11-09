@@ -181,7 +181,7 @@ export function PublicLayout() {
         <div className="public-actions">
           {user ? <Link viewTransition className="button button-primary" to="/app/dashboard">Open workspace <ArrowUpRight size={15} /></Link> : <>
             <Link viewTransition className="signin-link" to="/login">Sign in</Link>
-            <Link viewTransition className="button button-primary" to="/access">Get access <ArrowUpRight size={15} /></Link>
+            <Link viewTransition className="button button-primary" to="/register">Create account <ArrowUpRight size={15} /></Link>
           </>}
         </div>
       </div>
@@ -196,7 +196,7 @@ function PublicFooter() {
     <div className="footer-grid wrap">
       <div className="footer-about"><Brand inverse /><p>Academic document similarity analysis to support careful source review and academic integrity.</p></div>
       <div className="footer-links"><strong>Explore</strong><Link viewTransition to="/about">About AcaSift</Link><Link viewTransition to="/features">Features</Link><Link viewTransition to="/how-it-works">How it works</Link><Link viewTransition to="/faq">Frequently asked questions</Link></div>
-      <div className="footer-links"><strong>Workspace</strong><Link viewTransition to="/login">Sign in</Link><Link viewTransition to="/access">How to get access</Link></div>
+      <div className="footer-links"><strong>Workspace</strong><Link viewTransition to="/login">Sign in</Link><Link viewTransition to="/register">Create an account</Link></div>
     </div>
     <div className="footer-bottom wrap"><span>© {new Date().getFullYear()} AcaSift. All rights reserved.</span><span>Similarity indicators support human review; they do not determine misconduct.</span></div>
   </footer>;

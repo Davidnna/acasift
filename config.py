@@ -30,3 +30,15 @@ class Config:
 
     # Temporary high-entropy secret used only for first-admin setup.
     ADMIN_BOOTSTRAP_TOKEN = os.environ.get("ADMIN_BOOTSTRAP_TOKEN", "")
+
+    # SMTP delivery for public registration and account recovery.
+    MAIL_SERVER = os.environ.get("MAIL_SERVER", "")
+    MAIL_PORT = int(os.environ.get("MAIL_PORT", "587"))
+    MAIL_USERNAME = os.environ.get("MAIL_USERNAME", "")
+    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD", "")
+    MAIL_USE_TLS = os.environ.get("MAIL_USE_TLS", "true").lower() == "true"
+    MAIL_USE_SSL = os.environ.get("MAIL_USE_SSL", "false").lower() == "true"
+    MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER", "")
+    PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL", "https://acasift.onrender.com").rstrip("/")
+    EMAIL_VERIFICATION_HOURS = int(os.environ.get("EMAIL_VERIFICATION_HOURS", "24"))
+    PASSWORD_RESET_HOURS = int(os.environ.get("PASSWORD_RESET_HOURS", "1"))

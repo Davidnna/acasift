@@ -19,13 +19,15 @@ class AuthConfig(Config):
     SECRET_KEY = "test-auth-secret-key"
     SQLALCHEMY_DATABASE_URI = "sqlite://"
     SQLALCHEMY_ENGINE_OPTIONS = {}
-    MAIL_SERVER = "smtp.example.test"
-    MAIL_PORT = 587
-    MAIL_USERNAME = "test-user"
-    MAIL_PASSWORD = "test-password"
-    MAIL_USE_TLS = True
-    MAIL_USE_SSL = False
-    MAIL_DEFAULT_SENDER = "AcaSift <no-reply@example.test>"
+    NYLAS_API_KEY = "test-nylas-api-key"
+    NYLAS_API_URI = "https://api.us.nylas.com"
+    NYLAS_SENDING_DOMAIN = "acasift.nylas.email"
+    NYLAS_FROM_NAME = "AcaSift"
+    NYLAS_FROM_EMAIL_VERIFICATION = "verify@acasift.nylas.email"
+    NYLAS_FROM_EMAIL_PASSWORD_RESET = "security@acasift.nylas.email"
+    NYLAS_FROM_EMAIL_NOTIFICATION = "notifications@acasift.nylas.email"
+    NYLAS_REPLY_TO = ""
+    NYLAS_API_TIMEOUT = 5
     PUBLIC_APP_URL = "https://acasift.example.test"
     EMAIL_VERIFICATION_HOURS = 24
     PASSWORD_RESET_HOURS = 1
@@ -89,14 +91,14 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(user.role, "user")
 
     def test_registration_requires_email_delivery_configuration(self):
-        self.app.config["MAIL_SERVER"] = ""
+        self.app.config["NYLAS_API_KEY"] = ""
         response = self.client.post("/api/auth/register", json=self.register_payload())
         self.assertEqual(response.status_code, 503)
         self.assertIsNone(User.query.filter_by(email="ada@example.test").first())
 
     def test_failed_verification_delivery_keeps_pending_account_for_resend(self):
         from app.services.email_service import EmailDeliveryError
-        with patch("app.api.send_verification_email", side_effect=EmailDeliveryError("smtp unavailable")):
+        with patch("app.api.send_verification_email", side_effect=EmailDeliveryError("Nylas unavailable")):
             response = self.client.post("/api/auth/register", json=self.register_payload())
         self.assertEqual(response.status_code, 503)
         user = User.query.filter_by(email="ada@example.test").one()

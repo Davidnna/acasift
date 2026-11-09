@@ -78,15 +78,17 @@ acasift/
 
 ## 4. Authentication and email configuration
 
-Public registration and account recovery require SMTP delivery. Configure the following in
-Render Environment (never commit SMTP credentials):
+Public registration and account recovery use Nylas Transactional Send. Configure the `NYLAS_*`
+environment variables in Render; the API key must remain secret and must never be committed.
 
-- `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`
-- `MAIL_USE_TLS` or `MAIL_USE_SSL` (use one transport mode)
-- `MAIL_DEFAULT_SENDER`
-- `PUBLIC_APP_URL` (the canonical HTTPS application URL)
-- `EMAIL_VERIFICATION_HOURS` (default 24)
-- `PASSWORD_RESET_HOURS` (default 1)
+- `NYLAS_API_KEY` — secret Nylas API key.
+- `NYLAS_API_URI` — `https://api.us.nylas.com` for this US-region application.
+- `NYLAS_SENDING_DOMAIN` — `acasift.nylas.email`.
+- `NYLAS_FROM_EMAIL_VERIFICATION` — `verify@acasift.nylas.email`.
+- `NYLAS_FROM_EMAIL_PASSWORD_RESET` — `security@acasift.nylas.email`.
+- `NYLAS_FROM_EMAIL_NOTIFICATION` — `notifications@acasift.nylas.email`.
+- `PUBLIC_APP_URL` — canonical HTTPS application URL.
+- `EMAIL_VERIFICATION_HOURS` (default 24) and `PASSWORD_RESET_HOURS` (default 1).
 
 A new account remains inactive until its one-time verification link is used. Verification and
 password-reset tokens are stored as SHA-256 hashes and expire. Password reset increments the
@@ -328,6 +330,30 @@ New submissions are private to the uploader and active workspace. The current re
 
 ### Current rollout boundary
 
-Public self-registration and email verification are available in 0.5.1 once SMTP is configured in Render. New users start with an individual account; organisational workspace requests remain subject to platform review.
+Public self-registration and email verification are available in 0.5.1 once Nylas Transactional Send is configured in Render. New users start with an individual account; organisational workspace requests remain subject to platform review.
 
 Workspace owners can add references to their active workspace. Personal-workspace references remain private; organisational-workspace references are available to active workspace members.
+
+
+## Email delivery: Nylas Transactional Send
+
+AcaSift 0.5.1 uses Nylas Transactional Send for account verification and password resets.
+It does not use SMTP and does not require each AcaSift user to connect an email account.
+
+For the current US-region test setup, configure these Render environment variables:
+
+- `NYLAS_API_KEY` (secret)
+- `NYLAS_API_URI=https://api.us.nylas.com`
+- `NYLAS_SENDING_DOMAIN=acasift.nylas.email`
+- `NYLAS_FROM_EMAIL_VERIFICATION=verify@acasift.nylas.email`
+- `NYLAS_FROM_EMAIL_PASSWORD_RESET=security@acasift.nylas.email`
+- `NYLAS_FROM_EMAIL_NOTIFICATION=notifications@acasift.nylas.email`
+- `NYLAS_API_TIMEOUT=20`
+- `PUBLIC_APP_URL=https://acasift.onrender.com`
+
+Verification and password-reset messages use different sender identities on the same verified
+domain. Those addresses are sending identities, not provisioned inboxes. Set `NYLAS_REPLY_TO`
+only when a real monitored reply mailbox is available.
+
+Transactional Send is currently a beta feature. The free Nylas domain is suitable for initial
+testing; use an owned and DNS-verified sending domain before a broad production launch.

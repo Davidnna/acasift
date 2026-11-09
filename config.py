@@ -31,14 +31,26 @@ class Config:
     # Temporary high-entropy secret used only for first-admin setup.
     ADMIN_BOOTSTRAP_TOKEN = os.environ.get("ADMIN_BOOTSTRAP_TOKEN", "")
 
-    # SMTP delivery for public registration and account recovery.
-    MAIL_SERVER = os.environ.get("MAIL_SERVER", "")
-    MAIL_PORT = int(os.environ.get("MAIL_PORT", "587"))
-    MAIL_USERNAME = os.environ.get("MAIL_USERNAME", "")
-    MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD", "")
-    MAIL_USE_TLS = os.environ.get("MAIL_USE_TLS", "true").lower() == "true"
-    MAIL_USE_SSL = os.environ.get("MAIL_USE_SSL", "false").lower() == "true"
-    MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER", "")
+    # Nylas Transactional Send (US region) for verification and password recovery.
+    NYLAS_API_KEY = os.environ.get("NYLAS_API_KEY", "")
+    NYLAS_API_URI = os.environ.get("NYLAS_API_URI", "https://api.us.nylas.com").rstrip("/")
+    NYLAS_SENDING_DOMAIN = os.environ.get("NYLAS_SENDING_DOMAIN", "acasift.nylas.email").strip().lower()
+    NYLAS_FROM_NAME = os.environ.get("NYLAS_FROM_NAME", "AcaSift")
+    NYLAS_FROM_EMAIL_VERIFICATION = os.environ.get(
+        "NYLAS_FROM_EMAIL_VERIFICATION",
+        f"verify@{NYLAS_SENDING_DOMAIN}",
+    ).strip().lower()
+    NYLAS_FROM_EMAIL_PASSWORD_RESET = os.environ.get(
+        "NYLAS_FROM_EMAIL_PASSWORD_RESET",
+        f"security@{NYLAS_SENDING_DOMAIN}",
+    ).strip().lower()
+    NYLAS_FROM_EMAIL_NOTIFICATION = os.environ.get(
+        "NYLAS_FROM_EMAIL_NOTIFICATION",
+        f"notifications@{NYLAS_SENDING_DOMAIN}",
+    ).strip().lower()
+    # Optional monitored mailbox for replies. These sender aliases are not inboxes.
+    NYLAS_REPLY_TO = os.environ.get("NYLAS_REPLY_TO", "").strip().lower()
+    NYLAS_API_TIMEOUT = int(os.environ.get("NYLAS_API_TIMEOUT", "20"))
     PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL", "https://acasift.onrender.com").rstrip("/")
     EMAIL_VERIFICATION_HOURS = int(os.environ.get("EMAIL_VERIFICATION_HOURS", "24"))
     PASSWORD_RESET_HOURS = int(os.environ.get("PASSWORD_RESET_HOURS", "1"))

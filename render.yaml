@@ -21,20 +21,22 @@ services:
         value: "15"
       - key: SESSION_COOKIE_SECURE
         value: "true"
-      - key: MAIL_SERVER
+      - key: NYLAS_API_KEY
         sync: false
-      - key: MAIL_PORT
-        value: "587"
-      - key: MAIL_USERNAME
-        sync: false
-      - key: MAIL_PASSWORD
-        sync: false
-      - key: MAIL_USE_TLS
-        value: "true"
-      - key: MAIL_USE_SSL
-        value: "false"
-      - key: MAIL_DEFAULT_SENDER
-        sync: false
+      - key: NYLAS_API_URI
+        value: "https://api.us.nylas.com"
+      - key: NYLAS_SENDING_DOMAIN
+        value: "acasift.nylas.email"
+      - key: NYLAS_FROM_NAME
+        value: "AcaSift"
+      - key: NYLAS_FROM_EMAIL_VERIFICATION
+        value: "verify@acasift.nylas.email"
+      - key: NYLAS_FROM_EMAIL_PASSWORD_RESET
+        value: "security@acasift.nylas.email"
+      - key: NYLAS_FROM_EMAIL_NOTIFICATION
+        value: "notifications@acasift.nylas.email"
+      - key: NYLAS_API_TIMEOUT
+        value: "20"
       - key: PUBLIC_APP_URL
         value: "https://acasift.onrender.com"
       - key: EMAIL_VERIFICATION_HOURS

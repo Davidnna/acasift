@@ -253,7 +253,7 @@ def register_account():
         current_app.logger.exception("Public account registration failed.")
         return _error("We could not complete registration. Please try again later.", 500)
 
-    # Commit the pending account before sending. If SMTP delivery fails, the
+    # Commit the pending account before sending. If Nylas delivery fails, the
     # account remains recoverable through the resend-verification workflow.
     try:
         send_verification_email(user, raw_token)

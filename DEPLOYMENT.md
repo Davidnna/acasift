@@ -140,42 +140,64 @@ After deployment, sign in with the existing account and open `/app/workspaces`. 
 Organisational workspace approval is a manual platform-admin review. Confirm the requester's identity and authority to represent the organisation before approving. Workspace membership can currently be granted to existing active AcaSift accounts by email.
 
 
-## AcaSift 0.5.1 — public registration and account security
+## AcaSift 0.5.1 — Nylas Transactional Send
 
-Before enabling public registration, configure these Render Environment variables using SMTP
-credentials from an email provider:
+Public registration and password recovery use Nylas Transactional Send (currently beta),
+not SMTP. The service sends application-generated email through a verified Nylas domain
+using the Nylas API key. It does not require Gmail/Outlook grants or individual user OAuth.
 
-- `MAIL_SERVER` — SMTP host name.
-- `MAIL_PORT` — normally `587` for STARTTLS or `465` for implicit SSL.
-- `MAIL_USERNAME` and `MAIL_PASSWORD` — SMTP credentials.
-- `MAIL_USE_TLS=true` and `MAIL_USE_SSL=false` for STARTTLS; use the inverse for SSL.
-- `MAIL_DEFAULT_SENDER` — a sender address authorised by the provider.
+Configure these Render Environment variables:
+
+- `NYLAS_API_KEY` — secret API key generated in the Nylas application.
+- `NYLAS_API_URI=https://api.us.nylas.com` — US data-residency endpoint.
+- `NYLAS_SENDING_DOMAIN=acasift.nylas.email` — verified free Nylas sending domain.
+- `NYLAS_FROM_NAME=AcaSift`.
+- `NYLAS_FROM_EMAIL_VERIFICATION=verify@acasift.nylas.email`.
+- `NYLAS_FROM_EMAIL_PASSWORD_RESET=security@acasift.nylas.email`.
+- `NYLAS_FROM_EMAIL_NOTIFICATION=notifications@acasift.nylas.email`.
+- `NYLAS_API_TIMEOUT=20`.
 - `PUBLIC_APP_URL=https://acasift.onrender.com`.
 - `EMAIL_VERIFICATION_HOURS=24`.
 - `PASSWORD_RESET_HOURS=1`.
 
-Do not put SMTP credentials in GitHub, source files, screenshots or this chat. The source package
-contains only environment-variable names and example placeholders.
+The sender address is selected by message purpose. Verification emails use the `verify@`
+sender; password-reset messages use `security@`. All sender addresses must belong to the
+verified `acasift.nylas.email` domain. These are sending identities, not inboxes.
 
-The existing Docker startup command runs `flask --app run.py init-db` before Gunicorn. This
-release adds email-verification and password-reset columns to `users` and creates the
-`auth_rate_limit_events` table. Existing active accounts are marked verified using their original
-creation timestamp so current users can continue signing in. Existing accounts, workspaces,
-documents and reports are preserved. No manual Neon SQL is required.
+`NYLAS_REPLY_TO` is optional. If configured, use a real mailbox that is monitored for replies.
+Do not use an unprovisioned `support@acasift.nylas.email` alias as a reply destination. If no
+mailbox is configured, verification and reset emails are sent without a reply-to address.
 
-### Authentication verification checklist
+### Nylas dashboard check
 
-1. Configure SMTP and wait for Render to redeploy.
-2. Open `/register` and create a test account with an email address you can access.
-3. Confirm the account remains inactive until the verification email link is used.
-4. Open the email link. The page asks for an explicit confirmation; the GET request alone does
-   not consume the token, which helps avoid email security scanners consuming it automatically.
-5. Confirm successful verification signs the user in and opens their private workspace.
-6. Sign out and use `/forgot-password`; confirm the reset email arrives.
-7. Use the one-time reset link and confirm the old password no longer works.
-8. Confirm the old authenticated session is invalidated after the reset.
-9. Confirm login throttling returns HTTP 429 with a `Retry-After` header after repeated failures.
-10. Confirm existing administrator sign-in, workspace management, documents and reports still work.
+1. Open the Nylas Dashboard and select the application associated with `acasift.nylas.email`.
+2. Confirm that `acasift.nylas.email` appears under the application's/organisation's Domains
+   and has a verified or active sending status.
+3. Confirm that the API key belongs to this same Nylas application and US region.
+4. Do not share the API key in GitHub, screenshots or chat.
+
+Nylas' free `*.nylas.email` domain is intended for testing and does not require custom DNS
+records. Transactional Send is currently documented as a beta feature. For a public production
+launch, plan to verify a domain that AcaSift controls and configure its DNS records with Nylas.
+
+### Deployment and test sequence
+
+1. Push the updated source to `main` and wait for Render to deploy.
+2. Add `NYLAS_API_KEY` as a secret in Render Environment. Set the other `NYLAS_*` values
+   exactly as listed above.
+3. Save and wait for the environment-triggered redeploy.
+4. Open `/register` and create a test account using an email address you control.
+5. Confirm that the message arrives from
+   `AcaSift Account Verification <verify@acasift.nylas.email>`.
+6. Complete email verification and confirm the account activates.
+7. Use `/forgot-password` and confirm the reset email arrives from
+   `AcaSift Security <security@acasift.nylas.email>`.
+8. Complete the password reset and verify that the old password and prior sessions no longer work.
+9. If sending fails, inspect Render logs for the Nylas HTTP status and request ID, then check the
+   Nylas domain status and API key.
+
+The database migration remains additive. Existing accounts, workspaces, documents and reports are
+preserved. No manual Neon SQL is required.
 
 ### Public authentication routes
 

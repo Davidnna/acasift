@@ -174,3 +174,16 @@
 - SMTP environment variables must be configured in Render before public registration can send email.
 - The migration is additive and runs through the existing `init-db` startup command.
 - No manual Neon SQL or external Redis service is required.
+
+
+## 0.5.1 integration update — Nylas Transactional Send
+
+- Replaced SMTP delivery with Nylas Transactional Send over HTTPS.
+- Configured US API endpoint and `acasift.nylas.email` sending domain.
+- Verification messages use `verify@acasift.nylas.email`.
+- Password-reset messages use `security@acasift.nylas.email`.
+- Added a separate notification sender identity for future system emails.
+- Added optional monitored `NYLAS_REPLY_TO` support.
+- Added request timeouts, idempotency keys, provider error logging and domain-bound sender validation.
+- Added offline tests for endpoint, authentication header, payload, sender selection and reply-to behavior.
+- No SMTP username, password, host or port is required.

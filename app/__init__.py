@@ -53,10 +53,12 @@ def create_app(config_class=Config):
             return None
 
     from app.api import bp as api_bp
+    from app.api.workspaces import bp as workspaces_api_bp
     from app.academic_api import bp as academic_api_bp
     from app.routes.main import bp as main_bp
 
     app.register_blueprint(api_bp)
+    app.register_blueprint(workspaces_api_bp)
     app.register_blueprint(academic_api_bp)
     app.register_blueprint(main_bp)
 

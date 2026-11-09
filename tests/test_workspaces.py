@@ -7,7 +7,7 @@ from werkzeug.security import generate_password_hash
 from config import Config
 from app import create_app
 from app.extensions import db
-from app.models import User, Workspace, WorkspaceMembership, WorkspaceRequest, Document
+from app.models import User, Workspace, WorkspaceMembership, Document
 from app.services.workspace_service import ensure_personal_workspace
 
 
@@ -58,40 +58,6 @@ class WorkspaceTests(unittest.TestCase):
         second = ensure_personal_workspace(self.admin)
         self.assertEqual(first.workspace_id, second.workspace_id)
         self.assertEqual(Workspace.query.filter_by(owner_user_id=self.admin.user_id, workspace_type="personal").count(), 1)
-
-    def test_organisation_request_remains_pending(self):
-        response = self.client.post("/api/workspaces/requests", json={
-            "organization_name": "Example Research Institute",
-            "organization_type": "research_group",
-            "website": "https://example.test",
-            "reason": "We need a shared workspace for an academic research group.",
-        })
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(WorkspaceRequest.query.one().status, "pending")
-        self.assertEqual(Workspace.query.filter_by(workspace_type="organization").count(), 0)
-
-    def test_platform_admin_can_approve_workspace_request(self):
-        record = WorkspaceRequest(
-            user_id=self.admin.user_id,
-            organization_name="Example University",
-            organization_type="university",
-            reason="Shared academic review workspace for faculty members.",
-            status="pending",
-        )
-        db.session.add(record)
-        db.session.commit()
-        response = self.client.post(
-            f"/api/admin/workspace-requests/{record.request_id}/decision",
-            json={"decision": "approve"},
-        )
-        self.assertEqual(response.status_code, 200)
-        workspace = Workspace.query.filter_by(name="Example University").one()
-        membership = WorkspaceMembership.query.filter_by(
-            workspace_id=workspace.workspace_id, user_id=self.admin.user_id
-        ).one()
-        self.assertEqual(membership.role, "owner")
-        self.assertEqual(workspace.status, "active")
-        self.assertEqual(workspace.workspace_type, "shared")
 
     def test_init_db_migrates_existing_organisation_workspaces_to_shared(self):
         legacy = Workspace(
@@ -172,21 +138,6 @@ class WorkspaceTests(unittest.TestCase):
         self.assertIn("Platform reference", titles)
         self.assertNotIn("Second private submission", titles)
 
-    def test_non_admin_cannot_review_organisational_requests(self):
-        user = User(
-            first_name="Normal", last_name="User", full_name="Normal User",
-            email="user@example.test", password_hash=generate_password_hash("user-password-123"),
-            role="user", is_active=True,
-        )
-        db.session.add(user)
-        db.session.flush()
-        ensure_personal_workspace(user)
-        db.session.commit()
-        client = self.app.test_client()
-        client.post("/api/auth/login", json={
-            "email": user.email, "password": "user-password-123",
-        })
-        self.assertEqual(client.get("/api/admin/workspace-requests").status_code, 403)
 
 
 if __name__ == "__main__":

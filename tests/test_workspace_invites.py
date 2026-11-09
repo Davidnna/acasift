@@ -95,11 +95,18 @@ class WorkspaceInviteTests(unittest.TestCase):
         self.assertEqual(membership.role, "owner")
 
     def test_invite_token_is_hashed_and_preview_is_limited(self):
-        result, token = self._create_invite(role="student", max_uses=2)
+        result, token = self._create_invite(
+            role="student",
+            max_uses=2,
+            expires_at=(datetime.now(timezone.utc) + timedelta(days=2)).isoformat(),
+        )
         invite = db.session.get(WorkspaceInvite, result["invite"]["id"])
         self.assertEqual(len(invite.token_hash), 64)
         self.assertNotEqual(invite.token_hash, token)
         self.assertEqual(result["invite"]["role"], "student")
+        manager_view = self.owner_client.get("/api/workspaces").get_json()
+        manager_invite = next(item for item in manager_view["invites"] if item["id"] == invite.invite_id)
+        self.assertIsNotNone(manager_invite["expires_at"])
 
         preview = self.owner_client.get(
             "/api/workspaces/invites/preview",
@@ -110,6 +117,7 @@ class WorkspaceInviteTests(unittest.TestCase):
         self.assertEqual(payload["workspace"]["name"], "CSC 401 Project Submissions")
         self.assertEqual(payload["role"], "student")
         self.assertTrue(payload["is_member"])
+        self.assertNotIn("expires_at", payload)
 
     def test_invited_user_can_join_with_role_and_invite_usage_is_counted(self):
         result, token = self._create_invite(role="student", max_uses=1)
@@ -216,6 +224,94 @@ class WorkspaceInviteTests(unittest.TestCase):
             workspace_id=self.workspace_id, user_id=target.user_id
         ).one()
         self.assertEqual(membership.role, "admin")
+
+    def test_expired_invitation_does_not_disclose_expiration_to_recipient(self):
+        result, token = self._create_invite(role="student")
+        invite = db.session.get(WorkspaceInvite, result["invite"]["id"])
+        invite.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.session.commit()
+
+        response = self.owner_client.get(
+            "/api/workspaces/invites/preview",
+            query_string={"token": token},
+        )
+        self.assertEqual(response.status_code, 410)
+        self.assertEqual(response.get_json()["error"], "This invitation link is no longer available.")
+
+    def test_workspace_owner_can_update_name_and_description(self):
+        response = self.owner_client.post(
+            f"/api/workspaces/{self.workspace_id}/manage",
+            json={"name": "Updated Research Group", "description": "Updated description."},
+        )
+        self.assertEqual(response.status_code, 200)
+        workspace = db.session.get(Workspace, self.workspace_id)
+        self.assertEqual(workspace.name, "Updated Research Group")
+        self.assertEqual(workspace.description, "Updated description.")
+
+    def test_owner_leaving_transfers_ownership_to_highest_priority_role(self):
+        admin = self._make_user("successor-admin@example.test", "Successor Admin")
+        lecturer = self._make_user("successor-lecturer@example.test", "Successor Lecturer")
+        student = self._make_user("successor-student@example.test", "Successor Student")
+        member = self._make_user("successor-member@example.test", "Successor Member")
+        for user, role in ((member, "member"), (student, "student"), (lecturer, "lecturer"), (admin, "admin")):
+            db.session.add(WorkspaceMembership(
+                workspace_id=self.workspace_id, user_id=user.user_id, role=role, status="active"
+            ))
+        db.session.commit()
+
+        response = self.owner_client.post(f"/api/workspaces/{self.workspace_id}/leave", json={})
+        self.assertEqual(response.status_code, 200)
+        workspace = db.session.get(Workspace, self.workspace_id)
+        self.assertEqual(workspace.owner_user_id, admin.user_id)
+        successor_membership = WorkspaceMembership.query.filter_by(
+            workspace_id=self.workspace_id, user_id=admin.user_id
+        ).one()
+        self.assertEqual(successor_membership.role, "owner")
+        owner_membership = WorkspaceMembership.query.filter_by(
+            workspace_id=self.workspace_id, user_id=self.owner.user_id
+        ).one()
+        self.assertEqual(owner_membership.status, "left")
+
+    def test_owner_leaving_with_no_other_members_closes_workspace(self):
+        response = self.owner_client.post(f"/api/workspaces/{self.workspace_id}/leave", json={})
+        self.assertEqual(response.status_code, 200)
+        workspace = db.session.get(Workspace, self.workspace_id)
+        self.assertEqual(workspace.status, "deleted")
+        owner_membership = WorkspaceMembership.query.filter_by(
+            workspace_id=self.workspace_id, user_id=self.owner.user_id
+        ).one()
+        self.assertEqual(owner_membership.status, "left")
+
+    def test_member_can_leave_without_changing_workspace_owner(self):
+        member = self._make_user("leaving-member@example.test", "Leaving Member")
+        db.session.add(WorkspaceMembership(
+            workspace_id=self.workspace_id, user_id=member.user_id, role="member", status="active"
+        ))
+        db.session.commit()
+        client = self.app.test_client()
+        self._login(client, member.email)
+        response = client.post(f"/api/workspaces/{self.workspace_id}/leave", json={})
+        self.assertEqual(response.status_code, 200)
+        workspace = db.session.get(Workspace, self.workspace_id)
+        self.assertEqual(workspace.owner_user_id, self.owner.user_id)
+        membership = WorkspaceMembership.query.filter_by(
+            workspace_id=self.workspace_id, user_id=member.user_id
+        ).one()
+        self.assertEqual(membership.status, "left")
+
+    def test_only_workspace_owner_can_delete_shared_workspace(self):
+        admin = self._make_user("deleting-admin@example.test", "Deleting Admin")
+        db.session.add(WorkspaceMembership(
+            workspace_id=self.workspace_id, user_id=admin.user_id, role="admin", status="active"
+        ))
+        db.session.commit()
+        client = self.app.test_client()
+        self._login(client, admin.email)
+        forbidden = client.delete(f"/api/workspaces/{self.workspace_id}")
+        self.assertEqual(forbidden.status_code, 403)
+        deleted = self.owner_client.delete(f"/api/workspaces/{self.workspace_id}")
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(db.session.get(Workspace, self.workspace_id).status, "deleted")
 
     def test_non_owner_cannot_appoint_an_administrator(self):
         admin_user = self._make_user("admin@example.test", "Workspace Admin")

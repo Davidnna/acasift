@@ -1,470 +1,124 @@
-# AcaSift 0.7.0 — React + Flask collaborative similarity analysis
+# AcaSift
 
-**Tagline:** Find the overlap. Follow the source.
+AcaSift is a document similarity analysis and academic collaboration platform. It helps individuals and groups compare submitted documents with authorised reference materials, inspect overlapping passages and manage academic review workflows. Similarity measurements support human assessment; they do not independently establish plagiarism or academic misconduct.
 
-AcaSift is a web-based academic document similarity analysis platform. The product is the
-software implementation for the approved final-year project titled **“Design and
-Implementation of a Plagiarism Detection System.”** The academic project title remains
-unchanged; AcaSift is the software brand.
+## What AcaSift provides
 
-> Similarity results indicate textual overlap. They are not automatic findings of plagiarism.
-> Human review is required.
+- Document upload and text extraction for PDF, DOCX and TXT files.
+- Document-level similarity analysis using TF-IDF cosine similarity and n-gram overlap.
+- Reports with matched passages and source-level measurements.
+- Private personal workspaces and shared workspaces for classes, teams, research groups and other collaborations.
+- Workspace ownership, administrators, member roles, workspace settings, member departure and ownership succession.
+- Invitation links with administrator-managed expiration, usage limits and revocation.
+- Optional course-specific invitations that enrol students or lecturers in a selected course when they join.
+- Courses, assignments, submissions, cohort comparison and lecturer assessment workflows.
+- Account registration, email verification, password recovery and role-based access controls.
 
-## 1. Architecture
+## Requirements for local use
 
-AcaSift now uses a separated frontend/backend architecture within one deployable service:
-
-- **Frontend:** React 18, TypeScript, Vite and React Router 6 data APIs.
-- **Backend:** Flask JSON API, Flask-Login session authentication and Flask-WTF CSRF protection.
-- **Database:** PostgreSQL through SQLAlchemy; SQLite is available for local development.
-- **Analysis:** TF-IDF vectorisation, cosine similarity and word-based N-gram matching.
-- **Deployment:** Multi-stage Docker build on Render. Node builds the React bundle; Python serves
-  the bundle and Flask API from the same origin.
-
-The frontend uses React Router's data router with nested layouts, route loaders, route actions,
-protected route loaders, lazy route-level code splitting, `<Form>`, `useFetcher`, `useNavigation`, request cancellation and route-level error handling.
-The Flask API and React application share the same origin, so browser session cookies and CSRF
-protection work without cross-origin authentication configuration.
-
-## 2. Current capabilities
-
-- Public product website: Home, About, Features, How it Works, FAQ and open registration.
-- Public self-registration with personal or work email addresses. Email verification is required before activation.
-- Administrator-managed reference document repository.
-- User submission uploads for PDF, DOCX and TXT files.
-- Text extraction and normalisation.
-- TF-IDF and cosine similarity for document-level comparison.
-- Word N-gram overlap and matching passage offsets.
-- Comparison history and source-level reports.
-- Role-based API access for users and administrators.
-- Private personal workspaces and instantly-created shared workspaces for any group or purpose.
-- Shared-workspace owners and administrators, role-based members and revocable invitation links.
-- Optional invitation expiration date/time, use limits and role assignment (member, student or lecturer).
-- Shared-workspace course creation, lecturer/student course membership and enrolment codes.
-- Lecturer-managed assignments with draft, published and closed states, deadlines, late-submission and resubmission controls.
-- Student assignment submissions with attempt tracking and private document storage.
-- Assignment-specific student-to-student similarity comparisons, with lecturer-triggered cohort-wide reanalysis.
-- Privacy-aware student similarity summaries and lecturer-only peer-source evidence.
-- Lecturer assessment records and feedback with neutral human-review outcomes.
-- Email verification, verification resend and password recovery.
-- Hashed one-time tokens, expiry, database-backed authentication rate limits and session revocation after password resets.
-
-The individual document-check workflow compares submissions against administrator-curated
-references in the internal repository. The academic assignment workflow compares each student's
-submission only against other submissions for the same assignment in the same course. A lecturer
-can run cohort-wide reanalysis after the submission window has progressed. It does not search the
-entire internet or external academic databases. Scanned/image-only PDFs, OCR, semantic paraphrase
-detection, cross-language matching and source-code comparison are not included in this release.
-
-Academic access is scoped to the active shared workspace. Workspace owners and administrators
-can manage courses; workspace lecturers can create and manage courses they teach. Students can
-join a shared workspace through an invitation link and enrol in a specific course using a course
-code, lecturer enrolment or a course-specific invitation that enrols them automatically. Students
-can see only their own submission records and a privacy-preserving similarity summary. Authorised
-lecturers can see course submissions, peer-source evidence and record a human review. Similarity
-values do not determine plagiarism or misconduct.
-
-## 3. Project structure
-
-```text
-acasift/
-├── app/
-│   ├── api/                 # Flask authentication, workspace and document API
-│   ├── academic_api.py      # Course, assignment, submission and assessment API
-│   ├── routes/              # React SPA and health route
-│   ├── services/            # Extraction, similarity, academic and workspace services
-│   ├── static/
-│   │   ├── img/             # Brand assets
-│   │   └── spa/             # Built React bundle (generated by Docker build)
-│   ├── extensions.py
-│   └── models.py
-├── frontend/
-│   ├── src/
-│   │   ├── components/      # Public and authenticated layouts, shared UI
-│   │   ├── pages/           # Public and workspace pages
-│   │   ├── styles/          # React frontend styling
-│   │   ├── api.ts           # Same-origin API client and CSRF handling
-│   │   └── router.tsx       # React Router data router, loaders and actions
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── vite.config.ts
-├── tests/
-├── Dockerfile
-├── render.yaml
-├── requirements.txt
-└── run.py
-```
-
-## 4. Authentication and email configuration
-
-Public registration and account recovery use Nylas Transactional Send. Configure the `NYLAS_*`
-environment variables in Render; the API key must remain secret and must never be committed.
-
-- `NYLAS_API_KEY` — secret Nylas API key.
-- `NYLAS_API_URI` — `https://api.us.nylas.com` for this US-region application.
-- `NYLAS_SENDING_DOMAIN` — `acasift.nylas.email`.
-- `NYLAS_FROM_EMAIL_VERIFICATION` — `verify@acasift.nylas.email`.
-- `NYLAS_FROM_EMAIL_PASSWORD_RESET` — `security@acasift.nylas.email`.
-- `NYLAS_FROM_EMAIL_NOTIFICATION` — `notifications@acasift.nylas.email`.
-- `PUBLIC_APP_URL` — canonical HTTPS application URL.
-- `EMAIL_VERIFICATION_HOURS` (default 24) and `PASSWORD_RESET_HOURS` (default 1).
-
-A new account remains inactive until its one-time verification link is used. Verification and
-password-reset tokens are stored as SHA-256 hashes and expire. Password reset increments the
-account authentication version, invalidating previously issued login sessions. Authentication
-endpoints use database-backed rate limiting, so the limits apply across workers and restarts.
-
-## 5. Local development
-
-### Prerequisites
+Install the following software before running AcaSift:
 
 - Python 3.11 or later.
 - Node.js 20 or later and npm.
-- PostgreSQL for a production-like local setup; SQLite is sufficient for a quick local check.
+- SQLite (included with Python) for a simple local run, or PostgreSQL 14 or later for a production-like setup.
+- Git (optional, for cloning the repository).
 
-### Backend setup
+## Run locally
 
-From the project root in PowerShell:
+1. Clone or download the repository and open its root directory.
+2. Create and activate a Python virtual environment:
 
-```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-Copy-Item .env.example .env
-flask --app run.py init-db
-flask --app run.py create-admin
+   ```bash
+   python -m venv .venv
+   ```
+
+   On Windows PowerShell:
+
+   ```powershell
+   .venv\Scripts\Activate.ps1
+   ```
+
+   On macOS or Linux:
+
+   ```bash
+   source .venv/bin/activate
+   ```
+
+3. Install the Python dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Copy `.env.example` to `.env`. The example uses a local SQLite database, so no database server is required for a basic run. Provide a long, unique `SECRET_KEY` and set `PUBLIC_APP_URL` to `http://localhost:5000`. If you prefer PostgreSQL, replace `DATABASE_URL` with your PostgreSQL connection string. Configure the email provider only if you want to test registration verification and password recovery emails.
+
+5. Install frontend dependencies and build the application:
+
+   ```bash
+   cd frontend
+   npm install
+   npm run build
+   cd ..
+   ```
+
+6. Initialise the database and create the first administrator:
+
+   ```bash
+   flask --app run.py init-db
+   flask --app run.py create-admin
+   ```
+
+   Follow the prompts to create the administrator account. If the project configuration exposes a different first-administrator setup command, use the setup page shown by the application.
+
+7. Start the application:
+
+   ```bash
+   python run.py
+   ```
+
+8. Open `http://localhost:5000` in your browser and sign in.
+
+The first build compiles the frontend into the application’s static directory. Re-run `npm run build` after frontend changes. For active frontend development, run `npm run dev` from the `frontend` directory while the Flask application is running.
+
+## Configuration
+
+The application reads environment settings from `.env` in local development. At minimum, configure:
+
+- `SECRET_KEY`: a unique secret used to protect sessions and security tokens.
+- `DATABASE_URL`: the PostgreSQL connection string.
+- `PUBLIC_APP_URL`: the base URL used when generating account and workspace links.
+- `MAX_CONTENT_LENGTH_MB`: the maximum upload size in megabytes. The default is 15 MB.
+
+Email delivery settings are optional for basic local exploration, but required for end-to-end testing of email verification and password recovery. Never commit `.env` or production credentials to source control.
+
+## Supported documents and limitations
+
+AcaSift currently accepts PDF, DOCX and TXT documents, subject to the configured upload-size limit. Text extraction is required for analysis; scanned image-only PDFs may not produce usable text. Similarity results identify textual overlap and require review of context, quotations, citations and source attribution.
+
+## Project layout
+
+- `app/`: Flask application, API endpoints, data models, services and static assets.
+- `frontend/`: React application, routes, components, pages and styles.
+- `tests/`: automated backend regression tests.
+- `scripts/`: maintenance and evaluation utilities.
+- `sample_documents/`: small sample text files for local evaluation.
+- `render.yaml`: deployment service configuration.
+
+## Run tests
+
+With the Python virtual environment active and dependencies installed:
+
+```bash
+python -m unittest discover -s tests -v
 ```
 
-The sample `.env` uses SQLite. For PostgreSQL, set `DATABASE_URL` to a PostgreSQL connection
-string. Do not commit `.env` or expose database credentials.
+To validate the frontend production build:
 
-Start Flask in Terminal 1:
-
-```powershell
-flask --app run.py run --port 5000
-```
-
-### React frontend setup
-
-In Terminal 2:
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-Open `http://localhost:5173`. Vite proxies `/api` requests to the Flask server on port 5000.
-The placeholder file in `app/static/spa/` is only a local fallback; the Vite development server
-serves the React source directly.
-
-To create a production bundle locally:
-
-```powershell
+```bash
 cd frontend
 npm run build
 ```
 
-Vite writes the compiled application to `app/static/spa/`.
+## Privacy and responsible use
 
-## 6. API overview
-
-| Method | Endpoint | Access | Purpose |
-|---|---|---|---|
-| GET | `/api/csrf` | Public | Obtain a CSRF token |
-| GET | `/api/auth/me` | Public response | Current session user or 401 |
-| POST | `/api/auth/login` | Public | Authenticate a user |
-| POST | `/api/auth/logout` | Authenticated | End the session |
-| GET | `/api/dashboard` | Authenticated | Dashboard metrics and recent activity |
-| GET | `/api/documents` | Authenticated | List visible documents |
-| POST | `/api/documents` | Authenticated | Upload and analyse a submission |
-| GET | `/api/comparisons/{id}` | Owner or admin | Retrieve a comparison report |
-| GET | `/api/admin/users` | Admin | List accounts |
-| POST | `/api/admin/users` | Admin | Create an account |
-| GET | `/api/admin/references` | Admin | List reference documents |
-| POST | `/api/admin/references` | Admin | Upload a reference document |
-
-All state-changing API requests require the `X-CSRFToken` header. The React API client obtains
-the token from `/api/csrf` and includes it automatically. Authentication uses Flask session
-cookies with same-origin requests; no bearer token is stored in browser local storage.
-
-## 7. Academic collaboration API and workflow
-
-| Method | Endpoint | Access | Purpose |
-|---|---|---|---|
-| GET | `/api/courses` | Authenticated workspace member | List courses in the active workspace |
-| POST | `/api/courses` | Workspace owner/admin/lecturer | Create a course and one-time enrolment code |
-| POST | `/api/courses/join` | Student workspace member | Enrol using a course code |
-| GET | `/api/courses/{id}` | Course member or workspace manager | Course, assignments and (for lecturers) roster |
-| POST | `/api/courses/{id}/join-code` | Course lecturer/manager | Rotate the course enrolment code |
-| POST | `/api/courses/{id}/members` | Course lecturer/manager | Add an existing workspace member |
-| POST | `/api/courses/{id}/assignments` | Course lecturer/manager | Create a draft or published assignment |
-| GET | `/api/assignments` | Authenticated | List assignments in the active workspace |
-| GET | `/api/assignments/{id}` | Course member | Assignment and permitted submission list |
-| POST | `/api/assignments/{id}/status` | Course lecturer/manager | Publish, pause or close an assignment |
-| POST | `/api/assignments/{id}/submit` | Enrolled student | Submit a PDF, DOCX or TXT document |
-| POST | `/api/assignments/{id}/analyse` | Course lecturer/manager | Reanalyse the assignment cohort |
-| GET | `/api/submissions/{id}` | Submission owner or course lecturer | Privacy-aware student overview or lecturer evidence report |
-| POST | `/api/submissions/{id}/assessment` | Course lecturer/manager | Save review outcome and feedback |
-| POST | `/api/workspaces` | Authenticated user | Create a shared workspace instantly |
-| POST | `/api/workspaces/{id}/invites` | Workspace owner/admin | Create a role-based, expiring or usage-limited invitation |
-| GET | `/api/workspaces/invites/preview` | Authenticated invite recipient | Preview a workspace/course invitation |
-| POST | `/api/workspaces/invites/accept` | Authenticated invite recipient | Join a workspace and optionally enrol in a course |
-| POST | `/api/workspaces/{id}/invites/{invite_id}/revoke` | Workspace owner/admin | Revoke an invitation immediately |
-| POST | `/api/workspaces/{id}/members/{user_id}/role` | Workspace owner/admin | Change a member role; owner controls administrator roles |
-| POST | `/api/workspaces/{id}/members/{user_id}/remove` | Workspace owner/admin | Remove a workspace member |
-
-A new course is available in any active shared workspace. The course creator is
-added as a lecturer. Students must already be members of the same workspace with the Student
-workspace role. Enrolment codes are random 16-character codes; only their hashes are stored.
-Rotating a code invalidates the previous code.
-
-Assignments support draft, published and closed states. Lecturers can configure a deadline,
-late submissions and resubmissions. Student uploads are private documents. Peer comparison is
-restricted to submissions belonging to the same assignment. A newly submitted document is
-compared with the peer submissions already available; lecturers can run cohort-wide analysis to
-refresh every submission against the current cohort.
-
-Students can see their own submission history, aggregate similarity indicators and lecturer
-feedback. They cannot see peer identities, filenames or matched passages. Course lecturers and
-workspace managers can inspect peer-source evidence and record one current assessment per
-submission. Review outcomes are `No further action`, `Discuss with student` and `Further review
-required`; these are human-review workflow labels, not automatic misconduct findings.
-
-## 8. Similarity calculations
-
-### Cosine similarity
-
-A TF-IDF vectoriser is fitted to the submitted text and the available reference texts. Cosine
-similarity is calculated between the submission vector and each reference vector. The report
-shows the score as a percentage-scaled similarity value; it is not a percentage of plagiarised
-content.
-
-### Matched N-gram occurrence coverage
-
-The application generates overlapping word-based N-gram windows from the submitted document
-and checks whether each window occurs in a reference document:
-
-`matched_ngram_coverage = matched_query_ngram_windows / total_query_ngram_windows * 100`
-
-The denominator counts every N-gram window in the submitted text, including repeated windows.
-The default N-gram size is 5; it is reduced for shorter texts down to a minimum of 2 tokens.
-Single-token matches are not treated as meaningful phrase overlap. Matching is case-insensitive,
-uses Unicode compatibility normalisation, and ignores punctuation and spacing between tokens.
-Character offsets continue to refer to the original text so the report can show the source excerpts.
-New results store the coverage method. Existing reports retain their legacy unique-N-gram
-coverage definition and are labelled accordingly; the startup database check adds the coverage-method column
-without deleting or rewriting historical comparison records.
-
-### Interpretation limits
-
-TF-IDF cosine similarity measures similarity between weighted document-term vectors. It is not
-a copied-content percentage. Exact N-gram matching identifies shared word sequences; it does
-not independently establish plagiarism and does not detect paraphrases that share no exact
-word sequence. Quotations, reference lists, common expressions and technical terminology can
-produce legitimate overlap. Human review remains necessary.
-
-## 9. Run tests
-
-```powershell
-python -m unittest discover -s tests -v
-```
-
-The automated Python suite includes SPA and health checks, CSRF and authentication lifecycle,
-workspace isolation, similarity matching, Nylas email behaviour, and academic course/assignment
-workflow tests. The React TypeScript production build is executed by the Docker build on Render.
-The academic workflow tests were added in 0.6.0; see the release verification notes for the
-checks that could and could not be run in the authoring environment.
-
-## 10. Deployment on Render
-
-The repository contains a multi-stage `Dockerfile` and a Render Blueprint. Render builds the
-React bundle in a Node stage, installs Python requirements in a Python stage, copies the React
-bundle into Flask's static directory, and starts Gunicorn.
-
-Required Render environment variables:
-
-- `DATABASE_URL`: Neon PostgreSQL connection string.
-- `SECRET_KEY`: generated by Render.
-- `SESSION_COOKIE_SECURE=true`.
-
-The Blueprint is configured for automatic deployment on commits to `main`. Do not put secrets
-in GitHub. Review `DEPLOYMENT.md` before applying the React migration to an existing Render
-service, because the service runtime changes from native Python to Docker.
-
-## 11. Storage limitation
-
-PostgreSQL stores application records and extracted text. Original uploaded files are currently
-stored on the application filesystem. Render's free web service filesystem is ephemeral, so
-original files can disappear after restarts or redeployments. AcaSift needs private object
-storage or another persistent file-storage service before original uploads can be treated as
-permanent records or offered for download.
-
-## 12. Next development priorities
-
-- Verify the React production deployment and all protected route flows.
-- Extend the additive migration process as future database fields are introduced.
-- Add persistent private object storage for original uploads.
-- Add pagination, retention controls and downloadable reports.
-- Evaluate precision, recall, F1-score and processing time using a labelled test corpus.
-- Consider background processing and indexed candidate retrieval for larger repositories.
-
-
-## 13. Navigation and motion (0.3.4)
-
-- Route changes use React Router View Transitions for a coordinated outgoing/incoming page animation.
-- Route and button scrolling use an interruptible, distance-scaled animation with sine ease-in-out timing, capped at 2.8 seconds.
-- Navigation returns the viewport to the top with a controlled ease-in-out scroll animation; in-page hash links scroll to their target.
-- The floating scroll-to-top control appears after 360 pixels and uses the same interruptible scroll animation with a slower entrance and exit.
-- The `/health` endpoint remains available to Render health checks but is intentionally omitted from public navigation.
-- Motion respects the operating system's reduced-motion preference; browsers without the View Transitions API use a CSS fallback.
-
-## 14. Detection evaluation (0.4.0)
-
-A small labelled synthetic corpus is provided in `evaluation/cases.json`. It includes exact
-copying, partial overlap, case/punctuation differences, separated passages, Unicode compatibility,
-paraphrase-only pairs and unrelated text. Run the evaluation from the project root:
-
-```powershell
-python scripts/evaluate_similarity.py --ngram-size 5 --output evaluation/results.json
-```
-
-The script reports precision, recall, F1-score, accuracy, a confusion matrix and positive-passage
-localisation rate. Its binary decision rule is deliberately narrow: a pair is marked as containing
-exact overlap when at least one N-gram window matches. These metrics describe only the supplied
-synthetic test cases; they are not a valid estimate of real-world plagiarism detection performance.
-For a defensible academic evaluation, the corpus must be expanded with institutionally approved,
-representative documents and manually labelled copied passages, and the matching configuration
-should be selected using a separate validation set.
-
-
-## First administrator setup (browser-only)
-
-AcaSift 0.4.1 adds a one-time first-administrator setup flow so the initial administrator
-can be created without a local terminal or Render Shell.
-
-1. Deploy the release to Render.
-2. In Render, open the `acasift` service and select **Environment**.
-3. Add `ADMIN_BOOTSTRAP_TOKEN` with a password-manager-generated random value of at least
-   48 characters. Prefer letters and numbers. Do not commit it, put it in a URL, or share it.
-4. Save the environment change and wait for the service to redeploy.
-5. Open `https://acasift.onrender.com/setup/first-admin`.
-6. Enter the administrator's name, email, a unique password of at least 10 characters,
-   and the temporary setup token. Successful creation signs the new administrator in.
-7. Immediately remove `ADMIN_BOOTSTRAP_TOKEN` from the Render Environment and save.
-   Wait for that redeployment to finish. The setup endpoint also permanently refuses a
-   second administrator after the first one exists.
-
-The API checks that no administrator exists and uses a PostgreSQL transaction-level advisory
-lock to serialise concurrent bootstrap attempts across Render workers. It uses the existing
-CSRF protection, hashes the password with Werkzeug, and never returns or stores the setup
-token in the database. The setup page is not linked in the public navigation.
-
-If the setup page reports that setup is unavailable, check that the environment variable is
-present and at least 32 characters long, and that the Neon database connected to Render
-does not already contain an administrator.
-
-
-## Account management and structured names (0.4.2)
-
-The account profile stores first name, last name and optional other names separately. The
-`full_name` field remains as a denormalised display-name value for compatibility with existing
-document and comparison records. The startup `init-db` command adds the new nullable columns
-without deleting or rewriting legacy names. Existing users should confirm their structured
-name fields on `/app/account`.
-
-Authenticated users can update their name details and change their password after providing
-the current password. Email address, account role and account status are read-only in the
-profile; changing email safely requires a verification workflow, while roles/status remain
-administrator-controlled. The account page shows personal document and comparison activity.
-
-
-## Workspace architecture
-
-Every account receives a private personal workspace. Any verified user can also create a shared
-workspace immediately; no institution name, organisational proof or platform-admin approval is
-required. A shared workspace is a collaboration container for a class, assignment cohort,
-research group, project team, organisation or any other group.
-
-The creator becomes the workspace owner. Owners can appoint one or more administrators. Workspace
-administrators can manage ordinary members and invitations; only the owner can appoint or remove
-administrators. Workspace roles are separate from the platform administrator role.
-
-### Invitation links
-
-Workspace owners and administrators can create invitation links for Member, Student or Lecturer
-roles. Links can have an optional expiration date and time, an optional maximum-use limit, and can
-be revoked immediately. Links with no expiry and no use limit remain active until revoked. An
-invitation link cannot grant owner or administrator privileges. The secret token is high-entropy
-and only its SHA-256 hash is stored in PostgreSQL.
-
-Recipients must sign in or create and verify an AcaSift account before accepting an invitation.
-An invitation can optionally target one active course. When it does, a Student or Lecturer is
-automatically enrolled in that course while joining the workspace; otherwise, course enrolment
-remains a separate step using the course code. This lets a lecturer share one invitation link for
-both workspace access and a specific class without requiring individual email entry.
-
-### Data isolation and migration
-
-The 0.7.0 startup migration adds an optional description field to existing workspaces and changes
-legacy `organization` workspace types to `shared` without changing workspace IDs, memberships,
-courses, assignments, submissions, reports or documents. New invitation records are created in
-the `workspace_invites` table. Existing personal workspaces remain private. No manual Neon SQL
-execution or new Render environment variable is required.
-
-Legacy workspace-request records remain in the database for audit/history compatibility, but new
-shared workspaces are created directly and do not enter an approval queue.
-
-
-## Email delivery: Nylas Transactional Send
-
-AcaSift 0.5.1 uses Nylas Transactional Send for account verification and password resets.
-It does not use SMTP and does not require each AcaSift user to connect an email account.
-
-For the current US-region test setup, configure these Render environment variables:
-
-- `NYLAS_API_KEY` (secret)
-- `NYLAS_API_URI=https://api.us.nylas.com`
-- `NYLAS_SENDING_DOMAIN=acasift.nylas.email`
-- `NYLAS_FROM_EMAIL_VERIFICATION=verify@acasift.nylas.email`
-- `NYLAS_FROM_EMAIL_PASSWORD_RESET=security@acasift.nylas.email`
-- `NYLAS_FROM_EMAIL_NOTIFICATION=notifications@acasift.nylas.email`
-- `NYLAS_API_TIMEOUT=20`
-- `PUBLIC_APP_URL=https://acasift.onrender.com`
-
-Verification and password-reset messages use different sender identities on the same verified
-domain. Those addresses are sending identities, not provisioned inboxes. Set `NYLAS_REPLY_TO`
-only when a real monitored reply mailbox is available.
-
-Transactional Send is currently a beta feature. The free Nylas domain is suitable for initial
-testing; use an owned and DNS-verified sending domain before a broad production launch.
-
-
-## AcaSift 0.5.2 — Email verification and branded messages
-
-The email verification and password-reset confirmation endpoints use high-entropy, one-time,
-short-lived email bearer tokens. These two POST endpoints are deliberately exempt from the
-browser-session CSRF check because a person may open an email link in a new browser context
-that does not share the session used when they registered or requested a password reset.
-They remain rate-limited, expiry-checked and single-use. All other state-changing API routes
-continue to require CSRF protection.
-
-Verification and password-reset messages use branded HTML templates. The AcaSift logo is
-served from `/static/img/acasift-mark.png`; keep `PUBLIC_APP_URL` set to the canonical
-public application URL so email clients can load the logo and links.
-
-
-## AcaSift 0.7.0 — Flexible shared workspaces
-
-- Replaces institution-specific workspace semantics with generic shared workspaces.
-- Adds direct shared-workspace creation for any verified user.
-- Migrates existing organisational workspaces to the shared type in place.
-- Adds multiple workspace administrators with owner-controlled administrator appointment.
-- Adds secure invitation links with role selection, optional expiration date/time, optional usage
-  limits, revocation and invitation acceptance after sign-in.
-- Stores only SHA-256 hashes of invitation tokens.
-- Adds workspace member role updates and member removal with owner/admin separation.
-- Updates academic course permissions and public copy to use shared workspaces.
-- Keeps legacy workspace request records and routes for backward compatibility; new workspaces
-  do not require platform-admin approval.
+Workspace content is available according to membership and role permissions. Personal documents remain private to their owners. Similarity reports should be interpreted by authorised reviewers and should not be used as the sole basis for academic misconduct decisions.

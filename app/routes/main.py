@@ -23,7 +23,7 @@ def legacy_documents():
 
 @bp.get("/documents/upload")
 def legacy_document_upload():
-    return redirect("/app/documents/new", code=302)
+    return redirect("/app/documents", code=302)
 
 
 @bp.get("/comparisons/<int:comparison_id>")
@@ -43,7 +43,7 @@ def legacy_admin_references():
 
 @bp.get("/admin/references/upload")
 def legacy_admin_reference_upload():
-    return redirect("/app/admin/references/new", code=302)
+    return redirect("/app/admin/references", code=302)
 
 
 @bp.route("/", defaults={"path": ""})

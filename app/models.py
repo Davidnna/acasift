@@ -213,25 +213,6 @@ class WorkspaceInvite(db.Model):
 
 
 
-class WorkspaceRequest(db.Model):
-    __tablename__ = "workspace_requests"
-
-    request_id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
-    organization_name = db.Column(db.String(180), nullable=False)
-    organization_type = db.Column(db.String(40), nullable=False)
-    website = db.Column(db.String(255), nullable=True)
-    reason = db.Column(db.Text, nullable=False)
-    status = db.Column(db.String(24), nullable=False, default="pending", index=True)
-    reviewed_by_user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=True)
-    review_notes = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
-    reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
-
-    requester = db.relationship("User", foreign_keys=[user_id])
-    reviewer = db.relationship("User", foreign_keys=[reviewed_by_user_id])
-
-
 class AuthRateLimitEvent(db.Model):
     __tablename__ = "auth_rate_limit_events"
     __table_args__ = (

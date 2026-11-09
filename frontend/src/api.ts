@@ -1,4 +1,5 @@
 import type {
+  AccountData,
   ComparisonDetail,
   DashboardData,
   DocumentRecord,
@@ -78,6 +79,34 @@ export async function signOut(): Promise<void> {
   csrfToken = null;
 }
 
+
+export async function getAccount(signal?: AbortSignal): Promise<AccountData> {
+  return request('/api/account', { signal });
+}
+
+export async function updateAccountProfile(payload: {
+  first_name: string;
+  last_name: string;
+  other_names: string;
+}): Promise<User> {
+  const data = await request<{ user: User }>('/api/account/profile', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return data.user;
+}
+
+export async function changeAccountPassword(payload: {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
+}): Promise<void> {
+  await request('/api/account/password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getDashboard(signal?: AbortSignal): Promise<DashboardData> {
   return request('/api/dashboard', { signal });
 }
@@ -121,7 +150,9 @@ export async function getBootstrapStatus(signal?: AbortSignal): Promise<boolean>
 }
 
 export async function createFirstAdmin(payload: {
-  full_name: string;
+  first_name: string;
+  last_name: string;
+  other_names: string;
   email: string;
   password: string;
   setup_token: string;

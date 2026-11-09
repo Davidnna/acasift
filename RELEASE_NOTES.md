@@ -114,3 +114,17 @@
 - Automatically signs in the newly created administrator.
 - Setup becomes unavailable after the first administrator exists; remove the environment token after setup.
 - No database schema changes.
+
+
+# AcaSift 0.4.2 release notes
+
+## Structured names and account management
+
+- Added first name, last name and optional other names to user records.
+- Added an additive startup migration for existing databases; legacy full_name values are preserved.
+- Widened PostgreSQL full_name storage to support structured names.
+- Updated first-administrator setup and administrator-created account forms to use structured names.
+- Added an authenticated account page with personal information, read-only account identity/role/status, recent activity and password change.
+- Added current-password verification and password confirmation checks.
+- Added account navigation from the workspace sidebar and account identity control.
+- No open self-registration in this release; account provisioning policy remains unchanged.

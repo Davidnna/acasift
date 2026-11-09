@@ -36,7 +36,9 @@ class BootstrapTests(unittest.TestCase):
 
     def payload(self, **overrides):
         data = {
-            "full_name": "AcaSift Administrator",
+            "first_name": "AcaSift",
+            "last_name": "Administrator",
+            "other_names": "",
             "email": "admin@example.edu",
             "password": "a-strong-password-123",
             "setup_token": BootstrapConfig.ADMIN_BOOTSTRAP_TOKEN,
@@ -78,6 +80,9 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         user = User.query.filter_by(email="admin@example.edu").one()
         self.assertEqual(user.role, "admin")
+        self.assertEqual(user.first_name, "AcaSift")
+        self.assertEqual(user.last_name, "Administrator")
+        self.assertEqual(user.full_name, "AcaSift Administrator")
         self.assertTrue(user.is_active)
         self.assertTrue(check_password_hash(user.password_hash, "a-strong-password-123"))
         self.assertNotEqual(user.password_hash, "a-strong-password-123")

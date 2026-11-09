@@ -278,3 +278,17 @@ token in the database. The setup page is not linked in the public navigation.
 If the setup page reports that setup is unavailable, check that the environment variable is
 present and at least 32 characters long, and that the Neon database connected to Render
 does not already contain an administrator.
+
+
+## Account management and structured names (0.4.2)
+
+The account profile stores first name, last name and optional other names separately. The
+`full_name` field remains as a denormalised display-name value for compatibility with existing
+document and comparison records. The startup `init-db` command adds the new nullable columns
+without deleting or rewriting legacy names. Existing users should confirm their structured
+name fields on `/app/account`.
+
+Authenticated users can update their name details and change their password after providing
+the current password. Email address, account role and account status are read-only in the
+profile; changing email safely requires a verification workflow, while roles/status remain
+administrator-controlled. The account page shows personal document and comparison activity.

@@ -120,3 +120,12 @@ until private object storage or another persistent file-storage service is imple
 8. Save and wait for the final redeployment. Confirm `/setup/first-admin` now reports that setup is unavailable and sign-in works.
 
 Do not place the token in a GitHub file, URL, screenshot, support ticket, or chat message.
+
+
+## AcaSift 0.4.2 database migration
+
+No manual SQL is required. On deployment, the existing `init-db` startup command adds
+`first_name`, `last_name` and `other_names` as nullable columns when absent. It preserves
+all existing `full_name` values. On PostgreSQL, it also widens `users.full_name` to VARCHAR(255)
+when the current column is narrower. Existing accounts should sign in and complete their
+structured name fields under **My account**.

@@ -14,7 +14,12 @@ class User(UserMixin, db.Model):
     __tablename__ = "users"
 
     user_id = db.Column(db.Integer, primary_key=True)
-    full_name = db.Column(db.String(150), nullable=False)
+    # full_name remains as a denormalised display-name field for existing document
+    # records and older clients. Structured name fields are authoritative going forward.
+    full_name = db.Column(db.String(255), nullable=False)
+    first_name = db.Column(db.String(80), nullable=True)
+    last_name = db.Column(db.String(80), nullable=True)
+    other_names = db.Column(db.String(80), nullable=True)
     email = db.Column(db.String(150), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(30), nullable=False, default="user")

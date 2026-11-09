@@ -7,6 +7,9 @@ import {
 import {
   createUser,
   createFirstAdmin,
+  getAccount,
+  updateAccountProfile,
+  changeAccountPassword,
   getBootstrapStatus,
   getComparison,
   getCurrentUser,
@@ -60,7 +63,9 @@ async function firstAdminLoader({ request }: LoaderFunctionArgs) {
 async function firstAdminAction({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const payload = {
-    full_name: String(formData.get('full_name') || ''),
+    first_name: String(formData.get('first_name') || ''),
+    last_name: String(formData.get('last_name') || ''),
+    other_names: String(formData.get('other_names') || ''),
     email: String(formData.get('email') || ''),
     password: String(formData.get('password') || ''),
     setup_token: String(formData.get('setup_token') || ''),
@@ -114,7 +119,9 @@ async function uploadSubmissionAction({ request }: ActionFunctionArgs) {
 async function createUserAction({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const payload = {
-    full_name: String(formData.get('full_name') || ''),
+    first_name: String(formData.get('first_name') || ''),
+    last_name: String(formData.get('last_name') || ''),
+    other_names: String(formData.get('other_names') || ''),
     email: String(formData.get('email') || ''),
     password: String(formData.get('password') || ''),
     role: String(formData.get('role') || 'user'),
@@ -124,6 +131,32 @@ async function createUserAction({ request }: ActionFunctionArgs) {
     return { success: 'User account created successfully.' };
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'The account could not be created.' };
+  }
+}
+
+async function accountAction({ request }: ActionFunctionArgs) {
+  const formData = await request.formData();
+  const intent = String(formData.get('_intent') || 'profile');
+  try {
+    if (intent === 'profile') {
+      await updateAccountProfile({
+        first_name: String(formData.get('first_name') || ''),
+        last_name: String(formData.get('last_name') || ''),
+        other_names: String(formData.get('other_names') || ''),
+      });
+      return { intent, success: 'Your personal information has been updated.' };
+    }
+    if (intent === 'password') {
+      await changeAccountPassword({
+        current_password: String(formData.get('current_password') || ''),
+        new_password: String(formData.get('new_password') || ''),
+        confirm_password: String(formData.get('confirm_password') || ''),
+      });
+      return { intent, success: 'Your password has been changed.' };
+    }
+    return { intent, error: 'Unknown account action.' };
+  } catch (error) {
+    return { intent, error: error instanceof Error ? error.message : 'The account update could not be completed.' };
   }
 }
 
@@ -166,6 +199,7 @@ export const router = createBrowserRouter([
         element: <AppLayout />,
         children: [
           { index: true, loader: () => redirect('/app/dashboard') },
+          { path: 'account', loader: (args) => loadForUser(args, getAccount), action: accountAction, lazy: async () => ({ Component: (await import('./pages/account')).AccountPage }) },
           { path: 'dashboard', loader: (args) => loadForUser(args, getDashboard), lazy: async () => ({ Component: (await import('./pages/app')).DashboardPage }) },
           { path: 'documents', loader: (args) => loadForUser(args, getDocuments), lazy: async () => ({ Component: (await import('./pages/app')).DocumentsPage }) },
           { path: 'documents/new', action: uploadSubmissionAction, lazy: async () => ({ Component: (await import('./pages/app')).UploadSubmissionPage }) },

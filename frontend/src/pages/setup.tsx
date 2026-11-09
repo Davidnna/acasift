@@ -42,8 +42,14 @@ export function FirstAdminSetupPage() {
         {actionData?.error && <div className="form-error" role="alert">{actionData.error}</div>}
 
         <Form method="post" className="form-stack bootstrap-form">
-          <label htmlFor="full_name">Administrator name</label>
-          <input id="full_name" name="full_name" type="text" maxLength={150} autoComplete="name" required />
+          <label htmlFor="first_name">First name</label>
+          <input id="first_name" name="first_name" type="text" maxLength={80} autoComplete="given-name" required />
+
+          <label htmlFor="last_name">Last name</label>
+          <input id="last_name" name="last_name" type="text" maxLength={80} autoComplete="family-name" required />
+
+          <label htmlFor="other_names">Other names <span>(optional)</span></label>
+          <input id="other_names" name="other_names" type="text" maxLength={80} autoComplete="additional-name" />
 
           <label htmlFor="email">Administrator email</label>
           <input id="email" name="email" type="email" maxLength={150} autoComplete="email" required />

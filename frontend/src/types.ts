@@ -1,6 +1,9 @@
 export interface User {
   id: number;
   full_name: string;
+  first_name: string | null;
+  last_name: string | null;
+  other_names: string | null;
   email: string;
   role: 'admin' | 'user';
   is_admin: boolean;
@@ -61,4 +64,15 @@ export interface DashboardData {
   };
   recent_documents: DocumentRecord[];
   recent_comparisons: ComparisonSummary[];
+}
+
+
+export interface AccountData {
+  user: User;
+  activity: {
+    document_count: number;
+    comparison_count: number;
+    recent_documents: DocumentRecord[];
+    recent_comparisons: ComparisonSummary[];
+  };
 }

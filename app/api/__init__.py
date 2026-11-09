@@ -5,7 +5,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from flask_login import current_user, login_user, login_required, logout_user
 from flask_wtf.csrf import generate_csrf
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from sqlalchemy import select, func, text
 
 from app.decorators import admin_required
@@ -24,10 +24,34 @@ def _user_payload(user):
     return {
         "id": user.user_id,
         "full_name": user.full_name,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "other_names": user.other_names,
         "email": user.email,
         "role": user.role,
         "is_admin": user.is_admin,
+        "is_active": user.is_active,
+        "created_at": _date(user.created_at),
     }
+
+
+def _validated_name_parts(data):
+    first_name = str(data.get("first_name", "")).strip()
+    last_name = str(data.get("last_name", "")).strip()
+    other_names = str(data.get("other_names", "")).strip()
+    if not first_name or not last_name:
+        return None, _error("First name and last name are required.")
+    if len(first_name) > 80 or len(last_name) > 80 or len(other_names) > 80:
+        return None, _error("Each name field must contain no more than 80 characters.")
+    display_name = " ".join(part for part in (first_name, other_names, last_name) if part)
+    if len(display_name) > 255:
+        return None, _error("The combined name is too long.")
+    return {
+        "first_name": first_name,
+        "last_name": last_name,
+        "other_names": other_names or None,
+        "full_name": display_name,
+    }, None
 
 
 def _document_payload(document):
@@ -125,6 +149,61 @@ def logout():
     return jsonify({"message": "You have been signed out."})
 
 
+@bp.get("/account")
+@login_required
+def account_overview():
+    documents = Document.query.filter_by(user_id=current_user.user_id).order_by(
+        Document.uploaded_at.desc()
+    ).limit(5).all()
+    comparisons = Comparison.query.filter_by(user_id=current_user.user_id).order_by(
+        Comparison.started_at.desc()
+    ).limit(5).all()
+    return jsonify({
+        "user": _user_payload(current_user),
+        "activity": {
+            "document_count": Document.query.filter_by(user_id=current_user.user_id).count(),
+            "comparison_count": Comparison.query.filter_by(user_id=current_user.user_id).count(),
+            "recent_documents": [_document_payload(item) for item in documents],
+            "recent_comparisons": [_comparison_payload(item) for item in comparisons],
+        },
+    })
+
+
+@bp.post("/account/profile")
+@login_required
+def update_account_profile():
+    data = request.get_json(silent=True) or {}
+    name_parts, error = _validated_name_parts(data)
+    if error:
+        return error
+    current_user.first_name = name_parts["first_name"]
+    current_user.last_name = name_parts["last_name"]
+    current_user.other_names = name_parts["other_names"]
+    current_user.full_name = name_parts["full_name"]
+    db.session.commit()
+    return jsonify({"message": "Personal information updated successfully.", "user": _user_payload(current_user)})
+
+
+@bp.post("/account/password")
+@login_required
+def change_account_password():
+    data = request.get_json(silent=True) or {}
+    current_password = str(data.get("current_password", ""))
+    new_password = str(data.get("new_password", ""))
+    confirm_password = str(data.get("confirm_password", ""))
+    if not current_password or not check_password_hash(current_user.password_hash, current_password):
+        return _error("Your current password is incorrect.", 400)
+    if len(new_password) < 10 or len(new_password) > 256:
+        return _error("Your new password must contain between 10 and 256 characters.")
+    if new_password != confirm_password:
+        return _error("The new password and confirmation do not match.")
+    if check_password_hash(current_user.password_hash, new_password):
+        return _error("Choose a password different from your current password.")
+    current_user.password_hash = generate_password_hash(new_password)
+    db.session.commit()
+    return jsonify({"message": "Your password has been changed successfully."})
+
+
 @bp.get("/dashboard")
 @login_required
 def dashboard():
@@ -218,24 +297,26 @@ def users():
 @admin_required
 def create_user():
     data = request.get_json(silent=True) or {}
-    full_name = str(data.get("full_name", "")).strip()
+    name_parts, name_error = _validated_name_parts(data)
+    if name_error:
+        return name_error
     email = str(data.get("email", "")).strip().lower()
     password = str(data.get("password", ""))
     role = str(data.get("role", "user"))
 
-    if not full_name or not email or not password:
-        return _error("Full name, email address and password are required.")
-    if "@" not in email or len(email) > 150:
+    if not email or not password:
+        return _error("Email address and password are required.")
+    if len(email) > 150 or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
         return _error("Enter a valid email address.")
-    if len(password) < 10:
-        return _error("The password must contain at least 10 characters.")
+    if len(password) < 10 or len(password) > 256:
+        return _error("The password must contain between 10 and 256 characters.")
     if role not in {"user", "admin"}:
         return _error("The selected account role is invalid.")
     if User.query.filter_by(email=email).first():
         return _error("An account with that email already exists.", 409)
 
     user = User(
-        full_name=full_name[:150],
+        **name_parts,
         email=email,
         password_hash=generate_password_hash(password),
         role=role,
@@ -300,12 +381,12 @@ def bootstrap_first_admin():
     if len(supplied_token) > 512 or not hmac.compare_digest(supplied_token.encode('utf-8'), configured_token.encode('utf-8')):
         return _error("The setup token is invalid.", 403)
 
-    full_name = str(data.get("full_name", "")).strip()
+    name_parts, name_error = _validated_name_parts(data)
+    if name_error:
+        return name_error
     email = str(data.get("email", "")).strip().lower()
     password = str(data.get("password", ""))
 
-    if not full_name or len(full_name) > 150:
-        return _error("Enter your name (up to 150 characters).")
     if len(email) > 150 or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
         return _error("Enter a valid email address.")
     if len(password) < 10 or len(password) > 256:
@@ -337,7 +418,7 @@ def bootstrap_first_admin():
                     outcome = "email_exists"
                 else:
                     created_user = User(
-                        full_name=full_name,
+                        **name_parts,
                         email=email,
                         password_hash=generate_password_hash(password),
                         role="admin",

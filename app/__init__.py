@@ -66,6 +66,23 @@ def create_app(config_class=Config):
         with app.app_context():
             db.create_all()
             inspector = inspect(db.engine)
+            if inspector.has_table("users"):
+                user_columns = {column["name"]: column for column in inspector.get_columns("users")}
+                with db.engine.begin() as connection:
+                    for column_name in ("first_name", "last_name", "other_names"):
+                        if column_name not in user_columns:
+                            connection.execute(text(
+                                f"ALTER TABLE users ADD COLUMN {column_name} VARCHAR(80)"
+                            ))
+                    # PostgreSQL enforces VARCHAR lengths; widen the cached display name
+                    # for structured first/other/last names. SQLite does not require this.
+                    if db.engine.dialect.name == "postgresql":
+                        full_name_column = user_columns.get("full_name", {})
+                        if full_name_column.get("type") and getattr(full_name_column["type"], "length", None) and full_name_column["type"].length < 255:
+                            connection.execute(text(
+                                "ALTER TABLE users ALTER COLUMN full_name TYPE VARCHAR(255)"
+                            ))
+            inspector = inspect(db.engine)
             if inspector.has_table("comparison_results"):
                 columns = {column["name"] for column in inspector.get_columns("comparison_results")}
                 if "coverage_method" not in columns:
@@ -79,20 +96,31 @@ def create_app(config_class=Config):
         click.echo("Database tables created and additive migrations checked.")
 
     @app.cli.command("create-admin")
-    @click.option("--name", prompt="Administrator name")
+    @click.option("--first-name", prompt="First name")
+    @click.option("--last-name", prompt="Last name")
+    @click.option("--other-names", prompt="Other names (optional)", default="")
     @click.option("--email", prompt="Administrator email")
     @click.option("--password", prompt=True, hide_input=True, confirmation_prompt=True)
-    def create_admin(name, email, password):
+    def create_admin(first_name, last_name, other_names, email, password):
         """Create an administrator account."""
+        first_name = first_name.strip()
+        last_name = last_name.strip()
+        other_names = other_names.strip()
         email = email.strip().lower()
+        if not first_name or not last_name:
+            raise click.ClickException("First name and last name are required.")
         if len(password) < 10:
             raise click.ClickException("Use a password containing at least 10 characters.")
         with app.app_context():
             existing = User.query.filter_by(email=email).first()
             if existing:
                 raise click.ClickException("An account with that email already exists.")
+            display_name = " ".join(part for part in (first_name, other_names, last_name) if part)
             user = User(
-                full_name=name.strip(),
+                first_name=first_name,
+                last_name=last_name,
+                other_names=other_names or None,
+                full_name=display_name,
                 email=email,
                 password_hash=generate_password_hash(password),
                 role="admin",

@@ -206,6 +206,7 @@ const workspaceLinks: { to: string; label: string; icon: LucideIcon; end?: boole
   { to: '/app/dashboard', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/app/documents', label: 'My documents', icon: Files, end: true },
   { to: '/app/documents/new', label: 'Check a document', icon: Upload, end: true },
+  { to: '/app/account', label: 'My account', icon: Settings2, end: true },
 ];
 const adminLinks: { to: string; label: string; icon: LucideIcon; end?: boolean }[] = [
   { to: '/app/admin/references', label: 'Reference repository', icon: BookOpen, end: true },
@@ -225,7 +226,7 @@ export function AppLayout() {
         <Brand />
       </div>
       <div className="app-topbar-right">
-        <div className="account-chip"><span className="avatar">{user.full_name.slice(0, 1).toUpperCase()}</span><span className="account-details"><strong>{user.full_name}</strong><small>{user.is_admin ? 'Administrator' : 'Registered user'}</small></span><ChevronDown size={15} /></div>
+        <Link viewTransition to="/app/account" className="account-chip" aria-label="Open account settings"><span className="avatar">{(user.first_name?.[0] || user.full_name.slice(0, 1)).toUpperCase()}</span><span className="account-details"><strong>{user.full_name}</strong><small>{user.is_admin ? 'Administrator' : 'Registered user'}</small></span><ChevronDown size={15} /></Link>
         <fetcher.Form method="post" action="/logout"><button className="icon-button signout-button" type="submit" disabled={signingOut} title="Sign out"><LogOut size={17} /><span>Sign out</span></button></fetcher.Form>
       </div>
     </header>

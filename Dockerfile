@@ -25,4 +25,4 @@ COPY --from=frontend-build /workspace/backend/app/static/spa ./backend/app/stati
 
 WORKDIR /app/backend
 EXPOSE 10000
-CMD ["sh", "-c", "flask --app run.py init-db && exec gunicorn run:app --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 4 --timeout 120"]
+CMD ["sh", "-c", "set -e; STARTED_AT=$(date +%s); echo '[startup] Database initialisation started'; flask --app run.py init-db; FINISHED_AT=$(date +%s); echo '[startup] Database initialisation finished in' $((FINISHED_AT - STARTED_AT)) 'seconds'; echo '[startup] Starting Gunicorn'; exec gunicorn run:app --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 4 --timeout 120 --log-level info --access-logfile - --error-logfile -"]

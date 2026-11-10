@@ -142,6 +142,13 @@ configuration builds the frontend and backend together so that authentication se
 security checks remain same-origin. A separate frontend and API deployment can be introduced when
 a shared custom domain and the required cross-origin session configuration are available.
 
+Database initialisation uses a versioned migration ledger named `acasift_schema_migrations`.
+The initial schema is created during first-time bootstrap. Existing databases are checked against
+migration invariants before an already-completed legacy migration baseline is recorded. Completed
+migrations are not rerun on ordinary application restarts. Future schema or data changes must be
+implemented as new, versioned migrations; do not delete or manually edit the migration ledger.
+Startup logs report database-initialisation duration and the start of the Gunicorn web server.
+
 For hosted deployments, configure the database connection, application secret and email delivery
 settings in the hosting provider's private environment settings. For Submission Request comparisons,
 `MAX_COMPARISON_SOURCES` controls the maximum number of documents considered from each eligible

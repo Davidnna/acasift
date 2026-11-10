@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 
 from werkzeug.security import generate_password_hash
@@ -174,8 +175,13 @@ class LegacySubmissionMigrationTests(unittest.TestCase):
     def test_legacy_records_are_migrated_to_generic_requests_without_data_loss(self):
         first = self.app.test_cli_runner().invoke(args=["init-db"])
         self.assertEqual(first.exit_code, 0, first.output)
-        second = self.app.test_cli_runner().invoke(args=["init-db"])
+        with patch(
+            "app.database._run_legacy_data_migration",
+            side_effect=AssertionError("a recorded migration must not run again"),
+        ) as migration:
+            second = self.app.test_cli_runner().invoke(args=["init-db"])
         self.assertEqual(second.exit_code, 0, second.output)
+        migration.assert_not_called()
 
         request_record = SubmissionRequest.query.filter_by(
             legacy_assignment_id=self.assignment.assignment_id

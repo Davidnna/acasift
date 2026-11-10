@@ -14,7 +14,9 @@ export function EmailChangeConfirmationPage() {
     const [searchParams] = useSearchParams();
     const token = searchParams.get('token') || '';
     const busy = navigation.state === 'submitting';
-    const confirmed = Boolean(actionData?.success);
+    const successMessage = actionData?.success;
+    const successEmail = actionData?.email;
+    const confirmed = Boolean(successMessage);
 
     return <div className="auth-page">
         <div className="auth-card email-confirmation-card">
@@ -27,7 +29,7 @@ export function EmailChangeConfirmationPage() {
                     : 'Confirm that you have access to the new email address you requested for your AcaSift account.'}
             />
             {actionData?.error && <Notice tone="danger">{actionData.error}</Notice>}
-            {confirmed && <Notice tone="success">{actionData.success} {actionData.email}</Notice>}
+            {successMessage && <Notice tone="success">{successMessage} {successEmail}</Notice>}
             {!confirmed && <>
                 {!token && <Notice tone="danger">This confirmation link is incomplete. Request an email change again from your account page.</Notice>}
                 <Form method="post" className="form-stack">

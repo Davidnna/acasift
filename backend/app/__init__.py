@@ -93,6 +93,17 @@ def create_app(config_class=Config):
     @app.cli.command("init-db")
     def init_db():
         """Create database tables."""
+        # Import submission models before any migration references them.
+        # A later import in this function would make these names local and
+        # unavailable to earlier migration statements.
+        from app.submission_models import (
+            DocumentSubmission,
+            SubmissionRequest,
+            SubmissionRequestParticipant,
+            SubmissionRequestReviewer,
+            SubmissionReview,
+        )
+
         with app.app_context():
             db.create_all()
             inspector = inspect(db.engine)
@@ -262,10 +273,6 @@ def create_app(config_class=Config):
             # Introduce the generic submission model without deleting legacy academic
             # records. Each legacy assignment and its submissions/reviews are copied
             # once into the new model, with source IDs retained for auditability.
-            from app.submission_models import (
-                DocumentSubmission, SubmissionRequest, SubmissionRequestParticipant,
-                SubmissionRequestReviewer, SubmissionReview,
-            )
             for legacy_assignment in Assignment.query.order_by(Assignment.assignment_id.asc()).all():
                 generic_request = SubmissionRequest.query.filter_by(
                     legacy_assignment_id=legacy_assignment.assignment_id

@@ -214,8 +214,8 @@ export interface SubmissionRequestSubmission {
     attempt_number: number;
     is_late: boolean;
     submitted_at: string;
-    comparison_id: number | null;
-    comparison_status: string;
+    comparison_id?: number | null;
+    comparison_status?: string;
     contributor?: { id: number; full_name: string; email: string; };
     review: {
         decision: 'no_action' | 'revision_requested' | 'further_review' | string;

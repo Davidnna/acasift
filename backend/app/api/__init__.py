@@ -858,18 +858,12 @@ def comparison_detail(comparison_id):
             request_id=submission_request.request_id,
             user_id=current_user.user_id,
         ).first())
-        active_participation = SubmissionRequestParticipant.query.filter_by(
-            request_id=submission_request.request_id,
-            user_id=current_user.user_id,
-            status="active",
-        ).first()
-        is_contributor = (
-            generic_submission.contributor_user_id == current_user.user_id
-            and active_participation is not None
-        )
-        if not (is_contributor or is_manager or is_reviewer):
-            return _error("You do not have permission to view this report.", 403)
-        hide_peer_source_details = is_contributor and not (is_manager or is_reviewer)
+        # Shared-request comparison reports are restricted to reviewers and
+        # workspace managers. Contributors receive submission receipts and
+        # reviewer feedback through the Submission Request page only.
+        if not (is_manager or is_reviewer):
+            return _error("This comparison is available only to authorised reviewers.", 403)
+        hide_peer_source_details = False
     else:
         if comparison.user_id != current_user.user_id:
             return _error("You do not have permission to view this report.", 403)

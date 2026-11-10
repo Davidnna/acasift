@@ -172,12 +172,10 @@ def _submission_payload(row, include_contributor=False):
         "document_id": row.document_id,
         "title": row.document.title,
         "filename": row.document.original_filename,
-        "status": row.status,
+        "status": row.status if include_contributor else "submitted",
         "attempt_number": row.attempt_number,
         "is_late": bool(row.is_late),
         "submitted_at": row.submitted_at.isoformat() if row.submitted_at else None,
-        "comparison_id": row.comparison_id,
-        "comparison_status": row.comparison.status if row.comparison else "not_started",
         "review": ({
             "decision": review_decision,
             "feedback": latest_review.feedback,
@@ -186,6 +184,8 @@ def _submission_payload(row, include_contributor=False):
         } if latest_review else None),
     }
     if include_contributor:
+        payload["comparison_id"] = row.comparison_id
+        payload["comparison_status"] = row.comparison.status if row.comparison else "not_started"
         payload["contributor"] = {
             "id": row.contributor.user_id,
             "full_name": row.contributor.full_name,
@@ -783,13 +783,10 @@ def upload_submission_request_document(request_id):
 
     comparison = run_submission_request_comparison(submission)
     db.session.refresh(submission)
-    message = (
-        "Your document was submitted and similarity analysis completed."
-        if comparison and comparison.status == "completed"
-        else "Your document was received, but similarity analysis could not be completed."
-    )
+    # Similarity analysis is retained for authorised reviewers. Contributors
+    # receive a submission receipt and any reviewer feedback, not analysis data.
     return jsonify({
-        "message": message,
+        "message": "Your document was submitted successfully. You can return here to see reviewer feedback when it is available.",
         "submission": _submission_payload(submission),
     }), 201
 

@@ -287,7 +287,7 @@ export function SubmissionRequestDetailPage() {
         </section>}
 
         <section className="panel">
-            <div className="panel-heading"><div><h2><FileSearch size={17} /> Submissions</h2><p>{canManage || data.permissions.can_review ? 'Documents received for this request.' : 'Your submissions and review feedback.'}</p></div><span className="result-count">{data.submissions.length} shown</span></div>
+            <div className="panel-heading"><div><h2><FileSearch size={17} /> Submissions</h2><p>{canManage || data.permissions.can_review ? 'Documents received for this request.' : 'Your submission receipts and reviewer feedback.'}</p></div><span className="result-count">{data.submissions.length} shown</span></div>
             {data.submissions.length ? <div className="submission-list">
                 {data.submissions.map(submission => <article className="submission-row" key={submission.id}>
                     <div className="submission-row-heading">
@@ -297,7 +297,7 @@ export function SubmissionRequestDetailPage() {
                     </div>
                     <div className="submission-row-actions">
                         {submission.is_late && <span className="category-tag">Late submission</span>}
-                        {submission.comparison_id && <Link className="button button-secondary button-small" to={`/app/comparisons/${submission.comparison_id}`}>View analysis <ArrowRight size={14} /></Link>}
+
                     </div>
                     {submission.review && <div className="submission-review-summary">
                         <strong>Review outcome: {reviewDecisionLabel(submission.review.decision)}</strong>

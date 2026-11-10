@@ -66,7 +66,7 @@ export function AdminReferencesPage() {
             </Form>
         </section>
         <section className="panel">
-            <div className="panel-heading"><div><h2>Reference Bank records</h2><p>{entries.length} records, including documents awaiting rights review</p></div></div>
+            <div className="panel-heading"><div><h2>Reference Bank records</h2><p>{entries.filter(entry => entry.status === 'active').length} active sources available for private comparisons · {entries.length} total records</p></div></div>
             {entries.length ? <div className="reference-entry-list">{entries.map(entry => <article className="reference-entry-card" key={entry.id}>
                 <div className="reference-entry-main">
                     <div className="reference-entry-icon"><BookOpen size={19} /></div>

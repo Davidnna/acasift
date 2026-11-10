@@ -301,7 +301,9 @@ class SubmissionRequestTests(unittest.TestCase):
             f"Introduction. {shared_phrase} Closing remarks.",
         )
         self.assertEqual(first.status_code, 201, first.get_json())
-        self.assertEqual(first.get_json()["submission"]["status"], "analysed")
+        self.assertEqual(first.get_json()["submission"]["status"], "submitted")
+        self.assertNotIn("comparison_id", first.get_json()["submission"])
+        self.assertNotIn("comparison_status", first.get_json()["submission"])
 
         unrelated_request = self.owner_client.post("/api/submission-requests", json={
             "workspace_id": self.workspace.workspace_id,
@@ -339,21 +341,18 @@ class SubmissionRequestTests(unittest.TestCase):
         )
         self.assertEqual(second.status_code, 201, second.get_json())
         second_submission = second.get_json()["submission"]
-        self.assertEqual(second_submission["status"], "analysed")
-        self.assertIsNotNone(second_submission["comparison_id"])
+        self.assertEqual(second_submission["status"], "submitted")
+        self.assertNotIn("comparison_id", second_submission)
+        self.assertNotIn("comparison_status", second_submission)
 
-        report = external_client.get(f"/api/comparisons/{second_submission['comparison_id']}")
-        self.assertEqual(report.status_code, 200, report.get_json())
-        report_results = report.get_json()["comparison"]["results"]
-        source_scopes = {row["source_scope"] for row in report_results}
-        self.assertEqual(source_scopes, {"request"})
-        peer_results = [row for row in report_results if row["source_scope"] == "request"]
-        self.assertEqual(len(peer_results), 1)
-        self.assertEqual(peer_results[0]["reference_document"]["title"], "Another submission in this request")
-        self.assertIsNone(peer_results[0]["reference_document"]["uploader"])
-        self.assertIn("hidden to protect", peer_results[0]["passages"][0]["reference_text"])
+        contributor_report = external_client.get("/api/comparisons/1")
+        self.assertEqual(contributor_report.status_code, 403)
 
-        reviewer_report = self.reviewer_client.get(f"/api/comparisons/{second_submission['comparison_id']}")
+        reviewer_detail_before_review = self.reviewer_client.get(f"/api/submission-requests/{request_id}")
+        reviewer_submissions = reviewer_detail_before_review.get_json()["submissions"]
+        second_reviewer_submission = next(row for row in reviewer_submissions if row["id"] == second_submission["id"])
+        self.assertIsNotNone(second_reviewer_submission["comparison_id"])
+        reviewer_report = self.reviewer_client.get(f"/api/comparisons/{second_reviewer_submission['comparison_id']}")
         self.assertEqual(reviewer_report.status_code, 200, reviewer_report.get_json())
         reviewer_peer = [row for row in reviewer_report.get_json()["comparison"]["results"] if row["source_scope"] == "request"]
         self.assertEqual(reviewer_peer[0]["reference_document"]["title"], "First contributor report")
@@ -405,7 +404,7 @@ class SubmissionRequestTests(unittest.TestCase):
             "A sufficiently long report that will become inaccessible after workspace removal.",
         )
         self.assertEqual(member_submission.status_code, 201, member_submission.get_json())
-        member_comparison_id = member_submission.get_json()["submission"]["comparison_id"]
+        self.assertNotIn("comparison_id", member_submission.get_json()["submission"])
         self.assertEqual(self.owner_client.post(
             f"/api/submission-requests/{request_id}/reviewers",
             json={"user_id": self.reviewer.user_id},
@@ -416,7 +415,6 @@ class SubmissionRequestTests(unittest.TestCase):
         )
         self.assertEqual(removed.status_code, 200)
         self.assertEqual(self.member_client.get(f"/api/submission-requests/{request_id}").status_code, 403)
-        self.assertEqual(self.member_client.get(f"/api/comparisons/{member_comparison_id}").status_code, 403)
         self.assertEqual(self.reviewer_client.get(f"/api/submission-requests/{request_id}").status_code, 200)
 
     def test_resubmission_setting_is_enforced(self):

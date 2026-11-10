@@ -12,8 +12,6 @@ from app.reference_models import ReferenceEntry
 ACTIVE_STATUS = "active"
 REVIEW_REQUIRED_STATUS = "review_required"
 ARCHIVED_STATUS = "archived"
-WITHDRAWN_STATUS = "withdrawn"
-QUARANTINED_STATUS = "quarantined"
 
 GLOBAL_RIGHTS_BASES = {
     "open_license",
@@ -100,13 +98,6 @@ def register_reference_entry(
     return entry
 
 
-def entry_for_document(document_id, scope_key):
-    return ReferenceEntry.query.filter_by(
-        document_id=document_id,
-        scope_key=scope_key,
-    ).first()
-
-
 def reference_entry_payload(entry):
     document = entry.document
     return {
@@ -153,88 +144,55 @@ def list_reference_entries(*, scope, owner_user_id=None, workspace_id=None, requ
 
 def resolve_reference_sources(
     *,
-    user_id,
     workspace_id,
     request_id=None,
     exclude_document_id=None,
     exclude_contributor_user_id=None,
-    maximum_per_scope=50,
 ):
-    """Return eligible (Document, scope) pairs in policy priority order.
+    """Resolve sources using AcaSift's two simple comparison workflows.
 
-    Global and shared-workspace references require recorded rights verification.
-    Personal references are private to their owner. Request references are
-    restricted to submissions belonging to the same request and exclude the
-    contributor's own submissions.
+    Personal-workspace documents are compared only with the platform's
+    permission-verified global reference bank. Submission Request documents
+    are compared only with eligible peer submissions in that same request.
+    No user-managed personal or workspace reference collections participate.
     """
-    maximum = max(1, int(maximum_per_scope))
     workspace = db.session.get(Workspace, workspace_id) if workspace_id else None
     candidates = []
 
-    global_entries = (
-        ReferenceEntry.query.options(joinedload(ReferenceEntry.document))
-        .filter(
-            ReferenceEntry.scope == "global",
-            ReferenceEntry.status == ACTIVE_STATUS,
-            ReferenceEntry.rights_verified.is_(True),
-        )
-        .order_by(ReferenceEntry.created_at.desc())
-        .limit(maximum)
-        .all()
-    )
-    candidates.extend((entry.document, "global") for entry in global_entries)
-
-    if workspace and workspace.workspace_type == "personal":
-        personal_entries = (
-            ReferenceEntry.query.options(joinedload(ReferenceEntry.document))
-            .filter(
-                ReferenceEntry.scope == "personal",
-                ReferenceEntry.owner_user_id == user_id,
-                ReferenceEntry.status == ACTIVE_STATUS,
-            )
-            .order_by(ReferenceEntry.created_at.desc())
-            .limit(maximum)
-            .all()
-        )
-        candidates.extend((entry.document, "personal") for entry in personal_entries)
-    elif workspace and workspace.workspace_type == "shared":
-        workspace_entries = (
-            ReferenceEntry.query.options(joinedload(ReferenceEntry.document))
-            .filter(
-                ReferenceEntry.scope == "workspace",
-                ReferenceEntry.workspace_id == workspace_id,
-                ReferenceEntry.status == ACTIVE_STATUS,
-                ReferenceEntry.rights_verified.is_(True),
-            )
-            .order_by(ReferenceEntry.created_at.desc())
-            .limit(maximum)
-            .all()
-        )
-        candidates.extend((entry.document, "workspace") for entry in workspace_entries)
-
     if request_id is not None:
         request_query = (
-            ReferenceEntry.query.options(joinedload(ReferenceEntry.document))
-            .join(DocumentSubmission, DocumentSubmission.document_id == ReferenceEntry.document_id)
+            DocumentSubmission.query.options(joinedload(DocumentSubmission.document))
+            .join(Document, Document.document_id == DocumentSubmission.document_id)
             .filter(
-                ReferenceEntry.scope == "request",
-                ReferenceEntry.request_id == request_id,
-                ReferenceEntry.status == ACTIVE_STATUS,
                 DocumentSubmission.request_id == request_id,
                 DocumentSubmission.status.in_(("submitted", "analysed", "analysis_failed")),
+                Document.processing_status == "processed",
             )
         )
         if exclude_contributor_user_id is not None:
             request_query = request_query.filter(
                 DocumentSubmission.contributor_user_id != exclude_contributor_user_id
             )
-        request_entries = request_query.order_by(
-            DocumentSubmission.submitted_at.desc()
-        ).limit(maximum).all()
-        candidates.extend((entry.document, "request") for entry in request_entries)
+        request_submissions = request_query.order_by(
+            DocumentSubmission.submitted_at.desc(),
+            DocumentSubmission.submission_id.desc(),
+        ).all()
+        candidates.extend((submission.document, "request") for submission in request_submissions)
+    elif workspace and workspace.workspace_type == "personal":
+        global_entries = (
+            ReferenceEntry.query.options(joinedload(ReferenceEntry.document))
+            .filter(
+                ReferenceEntry.scope == "global",
+                ReferenceEntry.status == ACTIVE_STATUS,
+                ReferenceEntry.rights_verified.is_(True),
+                ReferenceEntry.document.has(Document.processing_status == "processed"),
+            )
+            .order_by(ReferenceEntry.created_at.desc(), ReferenceEntry.entry_id.desc())
+            .all()
+        )
+        candidates.extend((entry.document, "global") for entry in global_entries)
 
-    # Prefer the first eligible scope for duplicate files. This preserves the
-    # global > workspace/personal > request ordering while avoiding score inflation.
+    # De-duplicate identical files so a source cannot inflate the report.
     result = []
     seen_hashes = set()
     for document, scope in candidates:

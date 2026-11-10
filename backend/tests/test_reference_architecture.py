@@ -8,7 +8,10 @@ from werkzeug.security import generate_password_hash
 
 from config import Config
 from app import create_app
-from app.database import _run_reference_architecture_migration
+from app.database import (
+    _run_reference_architecture_migration,
+    _run_simplified_reference_policy_migration,
+)
 from app.extensions import db
 from app.models import Comparison, ComparisonResult, Document, User, Workspace, WorkspaceMembership
 from app.services.reference_service import register_reference_entry, resolve_reference_sources
@@ -110,51 +113,24 @@ class ReferenceArchitectureTests(unittest.TestCase):
         db.session.flush()
         return document
 
-    def test_personal_reference_upload_is_private_and_listed(self):
-        response = self.owner_client.post(
+    def test_user_managed_reference_uploads_are_retired(self):
+        personal_upload = self.owner_client.post(
             "/api/reference-library",
             data={"title": "Personal source", "document": (io.BytesIO(b"A private personal reference document."), "personal.txt")},
             content_type="multipart/form-data",
         )
-        self.assertEqual(response.status_code, 201, response.get_json())
-        entry = ReferenceEntry.query.one()
-        self.assertEqual(entry.scope, "personal")
-        self.assertEqual(entry.owner_user_id, self.owner.user_id)
-        self.assertEqual(entry.status, "active")
+        self.assertEqual(personal_upload.status_code, 410)
+        self.assertEqual(self.owner_client.get("/api/reference-library").status_code, 410)
 
-        listing = self.owner_client.get("/api/reference-library")
-        self.assertEqual(listing.status_code, 200)
-        self.assertEqual(len(listing.get_json()["entries"]), 1)
-
-        with self.member_client.session_transaction() as session:
-            session["active_workspace_id"] = self.member_personal.workspace_id
-        other_listing = self.member_client.get("/api/reference-library")
-        self.assertEqual(other_listing.status_code, 200)
-        self.assertEqual(other_listing.get_json()["entries"], [])
-
-    def test_shared_reference_requires_permission_confirmation(self):
         with self.owner_client.session_transaction() as session:
             session["active_workspace_id"] = self.shared.workspace_id
-        denied = self.owner_client.post(
-            "/api/reference-library",
-            data={"title": "Shared source", "document": (io.BytesIO(b"Shared reference text."), "shared.txt")},
+        shared_upload = self.owner_client.post(
+            "/api/workspace/references",
+            data={"document": (io.BytesIO(b"Shared reference text."), "shared.txt")},
             content_type="multipart/form-data",
         )
-        self.assertEqual(denied.status_code, 400)
-
-        accepted = self.owner_client.post(
-            "/api/reference-library",
-            data={
-                "title": "Shared source",
-                "permission_confirmed": "yes",
-                "document": (io.BytesIO(b"Shared reference text."), "shared.txt"),
-            },
-            content_type="multipart/form-data",
-        )
-        self.assertEqual(accepted.status_code, 201, accepted.get_json())
-        entry = ReferenceEntry.query.one()
-        self.assertEqual(entry.scope, "workspace")
-        self.assertTrue(entry.rights_verified)
+        self.assertEqual(shared_upload.status_code, 410)
+        self.assertEqual(ReferenceEntry.query.count(), 0)
 
     def test_global_reference_requires_rights_basis_and_attestation(self):
         denied = self.owner_client.post(
@@ -181,7 +157,7 @@ class ReferenceArchitectureTests(unittest.TestCase):
         self.assertTrue(entry.rights_verified)
         self.assertEqual(entry.status, "active")
 
-    def test_resolver_keeps_reference_scopes_private_and_separate(self):
+    def test_personal_comparison_uses_only_the_central_reference_bank(self):
         global_doc = self._document(self.owner, "Global source", visibility_scope="platform")
         personal_doc = self._document(self.owner, "Owner personal source", workspace_id=self.owner_personal.workspace_id)
         other_personal_doc = self._document(self.other, "Other personal source", workspace_id=self.other_personal.workspace_id)
@@ -196,27 +172,25 @@ class ReferenceArchitectureTests(unittest.TestCase):
         db.session.commit()
 
         personal_sources = resolve_reference_sources(
-            user_id=self.owner.user_id,
             workspace_id=self.owner_personal.workspace_id,
         )
         personal_titles = {document.title for document, _scope in personal_sources}
-        self.assertEqual(personal_titles, {"Global source", "Owner personal source"})
+        self.assertEqual(personal_titles, {"Global source"})
+        self.assertNotIn("Owner personal source", personal_titles)
+        self.assertNotIn("Other personal source", personal_titles)
 
         shared_sources = resolve_reference_sources(
-            user_id=self.member.user_id,
             workspace_id=self.shared.workspace_id,
         )
         shared_titles = {document.title for document, _scope in shared_sources}
-        self.assertEqual(shared_titles, {"Global source", "Workspace source"})
-        self.assertNotIn("Owner personal source", shared_titles)
-        self.assertNotIn("Other personal source", shared_titles)
-        self.assertNotIn("Unverified workspace source", shared_titles)
+        self.assertEqual(shared_titles, set())
 
-    def test_request_comparison_resolves_all_scopes_and_excludes_contributors_own_documents(self):
+    def test_request_comparison_uses_only_peer_submissions_in_the_same_request(self):
         global_doc = self._document(self.owner, "Request global source", visibility_scope="platform")
         workspace_doc = self._document(self.owner, "Request workspace source", workspace_id=self.shared.workspace_id, visibility_scope="workspace")
         own_doc = self._document(self.member, "Member own submission", document_type="submission", workspace_id=self.shared.workspace_id)
         peer_doc = self._document(self.other, "Peer submission", document_type="submission", workspace_id=self.shared.workspace_id)
+        unrelated_peer_doc = self._document(self.other, "Unrelated request peer", document_type="submission", workspace_id=self.shared.workspace_id)
         request_record = SubmissionRequest(
             workspace_id=self.shared.workspace_id,
             title="Request source scope test",
@@ -242,26 +216,39 @@ class ReferenceArchitectureTests(unittest.TestCase):
             status="analysed",
         )
         db.session.add_all([own_submission, peer_submission])
+        unrelated_request = SubmissionRequest(
+            workspace_id=self.shared.workspace_id,
+            title="Unrelated request",
+            status="open",
+            accepted_file_types=["txt"],
+            max_file_size_mb=15,
+            created_by_user_id=self.owner.user_id,
+        )
+        db.session.add(unrelated_request)
+        db.session.flush()
+        db.session.add(DocumentSubmission(
+            request_id=unrelated_request.request_id,
+            contributor_user_id=self.other.user_id,
+            document_id=unrelated_peer_doc.document_id,
+            attempt_number=1,
+            status="analysed",
+        ))
         register_reference_entry(global_doc, "global", self.owner.user_id, status="active", rights_basis="public_domain", rights_verified=True)
         register_reference_entry(workspace_doc, "workspace", self.owner.user_id, workspace_id=self.shared.workspace_id, status="active", rights_basis="workspace_permission", rights_verified=True)
-        register_reference_entry(own_doc, "request", self.member.user_id, owner_user_id=self.member.user_id, request_id=request_record.request_id, status="active", rights_basis="request_scoped_submission")
-        register_reference_entry(peer_doc, "request", self.other.user_id, owner_user_id=self.other.user_id, request_id=request_record.request_id, status="active", rights_basis="request_scoped_submission")
         db.session.commit()
 
         sources = resolve_reference_sources(
-            user_id=self.member.user_id,
             workspace_id=self.shared.workspace_id,
             request_id=request_record.request_id,
             exclude_document_id=own_doc.document_id,
             exclude_contributor_user_id=self.member.user_id,
         )
         source_map = {document.title: scope for document, scope in sources}
-        self.assertEqual(source_map, {
-            "Request global source": "global",
-            "Request workspace source": "workspace",
-            "Peer submission": "request",
-        })
+        self.assertEqual(source_map, {"Peer submission": "request"})
         self.assertNotIn("Member own submission", source_map)
+        self.assertNotIn("Unrelated request peer", source_map)
+        self.assertNotIn("Request global source", source_map)
+        self.assertNotIn("Request workspace source", source_map)
 
     def test_legacy_reference_migration_is_idempotent_and_quarantines_unverified_global(self):
         global_doc = self._document(self.owner, "Legacy global", visibility_scope="platform")
@@ -305,6 +292,40 @@ class ReferenceArchitectureTests(unittest.TestCase):
         db.session.add(result)
         db.session.commit()
         self.assertEqual(ComparisonResult.query.one().source_scope, "global")
+
+    def test_simplified_policy_archives_old_user_managed_scopes_without_deleting_files(self):
+        global_doc = self._document(self.owner, "Keep global", visibility_scope="platform")
+        personal_doc = self._document(self.owner, "Archive personal", workspace_id=self.owner_personal.workspace_id)
+        workspace_doc = self._document(self.owner, "Archive workspace", workspace_id=self.shared.workspace_id, visibility_scope="workspace")
+        request_doc = self._document(self.member, "Archive request", document_type="submission", workspace_id=self.shared.workspace_id)
+        db.session.flush()
+        request_record = SubmissionRequest(
+            workspace_id=self.shared.workspace_id,
+            title="Archived legacy request reference",
+            status="closed",
+            accepted_file_types=["txt"],
+            max_file_size_mb=15,
+            created_by_user_id=self.owner.user_id,
+        )
+        db.session.add(request_record)
+        db.session.flush()
+
+        register_reference_entry(global_doc, "global", self.owner.user_id, status="active", rights_basis="public_domain", rights_verified=True)
+        register_reference_entry(personal_doc, "personal", self.owner.user_id, owner_user_id=self.owner.user_id, status="active")
+        register_reference_entry(workspace_doc, "workspace", self.owner.user_id, workspace_id=self.shared.workspace_id, status="active")
+        register_reference_entry(request_doc, "request", self.member.user_id, request_id=request_record.request_id, status="active")
+        db.session.commit()
+
+        _run_simplified_reference_policy_migration(self.app)
+
+        entries = {entry.document_id: entry for entry in ReferenceEntry.query.all()}
+        self.assertEqual(entries[global_doc.document_id].status, "active")
+        self.assertEqual(entries[personal_doc.document_id].status, "archived")
+        self.assertEqual(entries[workspace_doc.document_id].status, "archived")
+        self.assertEqual(entries[request_doc.document_id].status, "archived")
+        self.assertIsNotNone(db.session.get(Document, personal_doc.document_id))
+        self.assertIsNotNone(db.session.get(Document, workspace_doc.document_id))
+        self.assertIsNotNone(db.session.get(Document, request_doc.document_id))
 
 
 if __name__ == "__main__":

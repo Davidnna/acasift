@@ -750,25 +750,6 @@ def dashboard():
         Comparison.user_id == current_user.user_id,
         Comparison.workspace_id == workspace.workspace_id,
     )
-    reference_query = ReferenceEntry.query.filter(
-        ReferenceEntry.status == "active",
-        ReferenceEntry.document.has(Document.processing_status == "processed"),
-        (
-            (ReferenceEntry.scope == "global")
-            & (ReferenceEntry.rights_verified.is_(True))
-        )
-        | (
-            (ReferenceEntry.scope == "personal")
-            & (ReferenceEntry.owner_user_id == current_user.user_id)
-            & (workspace.workspace_type == "personal")
-        )
-        | (
-            (ReferenceEntry.scope == "workspace")
-            & (ReferenceEntry.workspace_id == workspace.workspace_id)
-            & (ReferenceEntry.rights_verified.is_(True))
-            & (workspace.workspace_type == "shared")
-        ),
-    )
     request_records = (
         SubmissionRequest.query.join(SubmissionRequestParticipant)
         .join(SubmissionRequest.workspace)
@@ -810,7 +791,6 @@ def dashboard():
         "stats": {
             "document_count": document_query.count(),
             "comparison_count": comparison_query.count(),
-            "reference_count": reference_query.with_entities(ReferenceEntry.document_id).distinct().count(),
         },
         "recent_documents": [_document_payload(item) for item in document_query.order_by(Document.uploaded_at.desc()).limit(6).all()],
         "recent_comparisons": [_comparison_payload(item) for item in comparison_query.order_by(Comparison.started_at.desc()).limit(6).all()],
@@ -822,27 +802,10 @@ def dashboard():
 @login_required
 def documents():
     workspace = get_active_workspace(current_user)
-    query = Document.query.filter(
-        (
-            (Document.document_type == "submission")
-            & (Document.user_id == current_user.user_id)
-            & (Document.workspace_id == workspace.workspace_id)
-        )
-        | (
-            (Document.document_type == "reference")
-            & (
-                (Document.visibility_scope == "platform")
-                | (
-                    (Document.workspace_id == workspace.workspace_id)
-                    & (Document.visibility_scope == "workspace")
-                )
-                | (
-                    (Document.workspace_id == workspace.workspace_id)
-                    & (Document.user_id == current_user.user_id)
-                    & (Document.visibility_scope == "private")
-                )
-            )
-        )
+    query = Document.query.filter_by(
+        document_type="submission",
+        user_id=current_user.user_id,
+        workspace_id=workspace.workspace_id,
     )
     records = query.order_by(Document.uploaded_at.desc()).all()
     return jsonify({"documents": [_document_payload(item) for item in records]})
@@ -851,6 +814,12 @@ def documents():
 @bp.post("/documents")
 @login_required
 def upload_submission():
+    workspace = get_active_workspace(current_user)
+    if workspace.workspace_type != "personal":
+        return _error(
+            "In a shared workspace, submit documents through a Submission Request so they can be compared with other submissions to that request.",
+            403,
+        )
     try:
         document = save_uploaded_document(
             request.files.get("document"),
@@ -979,178 +948,40 @@ def _reference_entry_response(entry):
     return reference_entry_payload(entry)
 
 
-@bp.get("/reference-library")
+@bp.route("/reference-library", methods=["GET", "POST"])
 @login_required
-def reference_library():
-    workspace = get_active_workspace(current_user)
-    if workspace.workspace_type == "personal":
-        entries = list_reference_entries(
-            scope="personal",
-            owner_user_id=current_user.user_id,
-        )
-        scope = "personal"
-        can_manage = True
-    else:
-        membership = membership_for(current_user, workspace.workspace_id)
-        entries = list_reference_entries(
-            scope="workspace",
-            workspace_id=workspace.workspace_id,
-        )
-        scope = "workspace"
-        can_manage = is_workspace_manager(membership)
-    return jsonify({
-        "scope": scope,
-        "workspace": {"id": workspace.workspace_id, "name": workspace.name, "type": workspace.workspace_type},
-        "can_manage": can_manage,
-        "entries": [_reference_entry_response(entry) for entry in entries],
-    })
+def retired_user_reference_library():
+    return _error(
+        "AcaSift manages its reference bank centrally. Personal and workspace reference uploads are not available.",
+        410,
+    )
 
 
-@bp.post("/reference-library")
+@bp.route("/reference-library/<int:entry_id>", methods=["DELETE", "POST"])
 @login_required
-def upload_reference_library_document():
-    workspace = get_active_workspace(current_user)
-    if workspace.workspace_type == "shared":
-        membership = membership_for(current_user, workspace.workspace_id)
-        if not is_workspace_manager(membership):
-            return _error("Only workspace owners and administrators can manage shared references.", 403)
-        if str(request.form.get("permission_confirmed", "")).lower() not in {"1", "true", "yes", "on"}:
-            return _error("Confirm that you have permission to use this document within the workspace.")
-        scope = "workspace"
-        visibility_scope = "workspace"
-        rights_basis = "workspace_permission"
-        rights_verified = True
-        owner_user_id = None
-        workspace_id = workspace.workspace_id
-    else:
-        scope = "personal"
-        visibility_scope = "private"
-        rights_basis = "personal_use_only"
-        rights_verified = False
-        owner_user_id = current_user.user_id
-        workspace_id = None
-
-    source_url, url_error = _valid_reference_url(request.form.get("source_url"), "source URL")
-    if url_error:
-        return url_error
-    try:
-        document = save_uploaded_document(
-            request.files.get("document"),
-            request.form.get("title", ""),
-            "reference",
-            workspace_id=workspace.workspace_id if scope == "personal" else workspace_id,
-            visibility_scope=visibility_scope,
-            commit=False,
-        )
-        entry = register_reference_entry(
-            document,
-            scope,
-            current_user.user_id,
-            owner_user_id=owner_user_id,
-            workspace_id=workspace_id,
-            status="active",
-            provenance_type="user_upload",
-            source_title=document.title,
-            source_url=source_url,
-            rights_basis=rights_basis,
-            rights_verified=rights_verified,
-            verified_by_user_id=current_user.user_id if rights_verified else None,
-            verified_at=datetime.now(timezone.utc) if rights_verified else None,
-        )
-        db.session.commit()
-        return jsonify({
-            "message": f"Reference document '{document.title}' added to your {scope} reference library.",
-            "entry": _reference_entry_response(entry),
-        }), 201
-    except ValueError as exc:
-        db.session.rollback()
-        return _error(str(exc), 400)
-    except Exception:
-        db.session.rollback()
-        current_app.logger.exception("Reference library upload failed.")
-        return _error("The reference document could not be saved.", 500)
-
-
-@bp.delete("/reference-library/<int:entry_id>")
-@login_required
-def archive_reference_library_entry(entry_id):
-    entry = db.session.get(ReferenceEntry, entry_id)
-    if not entry or entry.scope not in {"personal", "workspace"}:
-        return _error("Reference document not found.", 404)
-    if entry.scope == "personal":
-        if entry.owner_user_id != current_user.user_id:
-            return _error("You do not have permission to remove this reference.", 403)
-    else:
-        membership = membership_for(current_user, entry.workspace_id)
-        if not is_workspace_manager(membership):
-            return _error("Only workspace owners and administrators can manage shared references.", 403)
-    archive_reference_entry(entry)
-    db.session.commit()
-    return jsonify({"message": "The reference was removed from this collection."})
+def retired_user_reference_entry(entry_id):
+    return _error(
+        "User-managed reference collections are no longer available.",
+        410,
+    )
 
 
 @bp.post("/reference-library/<int:entry_id>/verify")
 @login_required
-def verify_workspace_reference_entry(entry_id):
-    entry = db.session.get(ReferenceEntry, entry_id)
-    if not entry or entry.scope != "workspace" or entry.status != "review_required":
-        return _error("Reference document not found or no longer requires review.", 404)
-    membership = membership_for(current_user, entry.workspace_id)
-    if not is_workspace_manager(membership):
-        return _error("Only workspace owners and administrators can verify shared references.", 403)
-    if str(request.form.get("permission_confirmed", "")).lower() not in {"1", "true", "yes", "on"}:
-        return _error("Confirm that the workspace has permission to use this document.")
-    entry.status = "active"
-    entry.rights_basis = "workspace_permission"
-    entry.rights_verified = True
-    entry.verified_by_user_id = current_user.user_id
-    entry.verified_at = datetime.now(timezone.utc)
-    db.session.commit()
-    return jsonify({"message": "Workspace reference permission recorded."})
+def retired_user_reference_verification(entry_id):
+    return _error(
+        "User-managed reference collections are no longer available.",
+        410,
+    )
 
 
 @bp.post("/workspace/references")
 @login_required
-def upload_workspace_reference():
-    """Backward-compatible endpoint; new clients use /reference-library."""
-    workspace = get_active_workspace(current_user)
-    if workspace.workspace_type != "shared":
-        return _error("Shared reference collections are not available in a personal workspace.", 403)
-    membership = membership_for(current_user, workspace.workspace_id)
-    if not is_workspace_manager(membership):
-        return _error("Only workspace owners and administrators can manage shared references.", 403)
-    if str(request.form.get("permission_confirmed", "")).lower() not in {"1", "true", "yes", "on"}:
-        return _error("Confirm that you have permission to use this document within the workspace.")
-    try:
-        document = save_uploaded_document(
-            request.files.get("document"),
-            request.form.get("title", ""),
-            "reference",
-            workspace_id=workspace.workspace_id,
-            visibility_scope="workspace",
-            commit=False,
-        )
-        entry = register_reference_entry(
-            document,
-            "workspace",
-            current_user.user_id,
-            workspace_id=workspace.workspace_id,
-            status="active",
-            provenance_type="user_upload",
-            rights_basis="workspace_permission",
-            rights_verified=True,
-            verified_by_user_id=current_user.user_id,
-            verified_at=datetime.now(timezone.utc),
-        )
-        db.session.commit()
-        return jsonify({"message": f"Reference document '{document.title}' added to {workspace.name}.", "document": _document_payload(document), "entry": _reference_entry_response(entry)}), 201
-    except ValueError as exc:
-        db.session.rollback()
-        return _error(str(exc), 400)
-    except Exception:
-        db.session.rollback()
-        current_app.logger.exception("Workspace reference upload failed.")
-        return _error("The reference document could not be saved.", 500)
+def retired_workspace_reference_upload():
+    return _error(
+        "Shared documents must be submitted through a Submission Request.",
+        410,
+    )
 
 
 @bp.get("/admin/references")

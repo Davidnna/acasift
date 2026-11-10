@@ -202,6 +202,18 @@ class SubmissionRequestTests(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 403)
 
+    def test_shared_workspace_documents_must_be_submitted_through_a_request(self):
+        response = self.owner_client.post(
+            "/api/documents",
+            data={
+                "title": "Direct shared upload",
+                "document": (io.BytesIO(b"A document submitted outside a request."), "direct.txt"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Document.query.filter_by(title="Direct shared upload").count(), 0)
+
 
     def test_external_link_participant_joins_without_workspace_membership(self):
         created = self._create_request()
@@ -334,7 +346,7 @@ class SubmissionRequestTests(unittest.TestCase):
         self.assertEqual(report.status_code, 200, report.get_json())
         report_results = report.get_json()["comparison"]["results"]
         source_scopes = {row["source_scope"] for row in report_results}
-        self.assertEqual(source_scopes, {"global", "workspace", "request"})
+        self.assertEqual(source_scopes, {"request"})
         peer_results = [row for row in report_results if row["source_scope"] == "request"]
         self.assertEqual(len(peer_results), 1)
         self.assertEqual(peer_results[0]["reference_document"]["title"], "Another submission in this request")

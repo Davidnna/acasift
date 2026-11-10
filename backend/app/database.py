@@ -25,6 +25,7 @@ from app.submission_models import (
 MIGRATION_TABLE = "acasift_schema_migrations"
 LEGACY_BASELINE_VERSION = "2026-11-10-legacy-workspace-submission-baseline"
 REFERENCE_ARCHITECTURE_VERSION = "2026-11-10-unified-reference-architecture-v1"
+SIMPLIFIED_REFERENCE_POLICY_VERSION = "2026-11-10-simplified-reference-comparison-v1"
 
 REQUIRED_COLUMNS = {
     "users": {
@@ -662,12 +663,39 @@ def _run_reference_architecture_migration(app):
         )
 
 
+def _run_simplified_reference_policy_migration(app):
+    """Retire user-managed reference scopes without deleting historical files.
+
+    New personal comparisons use the administrator-managed global bank. New
+    Submission Request comparisons resolve peer submissions directly from
+    document_submissions. Personal, workspace and request ReferenceEntry rows
+    are therefore archived but retained for historical traceability.
+    """
+    with app.app_context():
+        if not inspect(db.engine).has_table("reference_entries"):
+            raise RuntimeError("The reference_entries table is missing; the reference architecture migration must run first.")
+
+        with db.engine.begin() as connection:
+            result = connection.execute(text(
+                "UPDATE reference_entries "
+                "SET status = 'archived', updated_at = CURRENT_TIMESTAMP "
+                "WHERE scope IN ('personal', 'workspace', 'request') "
+                "AND status <> 'archived'"
+            ))
+
+        app.logger.info(
+            "Simplified reference policy migration completed: archived %s legacy user-managed reference entries.",
+            result.rowcount if result.rowcount is not None else 0,
+        )
+
+
 # Keep migrations in ascending dependency order. Add future schema/data changes
 # here with a new immutable version identifier and an idempotent migration
 # function. Never edit a migration that has already been released.
 MIGRATIONS = (
     (LEGACY_BASELINE_VERSION, _run_legacy_data_migration),
     (REFERENCE_ARCHITECTURE_VERSION, _run_reference_architecture_migration),
+    (SIMPLIFIED_REFERENCE_POLICY_VERSION, _run_simplified_reference_policy_migration),
 )
 
 

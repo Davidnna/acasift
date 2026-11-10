@@ -227,7 +227,7 @@ export function SubmissionRequestDetailPage() {
         </section>}
 
         {data.permissions.can_submit && <section className="panel form-panel">
-            <div className="panel-heading"><div><h2><Upload size={17} /> Submit a document</h2><p>Upload a document for analysis against global references, workspace references and other eligible submissions in this request.</p></div></div>
+            <div className="panel-heading"><div><h2><Upload size={17} /> Submit a document</h2><p>Your document will be compared with other eligible submissions in this same request.</p></div></div>
             <Form method="post" encType="multipart/form-data" className="form-stack">
                 <input type="hidden" name="_intent" value="submit" />
                 <label htmlFor="submission-title">Document title <span>Optional</span></label>

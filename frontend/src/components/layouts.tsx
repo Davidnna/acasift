@@ -235,7 +235,6 @@ function PublicFooter() {
 const baseWorkspaceLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; }[] = [
     { to: '/app/dashboard', label: 'Overview', icon: LayoutDashboard, end: true },
     { to: '/app/documents', label: 'My documents', icon: Files, end: true },
-    { to: '/app/references', label: 'Reference library', icon: BookOpen, end: true },
     { to: '/app/account', label: 'My account', icon: Settings2, end: true },
     { to: '/app/workspaces', label: 'Workspaces', icon: Layers3, end: true },
 ];
@@ -243,7 +242,7 @@ const sharedWorkspaceLinks: { to: string; label: string; icon: LucideIcon; end?:
     { to: '/app/submission-requests', label: 'Submission Requests', icon: ClipboardList, end: true },
 ];
 const adminLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; }[] = [
-    { to: '/app/admin/references', label: 'Reference repository', icon: BookOpen, end: true },
+    { to: '/app/admin/references', label: 'AcaSift Reference Bank', icon: BookOpen, end: true },
     { to: '/app/admin/users', label: 'Manage users', icon: Users, end: true },
 ];
 

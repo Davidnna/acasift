@@ -1,4 +1,4 @@
-"""Generic submission and scoped reference collection models."""
+"""Generic submission request, participation and review models."""
 
 from datetime import datetime, timezone
 from sqlalchemy import Index, UniqueConstraint

@@ -53,13 +53,6 @@ export interface ReferenceEntryRecord {
     };
 }
 
-export interface ReferenceLibraryData {
-    scope: 'personal' | 'workspace';
-    workspace: { id: number; name: string; type: 'personal' | 'shared'; };
-    can_manage: boolean;
-    entries: ReferenceEntryRecord[];
-}
-
 export interface ComparisonSummary {
     id: number;
     status: string;
@@ -98,7 +91,6 @@ export interface DashboardData {
     stats: {
         document_count: number;
         comparison_count: number;
-        reference_count: number;
     };
     recent_documents: DocumentRecord[];
     recent_comparisons: ComparisonSummary[];

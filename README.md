@@ -16,10 +16,11 @@ support human assessment; they do not automatically determine plagiarism or misc
 - Create Submission Requests to collect documents from workspace members and authenticated external participants.
 - Generate restricted request links with optional expiration, usage limits and revocation.
 - Assign request-level reviewers without granting workspace administration privileges.
-- Compare submissions against eligible global references, workspace references and other submissions in the same request.
+- Compare private-workspace documents against AcaSift's central Reference Bank.
+- Compare shared Submission Request documents against other eligible submissions in that same request.
 - Provide request-level review outcomes and feedback while protecting peer-submission identities and excerpts in contributor reports.
 - Preserve historical submissions and reports while older records are migrated into the generic workflow.
-- Maintain one reference registry spanning global, personal, workspace and Submission Request sources, with provenance and permission records.
+- Maintain one administrator-managed Reference Bank with source, licence and permission records.
 - Support account registration, email verification and password recovery.
 - Let users upload, replace and remove a profile picture from their account page.
 - Let users request an email address change, confirmed through a one-time verification link sent to the new address.
@@ -114,11 +115,12 @@ one request only; participants must sign in with a verified AcaSift account and 
 workspace members. Links support optional expiration, usage limits and revocation. Participants
 can upload documents, view their own reports and receive review feedback.
 
-Each request submission is compared against eligible global references, workspace references and
-other eligible submissions belonging to that same request. A contributor's own submissions and
-previous attempts are excluded from peer-source comparison. Contributor reports hide peer identities
-and peer excerpts; authorised reviewers and workspace administrators can inspect the underlying
-evidence. Private material from unrelated users or workspaces is not exposed by this comparison policy.
+Each request submission is compared only against other eligible submissions belonging to that same
+request. It is not compared against the global Reference Bank, workspace documents or submissions
+from unrelated requests. A contributor's own submissions and previous attempts are excluded from
+peer-source comparison. Contributor reports hide peer identities and peer excerpts; authorised
+reviewers and workspace administrators can inspect the underlying evidence. Private material from
+unrelated users or workspaces is not exposed by this comparison policy.
 
 Older structured records from previous releases are retained as migration sources. They are
 converted into Submission Requests, preserving their documents, comparison links, participant
@@ -127,18 +129,20 @@ interface and are not deleted by this release.
 
 ## Reference materials
 
-AcaSift uses one reference registry with four scopes:
+AcaSift maintains one central **Reference Bank**, managed by platform administrators. It contains
+documents that have an appropriate recorded basis for retention and use in private similarity
+checks. Each record retains its source, licence or permission basis, and verification information.
+Public accessibility alone does not establish permission to reuse a document.
 
-- **Global:** platform-wide documents whose global-use permission basis and provenance have been recorded by an administrator.
-- **Personal:** private source documents available only to the owner in their personal workspace.
-- **Workspace:** documents available to authorised members of one shared workspace after a manager records permission for workspace use.
-- **Submission Request:** eligible submissions used only to compare other submissions belonging to the same request.
+Users do not upload or manage personal or workspace reference documents. A document uploaded in a
+personal workspace is compared with eligible documents in the central Reference Bank. Documents
+submitted to a shared Submission Request are compared with other eligible submissions in that same
+request; they are not added to the Reference Bank.
 
-The comparison service resolves eligible sources through the same registry. Personal comparisons use verified global references and the account owner's personal library. Shared-workspace comparisons use verified global references and verified references in the active workspace. Submission Request comparisons additionally use eligible submissions from that same request, excluding the contributor's own submissions and prior attempts. Duplicate file fingerprints are de-duplicated across scopes.
-
-Older global and shared-workspace references are migrated with a `review_required` status because the previous system did not record their rights basis. They remain available for administrator or workspace-manager review but are excluded from comparisons until the relevant permission is recorded. Personal references remain private and usable by their owner. Historical comparison results retain their recorded source scope.
-
-A document is not added to the global reference collection merely because it is uploaded. Global records require a recorded permission basis, source metadata where applicable, and an administrator attestation. Public accessibility alone does not establish permission to reuse a document. The separate user-facing global-contribution consent and withdrawal workflow, together with external repository ingestion, is planned for a later release. Submission documents are not automatically added to the global collection.
+Older personal, workspace and request-level reference registry entries are archived by the
+simplified reference-policy migration. Their underlying document records and files are retained to
+protect historical data, but they are no longer eligible for new comparisons. Existing comparison
+reports retain their original source records and labels for historical traceability.
 
 ## Deployment
 
@@ -155,7 +159,7 @@ implemented as new, versioned migrations; do not delete or manually edit the mig
 Startup logs report database-initialisation duration and the start of the Gunicorn web server.
 
 For hosted deployments, configure the database connection, application secret and email delivery
-settings in the hosting provider's private environment settings. For Submission Request comparisons,
-`MAX_COMPARISON_SOURCES` controls the maximum number of documents considered from each eligible
-source scope. Never commit
-real credentials, API keys or private database connection strings to the repository.
+settings in the hosting provider's private environment settings. Private checks use all eligible
+documents in the central Reference Bank; Submission Request checks use all eligible peer submissions
+within the same request. Never commit real credentials, API keys or private database connection
+strings to the repository.

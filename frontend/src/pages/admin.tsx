@@ -23,11 +23,11 @@ export function AdminReferencesPage() {
     const navigation = useNavigation();
     const busy = navigation.state === 'submitting';
     return <>
-        <PageHeading eyebrow="ADMINISTRATION" title="Global reference collection" description="Manage source documents that have a recorded basis for use in comparisons across AcaSift." />
+        <PageHeading eyebrow="ADMINISTRATION" title="AcaSift Reference Bank" description="Manage the platform's authorised source documents used for private document checks." />
         {actionData?.error && <Notice tone="danger">{actionData.error}</Notice>}
         {actionData?.success && <Notice tone="success">{actionData.success}</Notice>}
         <section className="panel form-panel">
-            <div className="panel-heading"><div><h2><BookOpen size={18} /> Add a global reference</h2><p>Record the source and the permission basis before making a document available platform-wide.</p></div><span className="panel-icon"><ShieldCheck size={18} /></span></div>
+            <div className="panel-heading"><div><h2><BookOpen size={18} /> Add a reference document</h2><p>Record the source and permission basis before adding a document to the Reference Bank.</p></div><span className="panel-icon"><ShieldCheck size={18} /></span></div>
             <Form method="post" encType="multipart/form-data" className="form-stack">
                 <input type="hidden" name="_intent" value="upload" />
                 <label htmlFor="reference-title">Document title <span>Optional</span></label>
@@ -62,11 +62,11 @@ export function AdminReferencesPage() {
                 <input id="reference-file" name="document" type="file" accept=".pdf,.docx,.txt" required />
                 <div className="form-hint">Supported formats: PDF, DOCX and TXT. Maximum upload size: 15 MB.</div>
                 <label className="checkbox-row"><input type="checkbox" name="rights_confirmed" value="yes" required /><span>I confirm that AcaSift has the necessary rights to retain and use this document for global similarity comparisons.</span></label>
-                <button className="button button-primary" disabled={busy}>{busy ? 'Adding reference…' : 'Add verified global reference'} <ArrowRight size={15} /></button>
+                <button className="button button-primary" disabled={busy}>{busy ? 'Adding reference…' : 'Add to Reference Bank'} <ArrowRight size={15} /></button>
             </Form>
         </section>
         <section className="panel">
-            <div className="panel-heading"><div><h2>Global reference records</h2><p>{entries.length} reference records, including records awaiting rights review</p></div></div>
+            <div className="panel-heading"><div><h2>Reference Bank records</h2><p>{entries.length} records, including documents awaiting rights review</p></div></div>
             {entries.length ? <div className="reference-entry-list">{entries.map(entry => <article className="reference-entry-card" key={entry.id}>
                 <div className="reference-entry-main">
                     <div className="reference-entry-icon"><BookOpen size={19} /></div>
@@ -96,8 +96,8 @@ export function AdminReferencesPage() {
                     </Form>
                 </div>}
                 {entry.status === 'active' && <div className="reference-entry-meta"><CheckCircle2 size={13} /> Rights basis recorded{entry.verified_at ? ` · verified ${new Date(entry.verified_at).toLocaleDateString()}` : ''}</div>}
-                {entry.status !== 'archived' && <div className="reference-entry-actions"><Form method="post"><input type="hidden" name="_intent" value="archive" /><input type="hidden" name="entry_id" value={entry.id} /><button className="button button-quiet" type="submit"><Archive size={15} /> Remove from global comparisons</button></Form></div>}
-            </article>)}</div> : <EmptyState title="The global collection is empty" description="Add legitimate reference documents with their source and permission information." />}
+                {entry.status !== 'archived' && <div className="reference-entry-actions"><Form method="post"><input type="hidden" name="_intent" value="archive" /><input type="hidden" name="entry_id" value={entry.id} /><button className="button button-quiet" type="submit"><Archive size={15} /> Remove from future comparisons</button></Form></div>}
+            </article>)}</div> : <EmptyState title="The Reference Bank is empty" description="Add legitimate reference documents with their source and permission information." />}
         </section>
         <Notice tone="info">Documents awaiting rights review are retained for administrative review but are not used in global similarity comparisons. Public availability alone does not establish permission to reuse a document.</Notice>
     </>;

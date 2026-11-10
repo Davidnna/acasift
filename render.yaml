@@ -15,8 +15,6 @@ services:
         generateValue: true
       - key: NGRAM_SIZE
         value: "5"
-      - key: MAX_COMPARISON_SOURCES
-        value: "50"
       - key: MAX_CONTENT_LENGTH_MB
         value: "15"
       - key: SESSION_COOKIE_SECURE

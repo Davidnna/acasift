@@ -22,7 +22,6 @@ from app.services.document_service import (
 )
 from app.services.workspace_service import is_workspace_manager, membership_for
 from app.services.submission_service import run_submission_request_comparison
-from app.services.reference_service import register_reference_entry
 from app.submission_models import (
     DocumentSubmission,
     SubmissionRequest,
@@ -769,17 +768,6 @@ def upload_submission_request_document(request_id):
         )
         db.session.add(submission)
         db.session.flush()
-        register_reference_entry(
-            document,
-            "request",
-            current_user.user_id,
-            owner_user_id=current_user.user_id,
-            request_id=request_id,
-            status="active",
-            provenance_type="submission_request_document",
-            rights_basis="request_scoped_submission",
-            rights_verified=False,
-        )
         _new_participant(
             item,
             current_user.user_id,

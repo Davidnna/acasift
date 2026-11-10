@@ -38,14 +38,10 @@ import {
     getDashboard,
     getDocuments,
     getReferences,
-    getReferenceLibrary,
     getUsers,
     signIn,
     signOut,
     uploadReference,
-    uploadReferenceLibrary,
-    archiveReferenceLibraryEntry,
-    verifyWorkspaceReferenceEntry,
     verifyGlobalReferenceEntry,
     archiveGlobalReferenceEntry,
     uploadSubmission,
@@ -552,49 +548,19 @@ async function submissionRequestAction({ request, params }: ActionFunctionArgs) 
     }
 }
 
-async function referenceLibraryLoader(args: LoaderFunctionArgs) {
-    await requireUser(args);
-    return getReferenceLibrary(args.request.signal);
-}
-
-async function referenceLibraryAction({ request }: ActionFunctionArgs) {
-    const formData = await request.formData();
-    const intent = String(formData.get('_intent') || 'upload');
-    try {
-        if (intent === 'upload') {
-            await uploadReferenceLibrary(formData, request.signal);
-            return { success: 'The reference document was added to the collection.' };
-        }
-        const entryId = Number(formData.get('entry_id'));
-        if (!Number.isInteger(entryId) || entryId < 1) return { error: 'The reference record is invalid.' };
-        if (intent === 'archive') {
-            await archiveReferenceLibraryEntry(entryId);
-            return { success: 'The reference was removed from this collection.' };
-        }
-        if (intent === 'verify') {
-            await verifyWorkspaceReferenceEntry(entryId, formData);
-            return { success: 'Workspace reference permission was recorded.' };
-        }
-        return { error: 'Unknown reference library action.' };
-    } catch (error) {
-        if (error instanceof Response) throw error;
-        return { error: error instanceof Error ? error.message : 'The reference library could not be updated.' };
-    }
-}
-
 async function adminReferencesAction({ request }: ActionFunctionArgs) {
     const formData = await request.formData();
     const intent = String(formData.get('_intent') || 'upload');
     try {
         if (intent === 'upload') {
             await uploadReference(formData, request.signal);
-            return { success: 'The document was added to the global reference collection.' };
+            return { success: 'The document was added to the AcaSift Reference Bank.' };
         }
         const entryId = Number(formData.get('entry_id'));
         if (!Number.isInteger(entryId) || entryId < 1) return { error: 'The reference record is invalid.' };
         if (intent === 'archive') {
             await archiveGlobalReferenceEntry(entryId);
-            return { success: 'The global reference was removed from future comparisons.' };
+            return { success: 'The document was removed from future private checks.' };
         }
         if (intent === 'verify') {
             await verifyGlobalReferenceEntry(entryId, formData);
@@ -603,7 +569,7 @@ async function adminReferencesAction({ request }: ActionFunctionArgs) {
         return { error: 'Unknown global reference action.' };
     } catch (error) {
         if (error instanceof Response) throw error;
-        return { error: error instanceof Error ? error.message : 'The global reference collection could not be updated.' };
+        return { error: error instanceof Error ? error.message : 'The AcaSift Reference Bank could not be updated.' };
     }
 }
 
@@ -656,8 +622,8 @@ export const router = createBrowserRouter([
                     { path: 'dashboard', loader: (args) => loadForUser(args, getDashboard), lazy: async () => ({ Component: (await import('./pages/dashboard')).DashboardPage }) },
                     { path: 'documents', loader: (args) => loadForUser(args, getDocuments), action: uploadSubmissionAction, lazy: async () => ({ Component: (await import('./pages/documents')).DocumentsPage }) },
                     { path: 'documents/new', loader: () => redirect('/app/documents') },
-                    { path: 'references', loader: referenceLibraryLoader, action: referenceLibraryAction, lazy: async () => ({ Component: (await import('./pages/reference-library')).ReferenceLibraryPage }) },
-                    { path: 'references/new', loader: () => redirect('/app/references') },
+                    { path: 'references', loader: () => redirect('/app/documents') },
+                    { path: 'references/new', loader: () => redirect('/app/documents') },
                     { path: 'comparisons/:comparisonId', loader: (args) => loadForUser(args, (signal) => getComparison(args.params.comparisonId || '', signal)), lazy: async () => ({ Component: (await import('./pages/documents')).ComparisonPage }) },
                     {
                         path: 'admin',

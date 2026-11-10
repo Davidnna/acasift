@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Form, Link, useActionData, useLoaderData, useNavigation } from 'react-router-dom';
 import {
-    Layers3, Users, BookOpen, Copy, Link2, ShieldCheck,
+    Layers3, Users, Copy, Link2, ShieldCheck,
     Clock3, Ban, UserPlus, Plus,
 } from 'lucide-react';
 import { Notice, PageHeading } from '../components/ui';
@@ -95,7 +95,7 @@ export function WorkspacesPage() {
                 </>}
                 <div className="panel-divider" />
                 <div className="workspace-danger-zone">
-                    <div><strong>Leave this workspace</strong><p>You will lose access to its shared documents, submission requests and reference materials. You can rejoin with a new invitation.</p></div>
+                    <div><strong>Leave this workspace</strong><p>You will lose access to its shared documents and submission requests. You can rejoin with a new invitation.</p></div>
                     <Form method="post" onSubmit={event => { if (!window.confirm('Leave this workspace?')) event.preventDefault(); }}>
                         <input type="hidden" name="_intent" value="leave" />
                         <button className="button button-secondary" disabled={busy}>Leave workspace</button>
@@ -109,7 +109,7 @@ export function WorkspacesPage() {
                     </Form>
                 </div>}
             </section>}
-            {data.can_manage_members && isShared && <div className="form-actions"><Link className="button button-secondary" to="/app/references/new"><BookOpen size={15} /> Add shared reference</Link><Link className="button button-primary" to="/app/submission-requests"><Plus size={15} /> Manage submission requests</Link></div>}
+            {data.can_manage_members && isShared && <div className="form-actions"><Link className="button button-primary" to="/app/submission-requests"><Plus size={15} /> Manage submission requests</Link></div>}
         </section>
 
         <div className="admin-content-grid">

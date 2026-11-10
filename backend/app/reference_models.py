@@ -1,4 +1,4 @@
-"""Scoped reference collection records and provenance metadata."""
+"""AcaSift Reference Bank records and retained legacy provenance metadata."""
 
 from datetime import datetime, timezone
 from sqlalchemy import Index, UniqueConstraint
@@ -24,7 +24,8 @@ class ReferenceEntry(db.Model):
 
     entry_id = db.Column(db.Integer, primary_key=True)
     document_id = db.Column(db.Integer, db.ForeignKey("documents.document_id"), nullable=False, index=True)
-    # Supported scopes: global, personal, workspace and request.
+    # New active records use the global scope only. Personal, workspace and
+    # request scopes remain in the schema solely for historical traceability.
     scope = db.Column(db.String(20), nullable=False, index=True)
     # Deterministic key permits one canonical document to have several placements.
     scope_key = db.Column(db.String(100), nullable=False)

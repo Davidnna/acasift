@@ -8,7 +8,12 @@ from sqlalchemy import text
 from config import Config
 from app import create_app
 from app.extensions import db
-from app.database import LEGACY_BASELINE_VERSION, MIGRATION_TABLE, REFERENCE_ARCHITECTURE_VERSION
+from app.database import (
+    LEGACY_BASELINE_VERSION,
+    MIGRATION_TABLE,
+    REFERENCE_ARCHITECTURE_VERSION,
+    SIMPLIFIED_REFERENCE_POLICY_VERSION,
+)
 
 
 class DatabaseMigrationConfig(Config):
@@ -74,6 +79,24 @@ class DatabaseMigrationTests(unittest.TestCase):
         self.assertEqual(record.execution_mode, "executed")
 
         with patch("app.database._run_reference_architecture_migration", side_effect=AssertionError("reference migration reran")) as migration:
+            second = self.app.test_cli_runner().invoke(args=["init-db"])
+        self.assertEqual(second.exit_code, 0, second.output)
+        migration.assert_not_called()
+
+    def test_simplified_reference_policy_migration_is_recorded(self):
+        first = self.app.test_cli_runner().invoke(args=["init-db"])
+        self.assertEqual(first.exit_code, 0, first.output)
+        record = db.session.execute(
+            text(f"SELECT version, execution_mode FROM {MIGRATION_TABLE} WHERE version = :version"),
+            {"version": SIMPLIFIED_REFERENCE_POLICY_VERSION},
+        ).first()
+        self.assertIsNotNone(record)
+        self.assertEqual(record.execution_mode, "executed")
+
+        with patch(
+            "app.database._run_simplified_reference_policy_migration",
+            side_effect=AssertionError("simplified reference migration reran"),
+        ) as migration:
             second = self.app.test_cli_runner().invoke(args=["init-db"])
         self.assertEqual(second.exit_code, 0, second.output)
         migration.assert_not_called()

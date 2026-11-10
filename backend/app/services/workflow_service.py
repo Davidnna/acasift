@@ -79,10 +79,8 @@ def run_comparison(submitted_document):
 
     try:
         eligible_sources = resolve_reference_sources(
-            user_id=current_user.user_id,
             workspace_id=submitted_document.workspace_id,
             exclude_document_id=submitted_document.document_id,
-            maximum_per_scope=current_app.config.get("MAX_COMPARISON_SOURCES", 50),
         )
         references = [document for document, _scope in eligible_sources]
         scope_by_document_id = {

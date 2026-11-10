@@ -12,39 +12,22 @@ from app.models import (
     Report,
 )
 from app.services.similarity_service import compare_against_repository
-from app.services.reference_service import resolve_reference_sources, register_reference_entry, entry_for_document
+from app.services.reference_service import resolve_reference_sources
 from app.submission_models import DocumentSubmission
 
 
 def _eligible_sources(submission):
-    """Resolve global, workspace and same-request references consistently."""
+    """Resolve only eligible peer submissions from this request."""
     return resolve_reference_sources(
-        user_id=submission.contributor_user_id,
         workspace_id=submission.request.workspace_id,
         request_id=submission.request_id,
         exclude_document_id=submission.document_id,
         exclude_contributor_user_id=submission.contributor_user_id,
-        maximum_per_scope=max(1, int(current_app.config.get("MAX_COMPARISON_SOURCES", 50))),
     )
 
 
 def run_submission_request_comparison(submission):
-    """Compare a request submission against global, workspace and request sources."""
-    request_scope_key = f"request:{submission.request_id}"
-    if entry_for_document(submission.document_id, request_scope_key) is None:
-        register_reference_entry(
-            submission.document,
-            "request",
-            submission.contributor_user_id,
-            owner_user_id=submission.contributor_user_id,
-            request_id=submission.request_id,
-            status="active",
-            provenance_type="submission_request_document",
-            rights_basis="request_scoped_submission",
-            rights_verified=False,
-        )
-        db.session.commit()
-
+    """Compare a request submission only with other submissions in that request."""
     comparison = Comparison(
         submitted_document_id=submission.document_id,
         user_id=submission.contributor_user_id,

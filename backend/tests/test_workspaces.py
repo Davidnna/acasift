@@ -105,7 +105,7 @@ class WorkspaceTests(unittest.TestCase):
             data={"document": (io.BytesIO(b"Private workspace reference"), "reference.txt")},
             content_type="multipart/form-data",
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 410)
 
     def test_document_list_does_not_expose_another_users_private_submission(self):
         second = User(

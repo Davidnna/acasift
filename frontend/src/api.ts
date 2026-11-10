@@ -14,7 +14,6 @@ import type {
     SubmissionRequestInviteRecord,
     SubmissionRequestSubmission,
     ReferenceEntryRecord,
-    ReferenceLibraryData,
 } from './types';
 
 export class ApiError extends Error {
@@ -176,22 +175,6 @@ export async function getUsers(signal?: AbortSignal): Promise<User[]> {
 
 export async function createUser(payload: Record<string, string>): Promise<void> {
     await request('/api/admin/users', { method: 'POST', body: JSON.stringify(payload) });
-}
-
-export async function getReferenceLibrary(signal?: AbortSignal): Promise<ReferenceLibraryData> {
-    return request('/api/reference-library', { signal });
-}
-
-export async function uploadReferenceLibrary(formData: FormData, signal?: AbortSignal): Promise<void> {
-    await request('/api/reference-library', { method: 'POST', body: formData, signal });
-}
-
-export async function archiveReferenceLibraryEntry(entryId: number): Promise<void> {
-    await request(`/api/reference-library/${entryId}`, { method: 'DELETE' });
-}
-
-export async function verifyWorkspaceReferenceEntry(entryId: number, formData: FormData): Promise<void> {
-    await request(`/api/reference-library/${entryId}/verify`, { method: 'POST', body: formData });
 }
 
 export async function getReferences(signal?: AbortSignal): Promise<ReferenceEntryRecord[]> {

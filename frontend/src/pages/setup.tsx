@@ -15,7 +15,7 @@ export function FirstAdminSetupPage() {
         <div className="bootstrap-card">
             <Link to="/" className="bootstrap-brand">
                 <span className="brand-mark"><FileSearch size={22} /></span>
-                <span>AcaSift<small>Academic similarity analysis</small></span>
+                <span>AcaSift<small>Document similarity analysis</small></span>
             </Link>
 
             {!available ? <>

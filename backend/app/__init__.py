@@ -58,13 +58,11 @@ def create_app(config_class=Config):
 
     from app.api import bp as api_bp
     from app.api.workspaces import bp as workspaces_api_bp
-    from app.academic_api import bp as academic_api_bp
     from app.submission_api import bp as submission_api_bp
     from app.routes.main import bp as main_bp
 
     app.register_blueprint(api_bp)
     app.register_blueprint(workspaces_api_bp)
-    app.register_blueprint(academic_api_bp)
     app.register_blueprint(submission_api_bp)
     app.register_blueprint(main_bp)
 
@@ -147,6 +145,25 @@ def create_app(config_class=Config):
                                 "ALTER TABLE users ALTER COLUMN full_name TYPE VARCHAR(255)"
                             ))
             inspector = inspect(db.engine)
+            if inspector.has_table("submission_requests"):
+                request_columns = {column["name"] for column in inspector.get_columns("submission_requests")}
+                if "allow_late_submissions" not in request_columns:
+                    with db.engine.begin() as connection:
+                        connection.execute(text(
+                            "ALTER TABLE submission_requests ADD COLUMN allow_late_submissions "
+                            "BOOLEAN NOT NULL DEFAULT FALSE"
+                        ))
+
+            inspector = inspect(db.engine)
+            if inspector.has_table("submission_requests"):
+                maximum_upload_mb = max(1, int(app.config["MAX_CONTENT_LENGTH"] / (1024 * 1024)))
+                SubmissionRequest.query.filter(
+                    SubmissionRequest.max_file_size_mb > maximum_upload_mb
+                ).update(
+                    {"max_file_size_mb": maximum_upload_mb},
+                    synchronize_session=False,
+                )
+
             if inspector.has_table("workspace_invites"):
                 invite_columns = {column["name"] for column in inspector.get_columns("workspace_invites")}
                 if "course_id" not in invite_columns:
@@ -155,8 +172,7 @@ def create_app(config_class=Config):
                             "ALTER TABLE workspace_invites ADD COLUMN course_id INTEGER"
                         ))
 
-            # Shared workspaces replace institution-specific workspaces. Existing
-            # organisational workspaces keep their IDs, members, courses and data.
+            # Existing shared workspaces keep their IDs, members and historical data.
             inspector = inspect(db.engine)
             if inspector.has_table("workspaces"):
                 workspace_columns = {column["name"] for column in inspector.get_columns("workspaces")}
@@ -269,7 +285,8 @@ def create_app(config_class=Config):
                         due_at=legacy_assignment.due_at,
                         status=request_status,
                         accepted_file_types=["pdf", "docx", "txt"],
-                        max_file_size_mb=20,
+                        max_file_size_mb=max(1, int(app.config["MAX_CONTENT_LENGTH"] / (1024 * 1024))),
+                        allow_late_submissions=legacy_assignment.allow_late_submissions,
                         allow_resubmissions=legacy_assignment.allow_resubmissions,
                         allow_external_participants=True,
                         created_by_user_id=legacy_assignment.created_by_user_id,
@@ -351,8 +368,23 @@ def create_app(config_class=Config):
                                 feedback=legacy_assessment.feedback,
                                 reviewed_at=legacy_assessment.reviewed_at,
                             ))
-            # Keep legacy workspace role values during this compatibility phase.
-            # The UI and remaining legacy routes will be migrated in the next phase.
+            # Normalize former academic workspace roles into the generic Member role.
+            # Historical course memberships remain stored for audit and migration only.
+            WorkspaceMembership.query.filter(
+                WorkspaceMembership.role.in_(("student", "lecturer"))
+            ).update({"role": "member"}, synchronize_session=False)
+            WorkspaceInvite.query.filter(
+                WorkspaceInvite.role != "member"
+            ).update({"role": "member", "course_id": None}, synchronize_session=False)
+            WorkspaceInvite.query.filter(WorkspaceInvite.course_id.isnot(None)).update(
+                {"course_id": None}, synchronize_session=False
+            )
+            SubmissionReview.query.filter_by(decision="no_concern").update(
+                {"decision": "no_action"}, synchronize_session=False
+            )
+            SubmissionReview.query.filter_by(decision="discuss_with_student").update(
+                {"decision": "further_review"}, synchronize_session=False
+            )
             db.session.commit()
 
             with db.engine.begin() as connection:

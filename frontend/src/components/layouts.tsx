@@ -1,8 +1,8 @@
 import { useFetcher, useLoaderData, useNavigation, Outlet, NavLink, Link, useLocation } from 'react-router-dom';
 import {
-    Activity, ArrowUpRight, BookOpen, ChevronDown, CircleHelp, ClipboardList,
+    Activity, ArrowUpRight, BookOpen, ChevronDown, CircleHelp,
     FileSearch, Files, LayoutDashboard, LogOut, Menu,
-    Settings2, ShieldCheck, Users, X, ArrowUp, Layers3,
+    Settings2, ShieldCheck, Users, X, ArrowUp, Layers3, ClipboardList,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
@@ -12,7 +12,7 @@ function Brand({ inverse = false }: { inverse?: boolean; }) {
     return (
         <Link viewTransition to="/" className={`brand ${inverse ? 'brand-inverse' : ''}`} aria-label="AcaSift home">
             <span className="brand-mark"><FileSearch size={22} strokeWidth={2.2} /></span>
-            <span className="brand-word">AcaSift<span>Academic similarity analysis</span></span>
+            <span className="brand-word">AcaSift<span>Document similarity analysis</span></span>
         </Link>
     );
 }
@@ -224,7 +224,7 @@ export function PublicLayout() {
 function PublicFooter() {
     return <footer className="public-footer">
         <div className="footer-grid wrap">
-            <div className="footer-about"><Brand inverse /><p>Academic document similarity analysis to support careful source review and academic integrity.</p></div>
+            <div className="footer-about"><Brand inverse /><p>Document similarity analysis to support careful source review and informed decisions.</p></div>
             <div className="footer-links"><strong>Explore</strong><Link viewTransition to="/about">About AcaSift</Link><Link viewTransition to="/features">Features</Link><Link viewTransition to="/how-it-works">How it works</Link><Link viewTransition to="/faq">Frequently asked questions</Link></div>
             <div className="footer-links"><strong>Workspace</strong><Link viewTransition to="/login">Sign in</Link><Link viewTransition to="/register">Create an account</Link></div>
         </div>
@@ -238,9 +238,8 @@ const baseWorkspaceLinks: { to: string; label: string; icon: LucideIcon; end?: b
     { to: '/app/account', label: 'My account', icon: Settings2, end: true },
     { to: '/app/workspaces', label: 'Workspaces', icon: Layers3, end: true },
 ];
-const academicWorkspaceLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; }[] = [
-    { to: '/app/courses', label: 'Courses', icon: BookOpen, end: true },
-    { to: '/app/assignments', label: 'Assignments', icon: ClipboardList, end: true },
+const sharedWorkspaceLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; }[] = [
+    { to: '/app/submission-requests', label: 'Submission Requests', icon: ClipboardList, end: true },
 ];
 const adminLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; }[] = [
     { to: '/app/admin/references', label: 'Reference repository', icon: BookOpen, end: true },
@@ -267,13 +266,9 @@ export function AppLayout() {
         document.addEventListener('keydown', closeOnEscape);
         return () => document.removeEventListener('keydown', closeOnEscape);
     }, [mobileNav]);
-    const canUseAcademicFeatures = Boolean(
-        activeWorkspace
-        && activeWorkspace.type === 'shared'
-        && ['owner', 'admin', 'lecturer', 'student'].includes(activeWorkspace.role || ''),
-    );
-    const visibleWorkspaceLinks = canUseAcademicFeatures
-        ? [baseWorkspaceLinks[0], ...academicWorkspaceLinks, ...baseWorkspaceLinks.slice(1)]
+    const canUseSharedFeatures = activeWorkspace?.type === 'shared';
+    const visibleWorkspaceLinks = canUseSharedFeatures
+        ? [baseWorkspaceLinks[0], ...sharedWorkspaceLinks, ...baseWorkspaceLinks.slice(1)]
         : baseWorkspaceLinks;
     return <div className="app-shell">
         <a className="skip-link" href="#workspace-main">Skip to main content</a>
@@ -295,7 +290,7 @@ export function AppLayout() {
                     <span className="avatar">
                         {user.profile_image_url ? <img src={user.profile_image_url} alt="" /> : (user.first_name?.[0] || user.full_name.slice(0, 1)).toUpperCase()}
                     </span>
-                    <span className="account-details"><strong>{user.full_name}</strong><small>{user.is_admin ? 'Platform administrator' : activeWorkspace?.type === 'shared' ? `${activeWorkspace.role} · Shared workspace` : 'Personal workspace'}</small></span>
+                    <span className="account-details"><strong>{user.full_name}</strong><small>{user.is_admin ? 'Platform administrator' : activeWorkspace?.type === 'shared' ? `${activeWorkspace.role === 'owner' ? 'Owner' : activeWorkspace.role === 'admin' ? 'Administrator' : 'Member'} · Shared workspace` : 'Personal workspace'}</small></span>
                     <ChevronDown size={15} aria-hidden="true" />
                 </Link>
                 <fetcher.Form method="post" action="/logout"><button className="icon-button signout-button" type="submit" disabled={signingOut} title="Sign out" aria-label="Sign out"><LogOut size={17} aria-hidden="true" /><span>Sign out</span></button></fetcher.Form>
@@ -311,7 +306,7 @@ export function AppLayout() {
                         {adminLinks.map(item => <NavLink viewTransition key={item.to} to={item.to} onClick={() => setMobileNav(false)} className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}><item.icon size={17} aria-hidden="true" /><span>{item.label}</span></NavLink>)}
                     </>}
                 </nav>
-                <div className="sidebar-bottom-note"><ShieldCheck size={17} aria-hidden="true" /><p>Similarity results are indicators for review, not automatic findings of academic misconduct.</p></div>
+                <div className="sidebar-bottom-note"><ShieldCheck size={17} aria-hidden="true" /><p>Similarity results are indicators for review, not automatic findings of plagiarism.</p></div>
                 <Link viewTransition to="/faq" className="sidebar-help"><CircleHelp size={16} aria-hidden="true" /> Help and guidance</Link>
             </aside>
             {mobileNav && <button type="button" className="sidebar-backdrop" onClick={() => { setMobileNav(false); menuToggleRef.current?.focus(); }} aria-label="Close workspace navigation" />}

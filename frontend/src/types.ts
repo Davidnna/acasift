@@ -47,6 +47,7 @@ export interface Passage {
 
 export interface ComparisonResult {
     id: number;
+    source_scope?: 'global' | 'workspace' | 'request' | 'personal';
     reference_document: DocumentRecord;
     cosine_similarity: number;
     matched_ngram_coverage: number;
@@ -68,6 +69,15 @@ export interface DashboardData {
     };
     recent_documents: DocumentRecord[];
     recent_comparisons: ComparisonSummary[];
+    my_submission_requests?: {
+        id: number;
+        title: string;
+        workspace_name: string | null;
+        status: string;
+        due_at: string | null;
+        submission_count: number;
+        last_submitted_at: string | null;
+    }[];
 }
 
 
@@ -95,7 +105,7 @@ export interface WorkspaceRecord {
     description: string | null;
     type: 'personal' | 'shared';
     status: string;
-    role: 'owner' | 'admin' | 'lecturer' | 'student' | 'member' | null;
+    role: 'owner' | 'admin' | 'member' | null;
     is_owner: boolean;
     member_count: number;
     created_at: string;
@@ -103,10 +113,7 @@ export interface WorkspaceRecord {
 
 export interface WorkspaceInviteRecord {
     id: number;
-    role: 'member' | 'student' | 'lecturer';
-    course_id: number | null;
-    course_title: string | null;
-    course_code: string | null;
+    role: 'member';
     status: 'active' | 'revoked' | 'expired' | 'used_up';
     expires_at: string | null;
     max_uses: number | null;
@@ -123,129 +130,92 @@ export interface WorkspaceData {
     is_workspace_owner: boolean;
     members: { id: number; full_name: string; email: string; role: string; }[];
     invites: WorkspaceInviteRecord[];
-    courses: { id: number; code: string; title: string; status: string; }[];
 }
 
 export interface WorkspaceInvitePreviewData {
     workspace: WorkspaceRecord;
-    role: 'member' | 'student' | 'lecturer';
-    course: { id: number; code: string; title: string; } | null;
+    role: 'member';
     is_member: boolean;
-    is_course_member: boolean;
     invited_by: string;
 }
 
 
-export interface CourseRecord {
+export interface SubmissionRequestRecord {
     id: number;
     workspace_id: number;
-    code: string;
-    title: string;
-    description: string | null;
-    status: string;
-    my_role: 'lecturer' | 'student' | null;
-    is_instructor: boolean;
-    member_count: number;
-    assignment_count: number;
-    created_at: string;
-}
-
-export interface CourseListData {
-    workspace: { id: number; name: string; type: 'personal' | 'shared'; };
-    courses: CourseRecord[];
-    can_create: boolean;
-    can_join: boolean;
-}
-
-export interface CourseMemberRecord {
-    id: number;
-    full_name: string;
-    email: string;
-    role: 'lecturer' | 'student';
-    enrolled_at: string;
-}
-
-export interface AssignmentRecord {
-    id: number;
-    course_id: number;
+    workspace_name: string | null;
     title: string;
     description: string | null;
     instructions: string | null;
+    opens_at: string | null;
     due_at: string | null;
-    status: 'draft' | 'published' | 'closed';
+    status: 'draft' | 'open' | 'closed' | 'archived';
+    accepted_file_types: string[];
+    max_file_size_mb: number;
     allow_late_submissions: boolean;
     allow_resubmissions: boolean;
+    allow_external_participants: boolean;
     created_by: string | null;
     created_at: string;
     submission_count?: number;
-    course_code?: string;
-    course_title?: string;
-    is_instructor?: boolean;
+    participant_count?: number;
+    reviewers?: { id: number; full_name: string; email: string; }[];
+    invites?: SubmissionRequestInviteRecord[];
 }
 
-export interface CourseDetailData {
-    course: CourseRecord;
-    assignments: AssignmentRecord[];
-    can_manage: boolean;
-    members: CourseMemberRecord[];
-}
-
-export interface AcademicSubmissionRecord {
+export interface SubmissionRequestInviteRecord {
     id: number;
-    assignment_id: number;
+    status: 'active' | 'revoked' | 'expired' | 'used_up';
+    expires_at: string | null;
+    max_uses: number | null;
+    use_count: number;
+    created_at: string;
+    created_by: string | null;
+}
+
+export interface SubmissionRequestListData {
+    workspace: { id: number; name: string; };
+    can_manage: boolean;
+    submission_requests: SubmissionRequestRecord[];
+    active_workspace: WorkspaceRecord;
+}
+
+export interface SubmissionRequestSubmission {
+    id: number;
     document_id: number;
     title: string;
     filename: string;
-    attempt_number: number;
     status: string;
+    attempt_number: number;
     is_late: boolean;
     submitted_at: string;
+    comparison_id: number | null;
     comparison_status: string;
-    has_assessment: boolean;
-    assessment_decision: string | null;
-    student?: { id: number; full_name: string; email: string; };
+    contributor?: { id: number; full_name: string; email: string; };
+    review: {
+        decision: 'no_action' | 'revision_requested' | 'further_review' | string;
+        feedback: string | null;
+        reviewer: string | null;
+        reviewed_at: string | null;
+    } | null;
 }
 
-export interface AssignmentDetailData {
-    assignment: AssignmentRecord;
-    course: CourseRecord;
-    is_instructor: boolean;
-    can_submit: boolean;
-    is_past_due: boolean;
-    submissions: AcademicSubmissionRecord[];
-}
-
-export interface AcademicAssessment {
-    decision: 'no_concern' | 'discuss_with_student' | 'further_review';
-    feedback: string | null;
-    assessor: string | null;
-    reviewed_at: string;
-}
-
-export interface AcademicComparisonResult {
-    id: number;
-    reference_document: { id: number; title: string; filename: string; student: string; };
-    cosine_similarity: number;
-    matched_ngram_coverage: number;
-    matched_ngram_count: number;
-    total_query_ngrams: number;
-    passages: { id: number; matched_text: string; reference_text: string; submitted_start: number; submitted_end: number; }[];
-}
-
-export interface AcademicSubmissionDetailData {
-    submission: AcademicSubmissionRecord;
-    assignment: AssignmentRecord;
-    course: CourseRecord;
-    is_instructor: boolean;
-    assessment: AcademicAssessment | null;
-    comparison: null | {
-        status: string;
-        started_at: string | null;
-        completed_at: string | null;
-        peer_count: number;
-        highest_cosine_similarity?: number;
-        highest_ngram_coverage?: number;
-        note?: string;
-        results?: AcademicComparisonResult[];
+export interface SubmissionRequestDetailData {
+    submission_request: SubmissionRequestRecord;
+    submissions: SubmissionRequestSubmission[];
+    workspace_members: { id: number; full_name: string; email: string; }[];
+    permissions: {
+        can_manage: boolean;
+        can_review: boolean;
+        can_submit: boolean;
+        can_join: boolean;
+        is_participant: boolean;
+        is_external_participant: boolean;
     };
+}
+
+export interface SubmissionRequestInvitePreviewData {
+    submission_request: SubmissionRequestRecord;
+    invited_by: string;
+    already_joined: boolean;
 }

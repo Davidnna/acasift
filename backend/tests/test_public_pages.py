@@ -38,7 +38,7 @@ class ReactAppTests(unittest.TestCase):
         paths = [
             "/", "/about", "/features", "/how-it-works", "/faq", "/access",
             "/login", "/register", "/verify-email", "/resend-verification",
-            "/forgot-password", "/reset-password", "/setup/first-admin", "/app/dashboard", "/app/documents", "/app/account", "/app/workspaces", "/app/references/new", "/app/admin/users",
+            "/forgot-password", "/reset-password", "/setup/first-admin", "/app/dashboard", "/app/documents", "/app/account", "/app/workspaces", "/app/submission-requests", "/app/submission-requests/1", "/join-submission-request?token=test-token", "/app/references/new", "/app/admin/users",
         ]
         for path in paths:
             with self.subTest(path=path):

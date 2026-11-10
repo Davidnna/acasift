@@ -9,7 +9,7 @@ from werkzeug.security import generate_password_hash
 from config import Config
 from app import create_app
 from app.extensions import db
-from app.models import CourseMembership, User, Workspace, WorkspaceInvite, WorkspaceMembership
+from app.models import User, Workspace, WorkspaceInvite, WorkspaceMembership
 from app.services.workspace_service import ensure_personal_workspace
 
 
@@ -39,8 +39,8 @@ class WorkspaceInviteTests(unittest.TestCase):
         self._login(self.owner_client, self.owner.email)
 
         response = self.owner_client.post("/api/workspaces", json={
-            "name": "CSC 401 Project Submissions",
-            "description": "A shared space for project submissions.",
+            "name": "Research Group",
+            "description": "A shared space for document collection and review.",
         })
         self.assertEqual(response.status_code, 201)
         self.workspace_id = response.get_json()["workspace"]["id"]
@@ -78,7 +78,7 @@ class WorkspaceInviteTests(unittest.TestCase):
     def _create_invite(self, **payload):
         response = self.owner_client.post(
             f"/api/workspaces/{self.workspace_id}/invites",
-            json=payload or {"role": "student"},
+            json=payload or {"role": "member"},
         )
         self.assertEqual(response.status_code, 201, response.get_json())
         result = response.get_json()
@@ -91,19 +91,19 @@ class WorkspaceInviteTests(unittest.TestCase):
             workspace_id=self.workspace_id, user_id=self.owner.user_id
         ).one()
         self.assertEqual(workspace.workspace_type, "shared")
-        self.assertEqual(workspace.name, "CSC 401 Project Submissions")
+        self.assertEqual(workspace.name, "Research Group")
         self.assertEqual(membership.role, "owner")
 
     def test_invite_token_is_hashed_and_preview_is_limited(self):
         result, token = self._create_invite(
-            role="student",
+            role="member",
             max_uses=2,
             expires_at=(datetime.now(timezone.utc) + timedelta(days=2)).isoformat(),
         )
         invite = db.session.get(WorkspaceInvite, result["invite"]["id"])
         self.assertEqual(len(invite.token_hash), 64)
         self.assertNotEqual(invite.token_hash, token)
-        self.assertEqual(result["invite"]["role"], "student")
+        self.assertEqual(result["invite"]["role"], "member")
         manager_view = self.owner_client.get("/api/workspaces").get_json()
         manager_invite = next(item for item in manager_view["invites"] if item["id"] == invite.invite_id)
         self.assertIsNotNone(manager_invite["expires_at"])
@@ -114,14 +114,14 @@ class WorkspaceInviteTests(unittest.TestCase):
         )
         self.assertEqual(preview.status_code, 200)
         payload = preview.get_json()
-        self.assertEqual(payload["workspace"]["name"], "CSC 401 Project Submissions")
-        self.assertEqual(payload["role"], "student")
+        self.assertEqual(payload["workspace"]["name"], "Research Group")
+        self.assertEqual(payload["role"], "member")
         self.assertTrue(payload["is_member"])
         self.assertNotIn("expires_at", payload)
 
     def test_invited_user_can_join_with_role_and_invite_usage_is_counted(self):
-        result, token = self._create_invite(role="student", max_uses=1)
-        invited = self._make_user("student@example.test", "Student User")
+        result, token = self._create_invite(role="member", max_uses=1)
+        invited = self._make_user("member@example.test", "Workspace Member")
         client = self.app.test_client()
         self._login(client, invited.email)
 
@@ -130,7 +130,7 @@ class WorkspaceInviteTests(unittest.TestCase):
         membership = WorkspaceMembership.query.filter_by(
             workspace_id=self.workspace_id, user_id=invited.user_id
         ).one()
-        self.assertEqual(membership.role, "student")
+        self.assertEqual(membership.role, "member")
 
         invite = db.session.get(WorkspaceInvite, result["invite"]["id"])
         self.assertEqual(invite.use_count, 1)
@@ -155,7 +155,7 @@ class WorkspaceInviteTests(unittest.TestCase):
         self.assertEqual(preview.status_code, 410)
 
     def test_invitation_cannot_grant_admin_or_owner_role(self):
-        for role in ("admin", "owner"):
+        for role in ("admin", "owner", "student", "lecturer"):
             response = self.owner_client.post(
                 f"/api/workspaces/{self.workspace_id}/invites",
                 json={"role": role},
@@ -177,37 +177,6 @@ class WorkspaceInviteTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
-    def test_course_specific_student_invite_automatically_enrols_the_student(self):
-        course_response = self.owner_client.post("/api/courses", json={
-            "code": "CSC401",
-            "title": "Research Methods",
-            "description": "Project and research methods.",
-        })
-        self.assertEqual(course_response.status_code, 201, course_response.get_json())
-        course_id = course_response.get_json()["course"]["id"]
-
-        result, token = self._create_invite(
-            role="student",
-            course_id=course_id,
-            max_uses=5,
-        )
-        self.assertEqual(result["invite"]["course_id"], course_id)
-
-        student = self._make_user("course-student@example.test", "Course Student")
-        client = self.app.test_client()
-        self._login(client, student.email)
-        response = client.post("/api/workspaces/invites/accept", json={"token": token})
-        self.assertEqual(response.status_code, 201, response.get_json())
-
-        workspace_membership = WorkspaceMembership.query.filter_by(
-            workspace_id=self.workspace_id, user_id=student.user_id, status="active"
-        ).one()
-        course_membership = CourseMembership.query.filter_by(
-            course_id=course_id, user_id=student.user_id, status="active"
-        ).one()
-        self.assertEqual(workspace_membership.role, "student")
-        self.assertEqual(course_membership.role, "student")
-
     def test_workspace_owner_can_promote_an_existing_member_to_admin(self):
         target = self._make_user("newadmin@example.test", "New Admin")
         add_response = self.owner_client.post(
@@ -226,7 +195,7 @@ class WorkspaceInviteTests(unittest.TestCase):
         self.assertEqual(membership.role, "admin")
 
     def test_expired_invitation_does_not_disclose_expiration_to_recipient(self):
-        result, token = self._create_invite(role="student")
+        result, token = self._create_invite(role="member")
         invite = db.session.get(WorkspaceInvite, result["invite"]["id"])
         invite.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
         db.session.commit()
@@ -250,10 +219,10 @@ class WorkspaceInviteTests(unittest.TestCase):
 
     def test_owner_leaving_transfers_ownership_to_highest_priority_role(self):
         admin = self._make_user("successor-admin@example.test", "Successor Admin")
-        lecturer = self._make_user("successor-lecturer@example.test", "Successor Lecturer")
-        student = self._make_user("successor-student@example.test", "Successor Student")
+        collaborator_one = self._make_user("successor-one@example.test", "Successor One")
+        collaborator_two = self._make_user("successor-two@example.test", "Successor Two")
         member = self._make_user("successor-member@example.test", "Successor Member")
-        for user, role in ((member, "member"), (student, "student"), (lecturer, "lecturer"), (admin, "admin")):
+        for user, role in ((member, "member"), (collaborator_one, "member"), (collaborator_two, "member"), (admin, "admin")):
             db.session.add(WorkspaceMembership(
                 workspace_id=self.workspace_id, user_id=user.user_id, role=role, status="active"
             ))

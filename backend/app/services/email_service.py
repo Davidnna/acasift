@@ -226,7 +226,7 @@ def _branded_email(
           <tr>
             <td style="background-color:#F9FAFC;padding:22px 32px;border:1px solid #E6EBF2;border-top:0;border-radius:0 0 16px 16px;text-align:center;">
               <div style="color:#14243D;font-size:13px;line-height:20px;font-weight:700;">AcaSift</div>
-              <div style="margin-top:3px;color:#7A8798;font-size:11px;line-height:18px;">Academic similarity analysis</div>
+              <div style="margin-top:3px;color:#7A8798;font-size:11px;line-height:18px;">Document similarity analysis</div>
               <div style="margin-top:12px;color:#9AA5B3;font-size:10px;line-height:17px;">This is an automated account-security message. Please do not reply to this email.<br>&copy; {year} AcaSift. All rights reserved.</div>
             </td>
           </tr>

@@ -20,12 +20,14 @@ class SubmissionRequest(db.Model):
     instructions = db.Column(db.Text, nullable=True)
     opens_at = db.Column(db.DateTime(timezone=True), nullable=True)
     due_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    allow_late_submissions = db.Column(db.Boolean, nullable=False, default=False)
     status = db.Column(db.String(24), nullable=False, default="draft", index=True)
     accepted_file_types = db.Column(db.JSON, nullable=False, default=list)
-    max_file_size_mb = db.Column(db.Integer, nullable=False, default=20)
+    max_file_size_mb = db.Column(db.Integer, nullable=False, default=15)
     allow_resubmissions = db.Column(db.Boolean, nullable=False, default=False)
     allow_external_participants = db.Column(db.Boolean, nullable=False, default=True)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
+    # Legacy source identifier keeps migration idempotent and preserves historical traceability.
     legacy_assignment_id = db.Column(db.Integer, db.ForeignKey("assignments.assignment_id"), nullable=True, unique=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
@@ -101,6 +103,7 @@ class DocumentSubmission(db.Model):
     contributor_user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
     document_id = db.Column(db.Integer, db.ForeignKey("documents.document_id"), nullable=False, unique=True, index=True)
     comparison_id = db.Column(db.Integer, db.ForeignKey("comparisons.comparison_id"), nullable=True, unique=True, index=True)
+    # Legacy source identifier keeps migration idempotent and preserves historical traceability.
     legacy_submission_id = db.Column(db.Integer, db.ForeignKey("academic_submissions.submission_id"), nullable=True, unique=True)
     attempt_number = db.Column(db.Integer, nullable=False, default=1)
     status = db.Column(db.String(24), nullable=False, default="submitted", index=True)

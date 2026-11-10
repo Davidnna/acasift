@@ -17,13 +17,18 @@ function displayDate(value: string | null) {
     return value ? new Date(value).toLocaleString() : 'No expiration';
 }
 
+function formatWorkspaceRole(role: string | null) {
+    if (role === 'owner') return 'Owner';
+    if (role === 'admin') return 'Administrator';
+    return 'Member';
+}
+
 export function WorkspacesPage() {
     const data = useLoaderData() as WorkspaceData;
     const actionData = useActionData() as WorkspaceActionData | undefined;
     const navigation = useNavigation();
     const busy = navigation.state === 'submitting';
     const [copied, setCopied] = useState(false);
-    const [inviteRole, setInviteRole] = useState('member');
     const active = data.workspaces.find(item => item.id === data.active_workspace_id);
     const isShared = active?.type === 'shared';
 
@@ -42,7 +47,7 @@ export function WorkspacesPage() {
         <PageHeading
             eyebrow="WORKSPACE MANAGEMENT"
             title="Your workspaces"
-            description="Keep personal work private or create shared spaces for any group, class, project or team."
+            description="Keep individual work private or collaborate with others in shared workspaces."
         />
         {actionData?.error && <Notice tone="danger">{actionData.error}</Notice>}
         {actionData?.success && <Notice tone="success">{actionData.success}</Notice>}
@@ -61,20 +66,20 @@ export function WorkspacesPage() {
 
         <section className="panel">
             <div className="panel-heading">
-                <div><h2><Layers3 size={17} /> Available workspaces</h2><p>Choose where new documents and comparisons should be stored.</p></div>
+                <div><h2><Layers3 size={17} /> Available workspaces</h2><p>Choose where your new documents and comparisons should be stored.</p></div>
             </div>
             <div className="workspace-card-list">
                 {data.workspaces.map(workspace => <div className={`workspace-choice ${workspace.id === data.active_workspace_id ? 'workspace-choice-active' : ''}`} key={workspace.id}>
                     <div className="workspace-choice-icon">{workspace.type === 'shared' ? <Users size={19} /> : <Layers3 size={19} />}</div>
                     <div className="workspace-choice-copy">
                         <strong>{workspace.name}</strong>
-                        <span>{workspace.type === 'personal' ? 'Private personal workspace' : `Shared workspace · ${workspace.member_count} members`} · {workspace.role}</span>
+                        <span>{workspace.type === 'personal' ? 'Private personal workspace' : `Shared workspace · ${workspace.member_count} members`} · {formatWorkspaceRole(workspace.role)}</span>
                         {workspace.description && <span>{workspace.description}</span>}
                     </div>
                     {workspace.id === data.active_workspace_id ? <span className="category-tag">Current workspace</span> : <Form method="post"><input type="hidden" name="_intent" value="switch" /><input type="hidden" name="workspace_id" value={workspace.id} /><button className="button button-secondary button-small" disabled={busy}>Switch workspace</button></Form>}
                 </div>)}
             </div>
-            {active && <p className="form-hint">New submissions and comparisons will be associated with <strong>{active.name}</strong>.</p>}
+            {active && <p className="form-hint">New personal documents and comparisons will be associated with <strong>{active.name}</strong>. Submission Request documents remain associated with their request.</p>}
             {isShared && active && <section className="workspace-settings">
                 {data.can_manage_members && <>
                     <div className="panel-divider" />
@@ -90,7 +95,7 @@ export function WorkspacesPage() {
                 </>}
                 <div className="panel-divider" />
                 <div className="workspace-danger-zone">
-                    <div><strong>Leave this workspace</strong><p>You will lose access to its shared documents, courses and assignments. You can rejoin with a new invitation.</p></div>
+                    <div><strong>Leave this workspace</strong><p>You will lose access to its shared documents, submission requests and reference materials. You can rejoin with a new invitation.</p></div>
                     <Form method="post" onSubmit={event => { if (!window.confirm('Leave this workspace?')) event.preventDefault(); }}>
                         <input type="hidden" name="_intent" value="leave" />
                         <button className="button button-secondary" disabled={busy}>Leave workspace</button>
@@ -104,21 +109,21 @@ export function WorkspacesPage() {
                     </Form>
                 </div>}
             </section>}
-            {data.can_manage_members && isShared && <div className="form-actions"><Link className="button button-secondary" to="/app/references/new"><BookOpen size={15} /> Add shared reference</Link></div>}
+            {data.can_manage_members && isShared && <div className="form-actions"><Link className="button button-secondary" to="/app/references/new"><BookOpen size={15} /> Add shared reference</Link><Link className="button button-primary" to="/app/submission-requests"><Plus size={15} /> Manage submission requests</Link></div>}
         </section>
 
         <div className="admin-content-grid">
             <section className="panel form-panel">
                 <div className="panel-heading">
-                    <div><h2><Plus size={17} /> Create a shared workspace</h2><p>Start a space for a class, research group, project team, organisation or any other collaboration.</p></div>
+                    <div><h2><Plus size={17} /> Create a shared workspace</h2><p>Start a shared space for a team, research group, organisation or any collaboration.</p></div>
                 </div>
                 <Form method="post" className="form-stack">
                     <input type="hidden" name="_intent" value="create" />
                     <label htmlFor="workspace-name">Workspace name</label>
-                    <input id="workspace-name" name="name" maxLength={180} required placeholder="e.g. CSC 401 Project Submissions" />
+                    <input id="workspace-name" name="name" maxLength={180} required placeholder="e.g. Product Research Team" />
                     <label htmlFor="workspace-description">Description <span>Optional</span></label>
                     <textarea id="workspace-description" name="description" rows={3} maxLength={2000} placeholder="What will this workspace be used for?" />
-                    <div className="form-hint">You will become the workspace owner. You can appoint additional administrators and invite as many collaborators as you need.</div>
+                    <div className="form-hint">You will become the workspace owner. You can appoint administrators and invite collaborators.</div>
                     <button className="button button-primary" disabled={busy}>{busy ? 'Creating workspace…' : 'Create shared workspace'} <Plus size={15} /></button>
                 </Form>
             </section>
@@ -126,27 +131,15 @@ export function WorkspacesPage() {
             {isShared && data.can_manage_members && <>
                 <section className="panel form-panel">
                     <div className="panel-heading">
-                        <div><h2><Link2 size={17} /> Invite people with a link</h2><p>Anyone with the link can join while it is active.</p></div>
+                        <div><h2><Link2 size={17} /> Invite people with a link</h2><p>Anyone with the link can join as a workspace member while it remains active.</p></div>
                     </div>
                     <Form method="post" className="form-stack">
                         <input type="hidden" name="_intent" value="create-invite" />
-                        <label htmlFor="invite-role">Role granted by this link</label>
-                        <select id="invite-role" name="role" value={inviteRole} onChange={event => setInviteRole(event.target.value)}>
-                            <option value="member">Member</option>
-                            <option value="student">Student</option>
-                            <option value="lecturer">Lecturer</option>
-                        </select>
-                        <label htmlFor="invite-course">Course access <span>Optional</span></label>
-                        <select id="invite-course" name="course_id" defaultValue="" disabled={inviteRole === 'member'}>
-                            <option value="">Workspace access only</option>
-                            {data.courses.map(course => <option key={course.id} value={course.id}>{course.code} — {course.title}</option>)}
-                        </select>
-                        <p className="form-hint">Choose Student or Lecturer to enable course-specific invitations. Recipients are enrolled in the selected course automatically when they join.</p>
                         <label htmlFor="invite-expiry">Expiration date and time <span>Optional</span></label>
                         <input id="invite-expiry" name="expires_at" type="datetime-local" />
                         <label htmlFor="invite-max-uses">Maximum number of uses <span>Optional</span></label>
                         <input id="invite-max-uses" name="max_uses" type="number" min="1" max="10000" placeholder="Leave blank for unlimited uses" />
-                        <div className="form-hint">Invitation links cannot grant administrator or owner privileges. The workspace owner can appoint administrators directly.</div>
+                        <div className="form-hint">Invitation links grant ordinary Member access. Only the workspace owner can appoint administrators. Request reviewers are assigned separately within each Submission Request.</div>
                         <button className="button button-primary" disabled={busy}>{busy ? 'Creating link…' : 'Create invitation link'} <Link2 size={15} /></button>
                     </Form>
                 </section>
@@ -159,8 +152,8 @@ export function WorkspacesPage() {
                         {data.invites.map(invite => <div className="account-row workspace-invite-row" key={invite.id}>
                             <span className="workspace-invite-icon"><Link2 size={17} /></span>
                             <span className="account-row-copy">
-                                <strong>{invite.role.charAt(0).toUpperCase() + invite.role.slice(1)} invitation</strong>
-                                <small>{invite.use_count}{invite.max_uses === null ? ' uses' : ` of ${invite.max_uses} uses`}{invite.course_title ? ` · ${invite.course_code} — ${invite.course_title}` : ''} · Expires: {displayDate(invite.expires_at)}</small>
+                                <strong>Member invitation</strong>
+                                <small>{invite.use_count}{invite.max_uses === null ? ' uses' : ` of ${invite.max_uses} uses`} · Expires: {displayDate(invite.expires_at)}</small>
                             </span>
                             <span className={`category-tag ${invite.status === 'active' ? 'status-active' : ''}`}>{invite.status.replace('_', ' ')}</span>
                             {invite.status === 'active' && <Form method="post">
@@ -180,15 +173,13 @@ export function WorkspacesPage() {
                         {data.members.map(member => <div className="account-row workspace-member-row" key={member.id}>
                             <span className="avatar">{member.full_name.slice(0, 1).toUpperCase()}</span>
                             <span className="account-row-copy"><strong>{member.full_name}</strong><small>{member.email}</small></span>
-                            <span className="category-tag">{member.role}</span>
+                            <span className="category-tag">{formatWorkspaceRole(member.role)}</span>
                             {member.role !== 'owner' && (data.is_workspace_owner || member.role !== 'admin') && <>
                                 <Form method="post" className="workspace-member-role-form">
                                     <input type="hidden" name="_intent" value="update-role" />
                                     <input type="hidden" name="user_id" value={member.id} />
                                     <select name="role" aria-label={`Role for ${member.full_name}`} defaultValue={member.role}>
                                         <option value="member">Member</option>
-                                        <option value="student">Student</option>
-                                        <option value="lecturer">Lecturer</option>
                                         {data.is_workspace_owner && <option value="admin">Administrator</option>}
                                     </select>
                                     <button className="button button-secondary button-small" disabled={busy}>Save</button>
@@ -209,8 +200,7 @@ export function WorkspacesPage() {
                         <label htmlFor="member-email">Email address</label><input id="member-email" name="email" type="email" required placeholder="person@example.com" />
                         <label htmlFor="member-role">Workspace role</label>
                         <select id="member-role" name="role" defaultValue="member">
-                            <option value="member">Member</option><option value="student">Student</option><option value="lecturer">Lecturer</option>
-                            {data.is_workspace_owner && <option value="admin">Administrator</option>}
+                            <option value="member">Member</option>{data.is_workspace_owner && <option value="admin">Administrator</option>}
                         </select>
                         <button className="button button-secondary" disabled={busy}>Add member</button>
                     </Form>

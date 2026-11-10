@@ -15,9 +15,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.decorators import admin_required
 from app.extensions import csrf, db
-from app.models import (
-    AcademicSubmission, Comparison, Document, User,
-)
+from app.models import Comparison, Document, User, Workspace
 from app.services.auth_security import consume_auth_limits
 from app.services.email_service import (
     email_is_configured,
@@ -27,6 +25,7 @@ from app.services.email_service import (
 )
 from app.services.workspace_service import ensure_personal_workspace, get_active_workspace, membership_for, is_workspace_manager
 from app.services.workflow_service import run_comparison, save_uploaded_document
+from app.submission_models import DocumentSubmission, SubmissionRequest, SubmissionRequestParticipant
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -96,7 +95,7 @@ def _document_payload(document):
     }
 
 
-def _comparison_payload(comparison, include_results=False):
+def _comparison_payload(comparison, include_results=False, hide_peer_source_details=False):
     payload = {
         "id": comparison.comparison_id,
         "status": comparison.status,
@@ -113,6 +112,7 @@ def _comparison_payload(comparison, include_results=False):
         payload["results"] = []
         for result in results:
             reference = result.reference_document
+            is_request_peer = reference.document_type == "submission"
             passages = []
             for passage in result.passages:
                 passages.append({
@@ -122,11 +122,31 @@ def _comparison_payload(comparison, include_results=False):
                     "reference_start": passage.reference_start,
                     "reference_end": passage.reference_end,
                     "matched_text": passage.matched_text,
-                    "reference_text": (reference.extracted_text or "")[passage.reference_start:passage.reference_end],
+                    "reference_text": (
+                        "The matching excerpt is hidden to protect another participant's document."
+                        if hide_peer_source_details and is_request_peer
+                        else (reference.extracted_text or "")[passage.reference_start:passage.reference_end]
+                    ),
                 })
+            reference_payload = _document_payload(reference)
+            if hide_peer_source_details and is_request_peer:
+                reference_payload = {
+                    **reference_payload,
+                    "title": "Another submission in this request",
+                    "original_filename": "Protected submission",
+                    "uploader": None,
+                    "user_id": None,
+                }
+            source_scope = (
+                "request" if is_request_peer else
+                "workspace" if reference.visibility_scope == "workspace" else
+                "personal" if reference.visibility_scope == "private" else
+                "global"
+            )
             payload["results"].append({
                 "id": result.result_id,
-                "reference_document": _document_payload(reference),
+                "source_scope": source_scope,
+                "reference_document": reference_payload,
                 "cosine_similarity": float(result.cosine_similarity),
                 "matched_ngram_coverage": float(result.matched_ngram_coverage),
                 "matched_ngram_count": result.matched_ngram_count,
@@ -713,13 +733,9 @@ def dashboard():
         workspace_id=workspace.workspace_id,
         document_type="submission",
     )
-    academic_comparison_ids = db.session.query(AcademicSubmission.comparison_id).filter(
-        AcademicSubmission.comparison_id.isnot(None)
-    )
     comparison_query = Comparison.query.filter(
         Comparison.user_id == current_user.user_id,
         Comparison.workspace_id == workspace.workspace_id,
-        ~Comparison.comparison_id.in_(academic_comparison_ids),
     )
     reference_query = Document.query.filter(
         Document.document_type == "reference",
@@ -737,6 +753,43 @@ def dashboard():
             )
         ),
     )
+    request_records = (
+        SubmissionRequest.query.join(SubmissionRequestParticipant)
+        .join(SubmissionRequest.workspace)
+        .filter(
+            SubmissionRequestParticipant.user_id == current_user.user_id,
+            SubmissionRequestParticipant.status == "active",
+            Workspace.status == "active",
+            SubmissionRequest.status.in_(("draft", "open", "closed", "archived")),
+        )
+        .order_by(SubmissionRequest.updated_at.desc())
+        .limit(50)
+        .all()
+    )
+    submission_summaries = db.session.query(
+        DocumentSubmission.request_id,
+        func.count(DocumentSubmission.submission_id),
+        func.max(DocumentSubmission.submitted_at),
+    ).filter_by(contributor_user_id=current_user.user_id).group_by(
+        DocumentSubmission.request_id
+    ).all()
+    summary_by_request = {
+        request_id: {"count": count, "last_submitted_at": last_submitted_at}
+        for request_id, count, last_submitted_at in submission_summaries
+    }
+    my_submission_requests = []
+    for item in request_records:
+        summary = summary_by_request.get(item.request_id, {})
+        my_submission_requests.append({
+            "id": item.request_id,
+            "title": item.title,
+            "workspace_name": item.workspace.name if item.workspace else None,
+            "status": item.status,
+            "due_at": _date(item.due_at),
+            "submission_count": summary.get("count", 0),
+            "last_submitted_at": _date(summary.get("last_submitted_at")),
+        })
+
     return jsonify({
         "stats": {
             "document_count": document_query.count(),
@@ -745,6 +798,7 @@ def dashboard():
         },
         "recent_documents": [_document_payload(item) for item in document_query.order_by(Document.uploaded_at.desc()).limit(6).all()],
         "recent_comparisons": [_comparison_payload(item) for item in comparison_query.order_by(Comparison.started_at.desc()).limit(6).all()],
+        "my_submission_requests": my_submission_requests,
     })
 
 
@@ -804,15 +858,44 @@ def upload_submission():
 @bp.get("/comparisons/<int:comparison_id>")
 @login_required
 def comparison_detail(comparison_id):
-    # Assignment-based peer comparisons have their own privacy-aware report route.
-    if AcademicSubmission.query.filter_by(comparison_id=comparison_id).first():
-        return _error("Assignment comparison reports must be opened from the relevant course submission page.", 403)
     comparison = db.get_or_404(Comparison, comparison_id)
-    if comparison.user_id != current_user.user_id:
-        return _error("You do not have permission to view this report.", 403)
-    if comparison.workspace_id and not membership_for(current_user, comparison.workspace_id):
-        return _error("This report belongs to a workspace you can no longer access.", 403)
-    return jsonify({"comparison": _comparison_payload(comparison, include_results=True)})
+    from app.submission_models import DocumentSubmission, SubmissionRequestReviewer
+
+    generic_submission = DocumentSubmission.query.filter_by(comparison_id=comparison_id).first()
+    hide_peer_source_details = False
+    if generic_submission:
+        submission_request = generic_submission.request
+        if not submission_request.workspace or submission_request.workspace.status != "active":
+            return _error("This report is no longer available.", 404)
+        membership = membership_for(current_user, submission_request.workspace_id)
+        is_manager = is_workspace_manager(membership)
+        is_reviewer = bool(membership and SubmissionRequestReviewer.query.filter_by(
+            request_id=submission_request.request_id,
+            user_id=current_user.user_id,
+        ).first())
+        active_participation = SubmissionRequestParticipant.query.filter_by(
+            request_id=submission_request.request_id,
+            user_id=current_user.user_id,
+            status="active",
+        ).first()
+        is_contributor = (
+            generic_submission.contributor_user_id == current_user.user_id
+            and active_participation is not None
+        )
+        if not (is_contributor or is_manager or is_reviewer):
+            return _error("You do not have permission to view this report.", 403)
+        hide_peer_source_details = is_contributor and not (is_manager or is_reviewer)
+    else:
+        if comparison.user_id != current_user.user_id:
+            return _error("You do not have permission to view this report.", 403)
+        if comparison.workspace_id and not membership_for(current_user, comparison.workspace_id):
+            return _error("This report belongs to a workspace you can no longer access.", 403)
+
+    return jsonify({"comparison": _comparison_payload(
+        comparison,
+        include_results=True,
+        hide_peer_source_details=hide_peer_source_details,
+    )})
 
 
 @bp.get("/admin/users")

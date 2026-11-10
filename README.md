@@ -13,9 +13,12 @@ support human assessment; they do not automatically determine plagiarism or misc
 - Provide private personal workspaces and shared workspaces for teams, groups and other collaborations.
 - Support workspace owners, administrators and members with role-based access.
 - Manage workspace invitations, including revocation, optional expiry and usage limits.
-- Provide a generic Submission Request model for collecting documents and organising review.
+- Create Submission Requests to collect documents from workspace members and authenticated external participants.
+- Generate restricted request links with optional expiration, usage limits and revocation.
 - Assign request-level reviewers without granting workspace administration privileges.
-- Preserve historical submissions and reports while legacy academic records are migrated.
+- Compare submissions against eligible global references, workspace references and other submissions in the same request.
+- Provide request-level review outcomes and feedback while protecting peer-submission identities and excerpts in contributor reports.
+- Preserve historical submissions and reports while older records are migrated into the generic workflow.
 - Maintain platform reference materials and authorised workspace reference collections.
 - Support account registration, email verification and password recovery.
 - Let users upload, replace and remove a profile picture from their account page.
@@ -101,21 +104,26 @@ current single-origin deployment.
 ## Document submission workflow
 
 A shared workspace owner or administrator can create a Submission Request to collect documents
-for a defined purpose. A request has a title, description, instructions, accepted file types,
-maximum file size, resubmission settings and a status. Workspace members can discover open
-requests and join them. Request-level reviewers can be assigned independently of workspace
-administration privileges.
+for a defined purpose. A request has a title, description, instructions, opening time, optional deadline, accepted file types,
+maximum file size, late-submission and resubmission settings, and a status. Workspace members can
+discover open requests and join them. Request-level reviewers can be assigned independently of
+workspace administration privileges.
 
-The generic data model includes request-specific invitation records for external participation;
-the external account onboarding and document upload workflow is being introduced in a subsequent
-implementation phase. A request's submissions are intended to be compared against eligible global references,
-workspace references and other eligible submissions belonging to that same request. Private
-material from unrelated users or workspaces is not exposed by this comparison policy.
+Administrators can create request-specific links for external participants. A link grants access to
+one request only; participants must sign in with a verified AcaSift account and do not become
+workspace members. Links support optional expiration, usage limits and revocation. Participants
+can upload documents, view their own reports and receive review feedback.
 
-Existing course and assignment records are retained as legacy source records during migration.
-Each legacy assignment is copied into a Submission Request, and its submissions, comparison links,
-participant relationships and review feedback are preserved in the generic records. The legacy
-records are not deleted by this release.
+Each request submission is compared against eligible global references, workspace references and
+other eligible submissions belonging to that same request. A contributor's own submissions and
+previous attempts are excluded from peer-source comparison. Contributor reports hide peer identities
+and peer excerpts; authorised reviewers and workspace administrators can inspect the underlying
+evidence. Private material from unrelated users or workspaces is not exposed by this comparison policy.
+
+Older structured records from previous releases are retained as migration sources. They are
+converted into Submission Requests, preserving their documents, comparison links, participant
+relationships and review feedback. The original records are not exposed through the active product
+interface and are not deleted by this release.
 
 ## Reference materials
 
@@ -123,7 +131,9 @@ AcaSift distinguishes personal, workspace, global and request-level reference so
 is not added to the global reference collection merely because it is uploaded. Global contribution
 requires explicit permission from a person who has the necessary rights. Reference acquisition
 must retain source and licence provenance; publicly accessible does not automatically mean
-reusable.
+reusable. The explicit global-contribution consent interface and external repository ingestion
+pipeline are planned for a later release. In this release, uploaded submissions are not automatically
+added to the global reference collection.
 
 ## Deployment
 
@@ -133,5 +143,7 @@ security checks remain same-origin. A separate frontend and API deployment can b
 a shared custom domain and the required cross-origin session configuration are available.
 
 For hosted deployments, configure the database connection, application secret and email delivery
-settings in the hosting provider's private environment settings. Never commit real credentials,
-API keys or private database connection strings to the repository.
+settings in the hosting provider's private environment settings. For Submission Request comparisons,
+`MAX_COMPARISON_SOURCES` controls the maximum number of documents considered from each eligible
+source scope. Never commit
+real credentials, API keys or private database connection strings to the repository.

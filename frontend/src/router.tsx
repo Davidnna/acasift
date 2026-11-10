@@ -44,20 +44,20 @@ import {
     uploadReference,
     uploadSubmission,
     uploadWorkspaceReference,
-    getCourses,
-    createCourse,
-    joinCourse,
-    getCourse,
-    rotateCourseJoinCode,
-    addCourseMember,
-    getAssignments,
-    createAssignment,
-    getAssignment,
-    submitAssignment,
-    analyseAssignment,
-    getAcademicSubmission,
-    saveAcademicAssessment,
-    updateAssignmentStatus,
+    getSubmissionRequests,
+    createSubmissionRequest,
+    getSubmissionRequest,
+    updateSubmissionRequest,
+    updateSubmissionRequestStatus,
+    joinSubmissionRequest,
+    uploadSubmissionRequest,
+    createSubmissionRequestInvite,
+    revokeSubmissionRequestInvite,
+    assignSubmissionReviewer,
+    removeSubmissionReviewer,
+    saveSubmissionReview,
+    getSubmissionRequestInvitePreview,
+    acceptSubmissionRequestInvite,
 } from './api';
 import { AdminLayout, AppLayout, NotFoundPage, PublicLayout, RootLayout, RouteErrorBoundary } from './components/layouts';
 
@@ -75,7 +75,6 @@ async function requireUser({ request }: LoaderFunctionArgs) {
     return user;
 }
 
-const academicWorkspaceRoles = ['owner', 'admin', 'lecturer', 'student'];
 const workspaceManagerRoles = ['owner', 'admin'];
 
 async function appLoader(args: LoaderFunctionArgs) {
@@ -85,6 +84,24 @@ async function appLoader(args: LoaderFunctionArgs) {
         workspace => workspace.id === workspaceData.active_workspace_id,
     ) || null;
     return { user, activeWorkspace };
+}
+
+async function submissionRequestsLoader(args: LoaderFunctionArgs) {
+    await requireUser(args);
+    const workspaceData = await getWorkspaces(args.request.signal);
+    const activeWorkspace = workspaceData.workspaces.find(
+        workspace => workspace.id === workspaceData.active_workspace_id,
+    );
+    if (!activeWorkspace || activeWorkspace.type !== 'shared') {
+        throw redirect('/app/workspaces');
+    }
+    const requestData = await getSubmissionRequests(activeWorkspace.id, args.request.signal);
+    return { ...requestData, active_workspace: activeWorkspace };
+}
+
+async function submissionRequestDetailLoader(args: LoaderFunctionArgs) {
+    await requireUser(args);
+    return getSubmissionRequest(args.params.requestId || '', args.request.signal);
 }
 
 async function requireWorkspaceRoles(args: LoaderFunctionArgs, allowedRoles: string[]) {
@@ -104,14 +121,6 @@ async function requireWorkspaceRoles(args: LoaderFunctionArgs, allowedRoles: str
     return activeWorkspace;
 }
 
-async function loadForWorkspaceRoles<T>(
-    args: LoaderFunctionArgs,
-    allowedRoles: string[],
-    load: (signal: AbortSignal) => Promise<T>,
-) {
-    await requireWorkspaceRoles(args, allowedRoles);
-    return load(args.request.signal);
-}
 
 async function requireAdmin(args: LoaderFunctionArgs) {
     const user = await requireUser(args);
@@ -240,6 +249,36 @@ async function workspaceInviteAction({ request }: ActionFunctionArgs) {
     }
 }
 
+async function submissionRequestInviteLoader({ request }: LoaderFunctionArgs) {
+    const url = new URL(request.url);
+    const token = url.searchParams.get('token') || '';
+    if (!token) throw new Response('Submission link is missing.', { status: 404 });
+    const user = await getCurrentUser(request.signal);
+    if (!user) {
+        const next = `${url.pathname}${url.search}`;
+        throw redirect(`/login?next=${encodeURIComponent(next)}`);
+    }
+    try {
+        return await getSubmissionRequestInvitePreview(token, request.signal);
+    } catch (error) {
+        if (error instanceof Error && /verify your email/i.test(error.message)) {
+            throw redirect(`/resend-verification?next=${encodeURIComponent(next)}`);
+        }
+        throw error;
+    }
+}
+
+async function submissionRequestInviteAction({ request }: ActionFunctionArgs) {
+    const formData = await request.formData();
+    try {
+        const result = await acceptSubmissionRequestInvite(String(formData.get('token') || ''));
+        throw redirect(`/app/submission-requests/${result.request_id}`);
+    } catch (error) {
+        if (error instanceof Response) throw error;
+        return { error: error instanceof Error ? error.message : 'The submission link could not be accepted.' };
+    }
+}
+
 async function loginLoader({ request }: LoaderFunctionArgs) {
     const user = await getCurrentUser(request.signal);
     if (user) throw redirect('/app/dashboard');
@@ -342,8 +381,7 @@ async function workspacesAction({ request }: ActionFunctionArgs) {
             const expiryValue = String(formData.get('expires_at') || '');
             const maxValue = String(formData.get('max_uses') || '');
             const result = await createWorkspaceInvite(data.active_workspace_id, {
-                role: String(formData.get('role') || 'member'),
-                course_id: String(formData.get('course_id') || '') ? Number(formData.get('course_id')) : null,
+                role: 'member',
                 expires_at: expiryValue ? new Date(expiryValue).toISOString() : null,
                 max_uses: maxValue ? Number(maxValue) : null,
             });
@@ -430,100 +468,99 @@ async function confirmEmailChangeAction({ request }: ActionFunctionArgs) {
 }
 
 
-async function coursesAction({ request }: ActionFunctionArgs) {
+async function submissionRequestsAction({ request }: ActionFunctionArgs) {
     const formData = await request.formData();
-    const intent = String(formData.get('_intent') || '');
     try {
-        if (intent === 'create') {
-            const result = await createCourse({
-                code: String(formData.get('code') || ''),
-                title: String(formData.get('title') || ''),
-                description: String(formData.get('description') || ''),
-            });
-            return { success: 'Course created successfully.', joinCode: result.join_code, course: result.course };
-        }
-        if (intent === 'join') {
-            const result = await joinCourse(String(formData.get('join_code') || ''));
-            throw redirect(`/app/courses/${result.course_id}`);
-        }
-        return { error: 'Unknown course action.' };
+        const workspaceData = await getWorkspaces();
+        const opensValue = String(formData.get('opens_at') || '');
+        const dueValue = String(formData.get('due_at') || '');
+        const result = await createSubmissionRequest({
+            workspace_id: workspaceData.active_workspace_id,
+            title: String(formData.get('title') || ''),
+            description: String(formData.get('description') || ''),
+            instructions: String(formData.get('instructions') || ''),
+            opens_at: opensValue ? new Date(opensValue).toISOString() : null,
+            due_at: dueValue ? new Date(dueValue).toISOString() : null,
+            accepted_file_types: formData.getAll('accepted_file_types').map(value => String(value)),
+            max_file_size_mb: Number(formData.get('max_file_size_mb') || 15),
+            allow_late_submissions: formData.get('allow_late_submissions') === 'on',
+            allow_resubmissions: formData.get('allow_resubmissions') === 'on',
+            allow_external_participants: formData.get('allow_external_participants') === 'on',
+        });
+        throw redirect(`/app/submission-requests/${result.submission_request.id}`);
     } catch (error) {
         if (error instanceof Response) throw error;
-        return { error: error instanceof Error ? error.message : 'The course action could not be completed.' };
+        return { error: error instanceof Error ? error.message : 'The submission request could not be created.' };
     }
 }
 
-async function courseAction({ request, params }: ActionFunctionArgs) {
+async function submissionRequestAction({ request, params }: ActionFunctionArgs) {
     const formData = await request.formData();
-    const courseId = params.courseId || '';
+    const requestId = params.requestId || '';
     const intent = String(formData.get('_intent') || '');
     try {
-        if (intent === 'rotate-code') {
-            const result = await rotateCourseJoinCode(courseId);
-            return { success: result.message, joinCode: result.join_code };
-        }
-        if (intent === 'add-member') {
-            const result = await addCourseMember(courseId, {
-                email: String(formData.get('email') || ''),
-                role: String(formData.get('role') || 'student') as 'student' | 'lecturer',
-            });
-            return { success: result.message };
-        }
-        if (intent === 'create-assignment') {
+        if (intent === 'edit') {
+            const opensValue = String(formData.get('opens_at') || '');
             const dueValue = String(formData.get('due_at') || '');
-            const dueAt = dueValue ? new Date(dueValue).toISOString() : null;
-            const result = await createAssignment(courseId, {
+            const result = await updateSubmissionRequest(requestId, {
                 title: String(formData.get('title') || ''),
                 description: String(formData.get('description') || ''),
                 instructions: String(formData.get('instructions') || ''),
-                due_at: dueAt,
-                status: String(formData.get('status') || 'draft') as 'draft' | 'published',
-                allow_late_submissions: formData.get('allow_late_submissions') === 'on',
-                allow_resubmissions: formData.get('allow_resubmissions') === 'on',
+                opens_at: opensValue ? new Date(opensValue).toISOString() : null,
+                due_at: dueValue ? new Date(dueValue).toISOString() : null,
             });
-            throw redirect(`/app/assignments/${result.assignment.id}`);
-        }
-        return { error: 'Unknown course action.' };
-    } catch (error) {
-        if (error instanceof Response) throw error;
-        return { error: error instanceof Error ? error.message : 'The course could not be updated.' };
-    }
-}
-
-async function assignmentAction({ request, params }: ActionFunctionArgs) {
-    const formData = await request.formData();
-    const assignmentId = params.assignmentId || '';
-    const intent = String(formData.get('_intent') || '');
-    try {
-        if (intent === 'submit') {
-            const result = await submitAssignment(assignmentId, formData);
-            throw redirect(`/app/submissions/${result.submission.id}`);
-        }
-        if (intent === 'analyse') {
-            const result = await analyseAssignment(assignmentId);
             return { success: result.message };
         }
         if (intent === 'status') {
-            const result = await updateAssignmentStatus(assignmentId, String(formData.get('status') || 'draft') as 'draft' | 'published' | 'closed');
+            const result = await updateSubmissionRequestStatus(
+                requestId,
+                String(formData.get('status') || 'draft') as 'draft' | 'open' | 'closed' | 'archived',
+            );
             return { success: result.message };
         }
-        return { error: 'Unknown assignment action.' };
+        if (intent === 'join') {
+            const result = await joinSubmissionRequest(requestId);
+            return { success: result.message };
+        }
+        if (intent === 'submit') {
+            const result = await uploadSubmissionRequest(requestId, formData);
+            if (result.submission.comparison_id) {
+                throw redirect(`/app/comparisons/${result.submission.comparison_id}`);
+            }
+            return { success: result.message };
+        }
+        if (intent === 'create-invite') {
+            const expiryValue = String(formData.get('expires_at') || '');
+            const maxValue = String(formData.get('max_uses') || '');
+            const result = await createSubmissionRequestInvite(requestId, {
+                expires_at: expiryValue ? new Date(expiryValue).toISOString() : null,
+                max_uses: maxValue ? Number(maxValue) : null,
+            });
+            return { success: result.message, inviteUrl: result.join_url };
+        }
+        if (intent === 'revoke-invite') {
+            const result = await revokeSubmissionRequestInvite(requestId, Number(formData.get('invite_id')));
+            return { success: result.message };
+        }
+        if (intent === 'assign-reviewer') {
+            const result = await assignSubmissionReviewer(requestId, Number(formData.get('user_id')));
+            return { success: result.message };
+        }
+        if (intent === 'remove-reviewer') {
+            const result = await removeSubmissionReviewer(requestId, Number(formData.get('user_id')));
+            return { success: result.message };
+        }
+        if (intent === 'review') {
+            const result = await saveSubmissionReview(requestId, Number(formData.get('submission_id')), {
+                decision: String(formData.get('decision') || 'further_review') as 'no_action' | 'revision_requested' | 'further_review',
+                feedback: String(formData.get('feedback') || ''),
+            });
+            return { success: result.message };
+        }
+        return { error: 'Unknown submission request action.' };
     } catch (error) {
         if (error instanceof Response) throw error;
-        return { error: error instanceof Error ? error.message : 'The assignment action could not be completed.' };
-    }
-}
-
-async function academicSubmissionAction({ request, params }: ActionFunctionArgs) {
-    const formData = await request.formData();
-    try {
-        const result = await saveAcademicAssessment(params.submissionId || '', {
-            decision: String(formData.get('decision') || 'further_review') as 'no_concern' | 'discuss_with_student' | 'further_review',
-            feedback: String(formData.get('feedback') || ''),
-        });
-        return { success: result.message };
-    } catch (error) {
-        return { error: error instanceof Error ? error.message : 'The assessment could not be saved.' };
+        return { error: error instanceof Error ? error.message : 'The submission request could not be updated.' };
     }
 }
 
@@ -572,6 +609,7 @@ export const router = createBrowserRouter([
                     { path: 'forgot-password', loader: loginLoader, action: passwordResetRequestAction, lazy: async () => ({ Component: (await import('./pages/auth')).ForgotPasswordPage }) },
                     { path: 'reset-password', action: passwordResetConfirmAction, lazy: async () => ({ Component: (await import('./pages/auth')).ResetPasswordPage }) },
                     { path: 'join-workspace', loader: workspaceInviteLoader, action: workspaceInviteAction, lazy: async () => ({ Component: (await import('./pages/workspace-invite')).WorkspaceInvitePage }) },
+                    { path: 'join-submission-request', loader: submissionRequestInviteLoader, action: submissionRequestInviteAction, lazy: async () => ({ Component: (await import('./pages/submission-request-invite')).SubmissionRequestInvitePage }) },
                     { path: 'confirm-email-change', action: confirmEmailChangeAction, lazy: async () => ({ Component: (await import('./pages/email-change')).EmailChangeConfirmationPage }) },
                 ],
             },
@@ -587,11 +625,13 @@ export const router = createBrowserRouter([
                     { index: true, loader: () => redirect('/app/dashboard') },
                     { path: 'account', loader: (args) => loadForUser(args, getAccount), action: accountAction, lazy: async () => ({ Component: (await import('./pages/account')).AccountPage }) },
                     { path: 'workspaces', loader: (args) => loadForUser(args, getWorkspaces), action: workspacesAction, lazy: async () => ({ Component: (await import('./pages/workspaces')).WorkspacesPage }) },
-                    { path: 'courses', loader: (args) => loadForWorkspaceRoles(args, academicWorkspaceRoles, getCourses), action: coursesAction, lazy: async () => ({ Component: (await import('./pages/academic')).CoursesPage }) },
-                    { path: 'courses/:courseId', loader: (args) => loadForWorkspaceRoles(args, academicWorkspaceRoles, (signal) => getCourse(args.params.courseId || '', signal)), action: courseAction, lazy: async () => ({ Component: (await import('./pages/academic')).CourseDetailPage }) },
-                    { path: 'assignments', loader: (args) => loadForWorkspaceRoles(args, academicWorkspaceRoles, getAssignments), lazy: async () => ({ Component: (await import('./pages/academic')).AssignmentsPage }) },
-                    { path: 'assignments/:assignmentId', loader: (args) => loadForWorkspaceRoles(args, academicWorkspaceRoles, (signal) => getAssignment(args.params.assignmentId || '', signal)), action: assignmentAction, lazy: async () => ({ Component: (await import('./pages/academic')).AssignmentDetailPage }) },
-                    { path: 'submissions/:submissionId', loader: (args) => loadForWorkspaceRoles(args, academicWorkspaceRoles, (signal) => getAcademicSubmission(args.params.submissionId || '', signal)), action: academicSubmissionAction, lazy: async () => ({ Component: (await import('./pages/academic')).AcademicSubmissionPage }) },
+                    { path: 'submission-requests', loader: submissionRequestsLoader, action: submissionRequestsAction, lazy: async () => ({ Component: (await import('./pages/submission-requests')).SubmissionRequestsPage }) },
+                    { path: 'submission-requests/:requestId', loader: submissionRequestDetailLoader, action: submissionRequestAction, lazy: async () => ({ Component: (await import('./pages/submission-requests')).SubmissionRequestDetailPage }) },
+                    { path: 'courses', loader: () => redirect('/app/submission-requests') },
+                    { path: 'courses/:courseId', loader: () => redirect('/app/submission-requests') },
+                    { path: 'assignments', loader: () => redirect('/app/submission-requests') },
+                    { path: 'assignments/:assignmentId', loader: () => redirect('/app/submission-requests') },
+                    { path: 'submissions/:submissionId', loader: () => redirect('/app/submission-requests') },
                     { path: 'dashboard', loader: (args) => loadForUser(args, getDashboard), lazy: async () => ({ Component: (await import('./pages/dashboard')).DashboardPage }) },
                     { path: 'documents', loader: (args) => loadForUser(args, getDocuments), action: uploadSubmissionAction, lazy: async () => ({ Component: (await import('./pages/documents')).DocumentsPage }) },
                     { path: 'documents/new', loader: () => redirect('/app/documents') },

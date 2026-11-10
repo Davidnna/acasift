@@ -187,7 +187,7 @@ class WorkspaceMembership(db.Model):
     membership_id = db.Column(db.Integer, primary_key=True)
     workspace_id = db.Column(db.Integer, db.ForeignKey("workspaces.workspace_id"), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
-    # owner, admin, lecturer, student, member
+    # Active workspace roles: owner, admin, member. Former role values are normalized at startup.
     role = db.Column(db.String(24), nullable=False, default="member")
     status = db.Column(db.String(24), nullable=False, default="active")
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
@@ -204,6 +204,7 @@ class WorkspaceInvite(db.Model):
 
     invite_id = db.Column(db.Integer, primary_key=True)
     workspace_id = db.Column(db.Integer, db.ForeignKey("workspaces.workspace_id"), nullable=False, index=True)
+    # Legacy column retained for additive migration compatibility; new invitations are workspace-wide.
     course_id = db.Column(db.Integer, db.ForeignKey("courses.course_id"), nullable=True, index=True)
     token_hash = db.Column(db.String(64), nullable=False, unique=True, index=True)
     role = db.Column(db.String(24), nullable=False, default="member")
@@ -232,6 +233,8 @@ class AuthRateLimitEvent(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, index=True)
 
 
+# Legacy-only records retained so existing installations can migrate historical data.
+# No active API or frontend route exposes this former academic domain.
 class Course(db.Model):
     __tablename__ = "courses"
     __table_args__ = (

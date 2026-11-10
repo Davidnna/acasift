@@ -13,9 +13,9 @@ function AuthShell({ eyebrow, title, description, icon, children }: {
 }) {
     return <div className="login-page">
         <div className="login-aside">
-            <Link viewTransition to="/" className="login-brand"><span className="brand-mark"><FileSearch size={22} /></span><span>AcaSift<small>Academic similarity analysis</small></span></Link>
-            <div className="login-aside-copy"><div className="eyebrow">INDEPENDENT ACADEMIC WORKSPACE</div><h1>Academic review,<br /><span>on your terms.</span></h1><p>A private workspace for document similarity analysis. No institutional affiliation or institutional email address is required.</p><div className="login-assurance"><ShieldCheck size={17} /> Similarity indicators support human review.</div></div>
-            <div className="login-aside-bottom">AcaSift · Academic similarity analysis</div>
+            <Link viewTransition to="/" className="login-brand"><span className="brand-mark"><FileSearch size={22} /></span><span>AcaSift<small>Document similarity analysis</small></span></Link>
+            <div className="login-aside-copy"><div className="eyebrow">INDEPENDENT DOCUMENT WORKSPACE</div><h1>Document review,<br /><span>on your terms.</span></h1><p>A private workspace for document similarity analysis. No institutional affiliation or institutional email address is required.</p><div className="login-assurance"><ShieldCheck size={17} /> Similarity indicators support human review.</div></div>
+            <div className="login-aside-bottom">AcaSift · Document similarity analysis</div>
         </div>
         <div className="login-main"><div className="login-card">
             <Link viewTransition to="/" className="back-home"><ArrowLeft size={15} /> Back to AcaSift</Link>
@@ -27,11 +27,15 @@ function AuthShell({ eyebrow, title, description, icon, children }: {
 
 export function RegisterPage() {
     const actionData = useActionData() as AuthActionData;
+    const [params] = useSearchParams();
+    const next = params.get('next');
+    const invitationPath = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+    const loginPath = invitationPath ? `/login?next=${encodeURIComponent(invitationPath)}` : '/login';
     const navigation = useNavigation();
     const busy = navigation.state === 'submitting';
     return <AuthShell eyebrow="CREATE AN ACCOUNT" title="Your workspace starts here." description="Create an individual account using any valid email address. Verify it to activate your AcaSift workspace." icon={<UserPlus size={22} />}>
         {actionData?.error && <div className="form-error" role="alert">{actionData.error}</div>}
-        {actionData?.success ? <div className="auth-success-panel" role="status"><CheckCircle2 size={24} /><strong>Check your inbox</strong><p>{actionData.success}</p><p>We sent a verification email to <strong>{actionData.email}</strong>.</p><Link viewTransition className="button button-primary login-submit" to={`/resend-verification?email=${encodeURIComponent(actionData.email || '')}`}>Resend verification email <ArrowRight size={16} /></Link></div> :
+        {actionData?.success ? <div className="auth-success-panel" role="status"><CheckCircle2 size={24} /><strong>Check your inbox</strong><p>{actionData.success}</p><p>We sent a verification email to <strong>{actionData.email}</strong>.</p>{invitationPath && <p>After verifying your email, return to the invitation you were opening.</p>}<Link viewTransition className="button button-primary login-submit" to={`/resend-verification?email=${encodeURIComponent(actionData.email || '')}`}>Resend verification email <ArrowRight size={16} /></Link>{invitationPath && <Link viewTransition className="button button-secondary login-submit" to={invitationPath}>Continue to invitation <ArrowRight size={16} /></Link>}</div> :
             <Form viewTransition method="post" className="form-stack auth-form">
                 <div className="auth-name-grid">
                     <div><label htmlFor="first_name">First name</label><input id="first_name" name="first_name" maxLength={80} autoComplete="given-name" required /></div>
@@ -44,7 +48,7 @@ export function RegisterPage() {
                 <p className="auth-form-hint">Use at least 10 characters. Your account becomes active after you verify your email address.</p>
                 <button className="button button-primary login-submit" type="submit" disabled={busy}>{busy ? 'Creating account…' : 'Create account'} <ArrowRight size={16} /></button>
             </Form>}
-        <div className="login-footnote">Already have an account? <Link viewTransition to="/login">Sign in</Link>.</div>
+        <div className="login-footnote">Already have an account? <Link viewTransition to={loginPath}>Sign in</Link>.</div>
     </AuthShell>;
 }
 
@@ -66,10 +70,12 @@ export function ResendVerificationPage() {
     const actionData = useActionData() as AuthActionData;
     const navigation = useNavigation();
     const [params] = useSearchParams();
+    const next = params.get('next');
+    const invitationPath = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
     const busy = navigation.state === 'submitting';
     return <AuthShell eyebrow="EMAIL VERIFICATION" title="Request another link." description="If your account is awaiting email verification, we will send a new one-time verification link." icon={<MailCheck size={22} />}>
         {actionData?.error && <div className="form-error" role="alert">{actionData.error}</div>}
-        {actionData?.success && <div className="auth-success-panel" role="status"><CheckCircle2 size={22} /><p>{actionData.success}</p></div>}
+        {actionData?.success && <div className="auth-success-panel" role="status"><CheckCircle2 size={22} /><p>{actionData.success}</p>{invitationPath && <p>After verifying your email, return to the invitation you were opening.</p>}{invitationPath && <Link viewTransition className="button button-secondary login-submit" to={invitationPath}>Continue to invitation <ArrowRight size={16} /></Link>}</div>}
         <Form viewTransition method="post" className="form-stack auth-form">
             <label htmlFor="email">Email address</label><input id="email" name="email" type="email" autoComplete="email" defaultValue={params.get('email') || ''} placeholder="you@example.com" required />
             <button className="button button-primary login-submit" type="submit" disabled={busy}>{busy ? 'Sending…' : 'Request verification email'} <ArrowRight size={16} /></button>

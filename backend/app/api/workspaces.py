@@ -8,13 +8,12 @@ from flask_login import current_user, login_required
 from sqlalchemy import case
 
 from app.extensions import db
-from app.models import (
-    Course,
-    CourseMembership,
-    User,
-    Workspace,
-    WorkspaceInvite,
-    WorkspaceMembership,
+from app.models import User, Workspace, WorkspaceInvite, WorkspaceMembership
+from app.submission_models import (
+    SubmissionRequest,
+    SubmissionRequestInvite,
+    SubmissionRequestParticipant,
+    SubmissionRequestReviewer,
 )
 from app.services.auth_security import consume_auth_limits
 from app.services.workspace_service import (
@@ -73,10 +72,7 @@ def _invite_status(invite):
 def _invite_payload(invite):
     return {
         "id": invite.invite_id,
-        "role": invite.role,
-        "course_id": invite.course_id,
-        "course_title": invite.course.title if invite.course else None,
-        "course_code": invite.course.code if invite.course else None,
+        "role": "member",
         "status": _invite_status(invite),
         "expires_at": _date(invite.expires_at),
         "max_uses": invite.max_uses,
@@ -115,16 +111,6 @@ def workspaces():
                 workspace_id=active.workspace_id
             ).order_by(WorkspaceInvite.created_at.desc()).all()
         ]
-    workspace_courses = []
-    if is_workspace_manager(active_membership) and active.workspace_type == "shared":
-        workspace_courses = [{
-            "id": item.course_id,
-            "code": item.code,
-            "title": item.title,
-            "status": item.status,
-        } for item in Course.query.filter_by(
-            workspace_id=active.workspace_id, status="active"
-        ).order_by(Course.code.asc()).all()]
     return jsonify({
         "active_workspace_id": active.workspace_id,
         "workspaces": [_workspace_payload(item.workspace, item) for item in memberships],
@@ -135,7 +121,6 @@ def workspaces():
         "is_workspace_owner": bool(active_membership and active_membership.role == "owner"),
         "members": members,
         "invites": invites,
-        "courses": workspace_courses,
     })
 
 
@@ -228,8 +213,8 @@ def add_workspace_member(workspace_id):
     data = request.get_json(silent=True) or {}
     email = str(data.get("email", "")).strip().lower()
     role = str(data.get("role", "member")).strip().lower()
-    if role not in {"admin", "lecturer", "student", "member"}:
-        return _error("Select a valid workspace role.")
+    if role not in {"admin", "member"}:
+        return _error("Workspace roles are Member and Administrator.")
     if role == "admin" and membership.role != "owner":
         return _error("Only the workspace owner can appoint another administrator.", 403)
     target = User.query.filter_by(email=email, is_active=True).first()
@@ -268,8 +253,8 @@ def update_workspace_member_role(workspace_id, user_id):
         return _error("Workspace ownership cannot be changed through member-role management.", 403)
     data = request.get_json(silent=True) or {}
     role = str(data.get("role", "")).strip().lower()
-    if role not in {"admin", "lecturer", "student", "member"}:
-        return _error("Select a valid workspace role.")
+    if role not in {"admin", "member"}:
+        return _error("Workspace roles are Member and Administrator.")
     if (role == "admin" or target.role == "admin") and actor_membership.role != "owner":
         return _error("Only the workspace owner can appoint or change an administrator.", 403)
     target.role = role
@@ -293,6 +278,19 @@ def remove_workspace_member(workspace_id, user_id):
     if target.role == "admin" and actor_membership.role != "owner":
         return _error("Only the workspace owner can remove another administrator.", 403)
     target.status = "removed"
+    request_ids = db.session.query(SubmissionRequest.request_id).filter_by(
+        workspace_id=workspace_id
+    ).subquery()
+    SubmissionRequestParticipant.query.filter(
+        SubmissionRequestParticipant.request_id.in_(request_ids),
+        SubmissionRequestParticipant.user_id == user_id,
+        SubmissionRequestParticipant.participation_type == "member",
+        SubmissionRequestParticipant.status == "active",
+    ).update({"status": "removed"}, synchronize_session=False)
+    SubmissionRequestReviewer.query.filter(
+        SubmissionRequestReviewer.request_id.in_(request_ids),
+        SubmissionRequestReviewer.user_id == user_id,
+    ).delete(synchronize_session=False)
     db.session.commit()
     return jsonify({"message": f"{target.user.full_name} was removed from the workspace."})
 
@@ -340,9 +338,7 @@ def leave_workspace(workspace_id):
         ).order_by(
             case(
                 (WorkspaceMembership.role == "admin", 0),
-                (WorkspaceMembership.role == "lecturer", 1),
-                (WorkspaceMembership.role == "student", 2),
-                else_=3,
+                else_=1,
             ),
             WorkspaceMembership.created_at.asc(),
             WorkspaceMembership.membership_id.asc(),
@@ -362,13 +358,30 @@ def leave_workspace(workspace_id):
         message = "You have left the workspace."
 
     membership.status = "left"
-    course_memberships = CourseMembership.query.join(Course).filter(
-        Course.workspace_id == workspace_id,
-        CourseMembership.user_id == current_user.user_id,
-        CourseMembership.status == "active",
-    ).all()
-    for course_membership in course_memberships:
-        course_membership.status = "left"
+    request_ids = db.session.query(SubmissionRequest.request_id).filter_by(
+        workspace_id=workspace_id
+    ).subquery()
+    SubmissionRequestParticipant.query.filter(
+        SubmissionRequestParticipant.request_id.in_(request_ids),
+        SubmissionRequestParticipant.user_id == current_user.user_id,
+        SubmissionRequestParticipant.participation_type == "member",
+        SubmissionRequestParticipant.status == "active",
+    ).update({"status": "left"}, synchronize_session=False)
+    SubmissionRequestReviewer.query.filter(
+        SubmissionRequestReviewer.request_id.in_(request_ids),
+        SubmissionRequestReviewer.user_id == current_user.user_id,
+    ).delete(synchronize_session=False)
+    if workspace.status != "active":
+        SubmissionRequest.query.filter_by(workspace_id=workspace_id).update(
+            {"status": "archived"}, synchronize_session=False
+        )
+        request_ids = db.session.query(SubmissionRequest.request_id).filter_by(
+            workspace_id=workspace_id
+        ).subquery()
+        SubmissionRequestInvite.query.filter(
+            SubmissionRequestInvite.request_id.in_(request_ids),
+            SubmissionRequestInvite.revoked_at.is_(None),
+        ).update({"revoked_at": now}, synchronize_session=False)
 
     if session.get("active_workspace_id") == workspace_id:
         session.pop("active_workspace_id", None)
@@ -396,6 +409,16 @@ def delete_workspace(workspace_id):
         member.status = "removed"
     for invite in WorkspaceInvite.query.filter_by(workspace_id=workspace_id).all():
         invite.revoked_at = now
+    SubmissionRequest.query.filter_by(workspace_id=workspace_id).update(
+        {"status": "archived"}, synchronize_session=False
+    )
+    request_ids = db.session.query(SubmissionRequest.request_id).filter_by(
+        workspace_id=workspace_id
+    ).subquery()
+    SubmissionRequestInvite.query.filter(
+        SubmissionRequestInvite.request_id.in_(request_ids),
+        SubmissionRequestInvite.revoked_at.is_(None),
+    ).update({"revoked_at": now}, synchronize_session=False)
     db.session.commit()
 
     if session.get("active_workspace_id") == workspace_id:
@@ -429,8 +452,8 @@ def create_workspace_invite(workspace_id):
 
     data = request.get_json(silent=True) or {}
     role = str(data.get("role", "member")).strip().lower()
-    if role not in {"member", "student", "lecturer"}:
-        return _error("Invitation links can grant Member, Student or Lecturer access. Administrators must be appointed directly by the owner.")
+    if role != "member":
+        return _error("Workspace invitation links grant Member access. Administrators must be appointed directly by the owner.")
 
     expires_at = None
     raw_expiry = data.get("expires_at")
@@ -444,21 +467,6 @@ def create_workspace_invite(workspace_id):
         expires_at = expires_at.astimezone(timezone.utc)
         if expires_at <= datetime.now(timezone.utc):
             return _error("The invitation expiration must be in the future.")
-
-    course_id = data.get("course_id")
-    course = None
-    if course_id not in (None, ""):
-        try:
-            course_id = int(course_id)
-        except (TypeError, ValueError):
-            return _error("Select a valid course for this invitation.")
-        course = Course.query.filter_by(
-            course_id=course_id, workspace_id=workspace_id, status="active"
-        ).first()
-        if not course:
-            return _error("The selected course does not belong to this active workspace.", 404)
-        if role not in {"student", "lecturer"}:
-            return _error("Course-specific invitations must grant the Student or Lecturer role.")
 
     max_uses = data.get("max_uses")
     if max_uses not in (None, ""):
@@ -479,7 +487,6 @@ def create_workspace_invite(workspace_id):
     raw_token = secrets.token_urlsafe(32)
     invite = WorkspaceInvite(
         workspace_id=workspace_id,
-        course_id=course.course_id if course else None,
         token_hash=hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
         role=role,
         created_by_user_id=current_user.user_id,
@@ -521,26 +528,13 @@ def preview_workspace_invite():
         return _error(messages.get(status, "This invitation link is no longer active."), 410)
     if invite.workspace.status != "active":
         return _error("This workspace is no longer active.", 410)
-    if invite.course_id and (not invite.course or invite.course.status != "active"):
-        return _error("The course associated with this invitation is no longer active.", 410)
     existing = WorkspaceMembership.query.filter_by(
         workspace_id=invite.workspace_id, user_id=current_user.user_id, status="active"
     ).first()
-    course_membership = None
-    if invite.course_id:
-        course_membership = CourseMembership.query.filter_by(
-            course_id=invite.course_id, user_id=current_user.user_id, status="active"
-        ).first()
     response = jsonify({
         "workspace": _workspace_payload(invite.workspace),
-        "role": invite.role,
-        "course": ({
-            "id": invite.course.course_id,
-            "code": invite.course.code,
-            "title": invite.course.title,
-        } if invite.course else None),
+        "role": "member",
         "is_member": bool(existing),
-        "is_course_member": bool(course_membership and course_membership.role == invite.role),
         "invited_by": invite.creator.full_name if invite.creator else "A workspace administrator",
     })
     response.headers["Cache-Control"] = "no-store"
@@ -587,61 +581,35 @@ def accept_workspace_invite():
     if existing:
         if not already_active:
             existing.status = "active"
-            # A removed member must rejoin with the role granted by this invite;
-            # an old administrator role must never be silently restored.
-            existing.role = invite.role
+            # A removed member rejoins with ordinary Member access; invitations
+            # never restore elevated privileges.
+            existing.role = "member"
             workspace_role_updated = True
-        elif existing.role not in {"owner", "admin"} and existing.role != invite.role:
-            existing.role = invite.role
+        elif existing.role not in {"owner", "admin"} and existing.role != "member":
+            existing.role = "member"
             workspace_role_updated = True
     else:
         db.session.add(WorkspaceMembership(
             workspace_id=invite.workspace_id,
             user_id=current_user.user_id,
-            role=invite.role,
+            role="member",
             status="active",
         ))
 
-    enrolled_in_course = False
-    if invite.course_id:
-        if not invite.course or invite.course.status != "active":
-            return _error("The course associated with this invitation is no longer active.", 410)
-        course_membership = CourseMembership.query.filter_by(
-            course_id=invite.course_id, user_id=current_user.user_id
-        ).first()
-        if not course_membership or course_membership.status != "active" or course_membership.role != invite.role:
-            if course_membership:
-                course_membership.status = "active"
-                course_membership.role = invite.role
-                course_membership.added_by_user_id = invite.created_by_user_id
-                course_membership.enrolled_at = datetime.now(timezone.utc)
-            else:
-                db.session.add(CourseMembership(
-                    course_id=invite.course_id,
-                    user_id=current_user.user_id,
-                    role=invite.role,
-                    status="active",
-                    added_by_user_id=invite.created_by_user_id,
-                ))
-            enrolled_in_course = True
-
-    if already_active and not enrolled_in_course and not workspace_role_updated:
+    if already_active and not workspace_role_updated:
         session["active_workspace_id"] = invite.workspace_id
         return jsonify({"message": "You are already a member of this workspace.", "workspace_id": invite.workspace_id})
 
     invite.use_count += 1
     db.session.commit()
     session["active_workspace_id"] = invite.workspace_id
-    if enrolled_in_course:
-        message = f"You joined {invite.workspace.name} and enrolled in {invite.course.code}."
-    elif already_active:
+    if already_active:
         message = f"You were already a member of {invite.workspace.name}."
     else:
         message = f"You have joined {invite.workspace.name}."
     return jsonify({
         "message": message,
         "workspace_id": invite.workspace_id,
-        "course_id": invite.course_id,
     }), 201
 
 

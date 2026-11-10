@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from sqlalchemy import UniqueConstraint, Index
+from sqlalchemy.orm import deferred
 
 from flask_login import UserMixin
 from werkzeug.security import check_password_hash
@@ -29,6 +30,12 @@ class User(UserMixin, db.Model):
     email_verified_at = db.Column(db.DateTime(timezone=True), nullable=True)
     email_verification_token_hash = db.Column(db.String(64), nullable=True, unique=True)
     email_verification_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    pending_email = db.Column(db.String(150), nullable=True)
+    email_change_token_hash = db.Column(db.String(64), nullable=True)
+    email_change_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    profile_image_data = deferred(db.Column(db.LargeBinary, nullable=True))
+    profile_image_mime = db.Column(db.String(50), nullable=True)
+    profile_image_updated_at = db.Column(db.DateTime(timezone=True), nullable=True)
     password_reset_token_hash = db.Column(db.String(64), nullable=True, unique=True)
     password_reset_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     auth_version = db.Column(db.Integer, nullable=False, default=0)

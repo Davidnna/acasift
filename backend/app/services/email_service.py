@@ -265,6 +265,33 @@ def send_verification_email(user, raw_token):
     )
 
 
+def send_email_change_verification(user, new_email, raw_token):
+    expires = current_app.config["EMAIL_VERIFICATION_HOURS"]
+    link = (
+        f"{current_app.config['PUBLIC_APP_URL']}/confirm-email-change"
+        f"?token={quote(raw_token, safe='')}"
+    )
+    recipient = user.first_name or user.full_name
+    html_body = _branded_email(
+        recipient_name=recipient,
+        eyebrow="EMAIL ADDRESS CHANGE",
+        heading="Confirm your new email address",
+        intro="A request was made to change the email address on your AcaSift account. Confirm that you control this new address to complete the change.",
+        action_label="Confirm new email address",
+        action_url=link,
+        expiry_note=f"This one-time confirmation link expires in {expires} hours.",
+        security_note="Your existing email address remains active until confirmation. If you did not request this change, ignore this message and your account will keep its current email address.",
+        preheader="Confirm the new email address for your AcaSift account.",
+    )
+    _send(
+        new_email,
+        recipient,
+        "Confirm your new email address | AcaSift",
+        html_body,
+        "verification",
+    )
+
+
 def send_password_reset_email(user, raw_token):
     expires = current_app.config["PASSWORD_RESET_HOURS"]
     link = (

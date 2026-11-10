@@ -60,6 +60,10 @@ class AuthenticationMigrationTests(unittest.TestCase):
         self.assertIsNotNone(user.email_verified_at)
         self.assertEqual(user.auth_version, 0)
         self.assertIsNone(user.password_reset_token_hash)
+        self.assertIsNone(user.pending_email)
+        self.assertIsNone(user.email_change_token_hash)
+        self.assertIsNone(user.profile_image_data)
+        self.assertIsNone(user.profile_image_mime)
         self.assertEqual(len(user.workspace_memberships), 1)
 
 

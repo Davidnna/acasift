@@ -140,11 +140,16 @@ export function RootLayout() {
                 if (target) {
                     const targetY = target.getBoundingClientRect().top + window.scrollY;
                     cancelScroll.current = animateWindowScroll(targetY);
+                    target.setAttribute('tabindex', '-1');
+                    target.focus({ preventScroll: true });
                     return;
                 }
             }
 
             cancelScroll.current = animateWindowScroll(0);
+            const mainContent = document.getElementById('workspace-main')
+                || document.getElementById('public-main');
+            mainContent?.focus({ preventScroll: true });
         });
 
         return () => {
@@ -154,7 +159,7 @@ export function RootLayout() {
     }, [location.key, location.hash]);
 
     return <>
-        {navigation.state !== 'idle' && <div className="navigation-progress"><span /></div>}
+        {navigation.state !== 'idle' && <div className="navigation-progress" role="status" aria-live="polite" aria-label="Loading page"><span /></div>}
         <div key={location.key} className="route-transition">
             <Outlet />
         </div>
@@ -164,19 +169,44 @@ export function RootLayout() {
 export function PublicLayout() {
     const user = useLoaderData() as User | null;
     const [menuOpen, setMenuOpen] = useState(false);
+    const menuToggleRef = useRef<HTMLButtonElement>(null);
+    const publicNavRef = useRef<HTMLElement>(null);
+
+    useEffect(() => {
+        if (!menuOpen) return undefined;
+        publicNavRef.current?.querySelector('a')?.focus();
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setMenuOpen(false);
+                menuToggleRef.current?.focus();
+            }
+        };
+        document.addEventListener('keydown', closeOnEscape);
+        return () => document.removeEventListener('keydown', closeOnEscape);
+    }, [menuOpen]);
+
     return <div className="public-shell">
+        <a className="skip-link" href="#public-main">Skip to main content</a>
         <header className="public-header">
             <div className="public-header-inner">
                 <Brand />
-                <button className="mobile-menu-toggle" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle navigation">
-                    {menuOpen ? <X size={21} /> : <Menu size={21} />}
+                <button
+                    type="button"
+                    className="mobile-menu-toggle"
+                    ref={menuToggleRef}
+                    onClick={() => setMenuOpen(!menuOpen)}
+                    aria-label={menuOpen ? 'Close main navigation' : 'Open main navigation'}
+                    aria-expanded={menuOpen}
+                    aria-controls="public-navigation"
+                >
+                    {menuOpen ? <X size={21} aria-hidden="true" /> : <Menu size={21} aria-hidden="true" />}
                 </button>
-                <nav className={`public-nav ${menuOpen ? 'is-open' : ''}`}>
-                    <NavLink viewTransition end to="/">Home</NavLink>
-                    <NavLink viewTransition to="/about">About</NavLink>
-                    <NavLink viewTransition to="/features">Features</NavLink>
-                    <NavLink viewTransition to="/how-it-works">How it works</NavLink>
-                    <NavLink viewTransition to="/faq">FAQ</NavLink>
+                <nav ref={publicNavRef} id="public-navigation" aria-label="Main navigation" className={`public-nav ${menuOpen ? 'is-open' : ''}`}>
+                    <NavLink viewTransition end to="/" onClick={() => setMenuOpen(false)}>Home</NavLink>
+                    <NavLink viewTransition to="/about" onClick={() => setMenuOpen(false)}>About</NavLink>
+                    <NavLink viewTransition to="/features" onClick={() => setMenuOpen(false)}>Features</NavLink>
+                    <NavLink viewTransition to="/how-it-works" onClick={() => setMenuOpen(false)}>How it works</NavLink>
+                    <NavLink viewTransition to="/faq" onClick={() => setMenuOpen(false)}>FAQ</NavLink>
                 </nav>
                 <div className="public-actions">
                     {user ? <Link viewTransition className="button button-primary" to="/app/dashboard">Open workspace <ArrowUpRight size={15} /></Link> : <>
@@ -186,7 +216,7 @@ export function PublicLayout() {
                 </div>
             </div>
         </header>
-        <main><Outlet /></main>
+        <main id="public-main" tabIndex={-1}><Outlet /></main>
         <PublicFooter />
     </div>;
 }
@@ -221,7 +251,22 @@ export function AppLayout() {
     const { user, activeWorkspace } = useLoaderData() as AppShellData;
     const fetcher = useFetcher();
     const [mobileNav, setMobileNav] = useState(false);
+    const menuToggleRef = useRef<HTMLButtonElement>(null);
+    const workspaceNavRef = useRef<HTMLElement>(null);
     const signingOut = fetcher.state !== 'idle';
+
+    useEffect(() => {
+        if (!mobileNav) return undefined;
+        workspaceNavRef.current?.querySelector('a')?.focus();
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setMobileNav(false);
+                menuToggleRef.current?.focus();
+            }
+        };
+        document.addEventListener('keydown', closeOnEscape);
+        return () => document.removeEventListener('keydown', closeOnEscape);
+    }, [mobileNav]);
     const canUseAcademicFeatures = Boolean(
         activeWorkspace
         && activeWorkspace.type === 'shared'
@@ -231,29 +276,46 @@ export function AppLayout() {
         ? [baseWorkspaceLinks[0], ...academicWorkspaceLinks, ...baseWorkspaceLinks.slice(1)]
         : baseWorkspaceLinks;
     return <div className="app-shell">
+        <a className="skip-link" href="#workspace-main">Skip to main content</a>
         <header className="app-topbar">
             <div className="app-topbar-left">
-                <button className="mobile-menu-toggle app-menu-toggle" onClick={() => setMobileNav(!mobileNav)} aria-label="Toggle workspace navigation"><Menu size={20} /></button>
+                <button
+                    type="button"
+                    className="mobile-menu-toggle app-menu-toggle"
+                    ref={menuToggleRef}
+                    onClick={() => setMobileNav(!mobileNav)}
+                    aria-label={mobileNav ? 'Close workspace navigation' : 'Open workspace navigation'}
+                    aria-expanded={mobileNav}
+                    aria-controls="workspace-navigation"
+                >{mobileNav ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}</button>
                 <Brand />
             </div>
             <div className="app-topbar-right">
-                <Link viewTransition to="/app/account" className="account-chip" aria-label="Open account settings"><span className="avatar">{(user.first_name?.[0] || user.full_name.slice(0, 1)).toUpperCase()}</span><span className="account-details"><strong>{user.full_name}</strong><small>{user.is_admin ? 'Platform administrator' : activeWorkspace?.type === 'shared' ? `${activeWorkspace.role} · Shared workspace` : 'Personal workspace'}</small></span><ChevronDown size={15} /></Link>
-                <fetcher.Form method="post" action="/logout"><button className="icon-button signout-button" type="submit" disabled={signingOut} title="Sign out"><LogOut size={17} /><span>Sign out</span></button></fetcher.Form>
+                <Link viewTransition to="/app/account" className="account-chip" aria-label="Open account settings">
+                    <span className="avatar">
+                        {user.profile_image_url ? <img src={user.profile_image_url} alt="" /> : (user.first_name?.[0] || user.full_name.slice(0, 1)).toUpperCase()}
+                    </span>
+                    <span className="account-details"><strong>{user.full_name}</strong><small>{user.is_admin ? 'Platform administrator' : activeWorkspace?.type === 'shared' ? `${activeWorkspace.role} · Shared workspace` : 'Personal workspace'}</small></span>
+                    <ChevronDown size={15} aria-hidden="true" />
+                </Link>
+                <fetcher.Form method="post" action="/logout"><button className="icon-button signout-button" type="submit" disabled={signingOut} title="Sign out" aria-label="Sign out"><LogOut size={17} aria-hidden="true" /><span>Sign out</span></button></fetcher.Form>
             </div>
         </header>
         <div className="workspace-frame">
             <aside className={`workspace-sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
-                <div className="sidebar-label">WORKSPACE</div>
-                {visibleWorkspaceLinks.map(item => <NavLink viewTransition key={item.to} to={item.to} end={item.end} onClick={() => setMobileNav(false)} className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}><item.icon size={17} /><span>{item.label}</span></NavLink>)}
-                {user.is_admin && <>
-                    <div className="sidebar-label sidebar-label-spaced">ADMINISTRATION</div>
-                    {adminLinks.map(item => <NavLink viewTransition key={item.to} to={item.to} onClick={() => setMobileNav(false)} className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}><item.icon size={17} /><span>{item.label}</span></NavLink>)}
-                </>}
-                <div className="sidebar-bottom-note"><ShieldCheck size={17} /><p>Similarity results are indicators for review, not automatic findings of academic misconduct.</p></div>
-                <Link viewTransition to="/faq" className="sidebar-help"><CircleHelp size={16} /> Help and guidance</Link>
+                <nav ref={workspaceNavRef} id="workspace-navigation" className="workspace-sidebar-nav" aria-label="Workspace navigation">
+                    <div className="sidebar-label">WORKSPACE</div>
+                    {visibleWorkspaceLinks.map(item => <NavLink viewTransition key={item.to} to={item.to} end={item.end} onClick={() => setMobileNav(false)} className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}><item.icon size={17} aria-hidden="true" /><span>{item.label}</span></NavLink>)}
+                    {user.is_admin && <>
+                        <div className="sidebar-label sidebar-label-spaced">ADMINISTRATION</div>
+                        {adminLinks.map(item => <NavLink viewTransition key={item.to} to={item.to} onClick={() => setMobileNav(false)} className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}><item.icon size={17} aria-hidden="true" /><span>{item.label}</span></NavLink>)}
+                    </>}
+                </nav>
+                <div className="sidebar-bottom-note"><ShieldCheck size={17} aria-hidden="true" /><p>Similarity results are indicators for review, not automatic findings of academic misconduct.</p></div>
+                <Link viewTransition to="/faq" className="sidebar-help"><CircleHelp size={16} aria-hidden="true" /> Help and guidance</Link>
             </aside>
-            {mobileNav && <button className="sidebar-backdrop" onClick={() => setMobileNav(false)} aria-label="Close navigation" />}
-            <main className="workspace-main"><Outlet /></main>
+            {mobileNav && <button type="button" className="sidebar-backdrop" onClick={() => { setMobileNav(false); menuToggleRef.current?.focus(); }} aria-label="Close workspace navigation" />}
+            <main id="workspace-main" className="workspace-main" tabIndex={-1}><Outlet /></main>
         </div>
     </div>;
 }

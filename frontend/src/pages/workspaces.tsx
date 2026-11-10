@@ -196,7 +196,7 @@ export function WorkspacesPage() {
                                 <Form method="post">
                                     <input type="hidden" name="_intent" value="remove-member" />
                                     <input type="hidden" name="user_id" value={member.id} />
-                                    <button className="button button-secondary button-small" disabled={busy} title={`Remove ${member.full_name}`}><Ban size={14} /></button>
+                                    <button className="button button-secondary button-small" disabled={busy} title={`Remove ${member.full_name}`} aria-label={`Remove ${member.full_name} from this workspace`}><Ban size={14} aria-hidden="true" /></button>
                                 </Form>
                             </>}
                         </div>)}

@@ -9,6 +9,7 @@ export interface User {
     is_admin: boolean;
     is_active?: boolean;
     email_verified?: boolean;
+    profile_image_url?: string | null;
     created_at?: string;
 }
 
@@ -72,6 +73,8 @@ export interface DashboardData {
 
 export interface AccountData {
     user: User;
+    pending_email: string | null;
+    email_change_pending: boolean;
     activity: {
         document_count: number;
         comparison_count: number;

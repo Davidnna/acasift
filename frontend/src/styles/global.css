@@ -3818,3 +3818,481 @@ html, body, .workspace-main, .workspace-sidebar, .table-scroll, .academic-roster
         flex-direction: column;
     }
 }
+
+
+/* Accessibility and responsive refinements — AcaSift 0.10.0 */
+:root {
+    --teal: #0f766e;
+    --teal-dark: #0b625b;
+    --muted: #58677b;
+    --line: #d8e0e9;
+}
+
+html {
+    font-size: 16px;
+    scroll-padding-top: 88px;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+body {
+    font-size: 16px;
+    line-height: 1.55;
+    color: #17243a;
+}
+
+p {
+    color: #58677b;
+}
+
+.eyebrow {
+    color: #5f6f82;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.brand-word span {
+    font-size: 11px;
+}
+
+.skip-link {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 3000;
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: #14243d;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    transform: translateY(-160%);
+    transition: transform .18s ease;
+}
+
+.skip-link:focus {
+    transform: translateY(0);
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 3px solid #0f766e !important;
+    outline-offset: 3px !important;
+    box-shadow: 0 0 0 2px #fff !important;
+}
+
+:where(button, input, select, textarea) {
+    accent-color: #0f766e;
+}
+
+.button,
+.icon-button,
+.mobile-menu-toggle,
+.sidebar-link,
+.sidebar-help,
+.public-nav a,
+.account-chip,
+.signout-button {
+    min-height: 44px;
+}
+
+.form-stack input:not([type="checkbox"]):not([type="radio"]),
+.form-stack select,
+.form-stack textarea,
+input[type="email"],
+input[type="password"],
+input[type="text"],
+input[type="file"],
+select,
+textarea {
+    font-size: 16px;
+}
+
+.form-stack input:not([type="checkbox"]):not([type="radio"]),
+.form-stack select,
+input[type="email"],
+input[type="password"],
+input[type="text"],
+select {
+    min-height: 44px;
+}
+
+.form-stack label,
+label {
+    color: #34445a;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.form-hint,
+.muted-note,
+.account-security-note,
+.account-empty,
+.account-activity-item small,
+.account-detail-list span {
+    color: #58677b;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.data-table th {
+    color: #58677b;
+    font-size: 12px;
+}
+
+.data-table td {
+    color: #405168;
+    font-size: 13px;
+}
+
+.empty-state p {
+    color: #58677b;
+    font-size: 13px;
+}
+
+.account-avatar-photo,
+.profile-picture-preview {
+    display: block;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.account-avatar-photo {
+    flex: 0 0 auto;
+}
+
+.avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+}
+
+.profile-picture-editor {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    align-items: start;
+    gap: 22px;
+}
+
+.profile-picture-preview,
+.profile-picture-placeholder {
+    width: 112px;
+    height: 112px;
+    border: 1px solid #d8e0e9;
+    background: #edf4f6;
+}
+
+.profile-picture-placeholder {
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #52667b;
+}
+
+.profile-picture-controls,
+.profile-picture-form {
+    min-width: 0;
+}
+
+.profile-picture-remove-form {
+    margin-top: 10px;
+}
+
+.email-change-form {
+    margin-top: 18px;
+}
+
+.email-confirmation-card {
+    width: min(100%, 560px);
+    margin-inline: auto;
+}
+
+.auth-card-icon {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 18px;
+    border-radius: 15px;
+    background: #e7f4f2;
+    color: #0f766e;
+}
+
+.account-hero,
+.account-panel,
+.panel {
+    min-width: 0;
+}
+
+.workspace-main,
+.workspace-frame,
+.account-layout-grid,
+.account-main-column,
+.account-side-column {
+    min-width: 0;
+}
+
+.table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-gutter: stable;
+}
+
+.table-scroll:focus-visible {
+    outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+    html {
+        scroll-padding-top: 72px;
+    }
+
+    .wrap {
+        width: calc(100% - 32px);
+    }
+
+    .workspace-main {
+        width: 100%;
+        padding: 22px 14px 48px;
+    }
+
+    .page-heading {
+        gap: 12px;
+    }
+
+    .page-heading h1 {
+        font-size: clamp(1.5rem, 6vw, 2rem);
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    .page-heading p {
+        font-size: 14px;
+    }
+
+    .panel {
+        padding: 16px;
+    }
+
+    .profile-picture-editor {
+        grid-template-columns: 80px minmax(0, 1fr);
+        gap: 14px;
+    }
+
+    .profile-picture-preview,
+    .profile-picture-placeholder {
+        width: 80px;
+        height: 80px;
+    }
+
+    .profile-picture-controls .button {
+        width: 100%;
+    }
+
+    .account-hero-copy h2 {
+        overflow-wrap: anywhere;
+    }
+
+    .account-hero-copy p {
+        overflow-wrap: anywhere;
+    }
+
+    .data-table {
+        min-width: 680px;
+    }
+}
+
+@media (max-width: 420px) {
+    .workspace-main {
+        padding-inline: 12px;
+    }
+
+    .account-hero {
+        gap: 12px;
+    }
+
+    .profile-picture-editor {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-picture-preview,
+    .profile-picture-placeholder {
+        width: 88px;
+        height: 88px;
+    }
+
+    .account-hero-meta {
+        margin-top: 8px;
+    }
+
+    .form-actions,
+    .button-row {
+        align-items: stretch;
+    }
+
+    .form-actions .button,
+    .button-row .button {
+        width: 100%;
+    }
+}
+
+@media (prefers-contrast: more) {
+    :root {
+        --muted: #34445a;
+        --line: #9aa9bb;
+    }
+
+    .eyebrow,
+    .form-hint,
+    .muted-note,
+    .account-detail-list span {
+        color: #34445a;
+    }
+
+    .category-tag,
+    .status-pill {
+        border: 1px solid currentColor;
+    }
+}
+
+@media (forced-colors: active) {
+    :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+        outline: 2px solid Highlight !important;
+        box-shadow: none !important;
+    }
+
+    .button-primary {
+        border: 1px solid ButtonText;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skip-link {
+        transition: none;
+    }
+}
+
+
+/* Consistent readable text sizes for compact labels and metadata. */
+:where(small, .category-tag, .status-pill, .academic-code, .academic-role, .result-count, .late-label, .match-count, .passage-heading, .sidebar-label, .account-email-status) {
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.button {
+    font-size: 14px;
+}
+
+.public-nav a,
+.signin-link {
+    font-size: 14px;
+}
+
+.sidebar-link {
+    font-size: 14px;
+}
+
+.account-activity-item strong,
+.account-detail-list strong,
+.account-readonly-field strong {
+    color: #26374d;
+}
+
+@media (max-width: 760px) {
+    .public-nav a {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        min-height: 44px;
+    }
+
+    .workspace-sidebar-nav {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .workspace-sidebar-nav .sidebar-link {
+        min-height: 46px;
+    }
+}
+
+
+@media (max-width: 760px) {
+    .workspace-sidebar:not(.sidebar-open) {
+        visibility: hidden;
+        pointer-events: none;
+    }
+
+    .workspace-sidebar.sidebar-open {
+        visibility: visible;
+        pointer-events: auto;
+    }
+}
+
+
+/* Additional contrast and target-size corrections in the signed-in workspace. */
+.sidebar-label {
+    color: #58677b;
+    font-size: 12px;
+}
+
+.sidebar-bottom-note {
+    color: #405168;
+}
+
+.sidebar-bottom-note p {
+    color: #405168;
+    font-size: 12px;
+}
+
+.account-details small,
+.account-readonly-field span,
+.account-readonly-field small,
+.account-activity-stats span {
+    color: #58677b;
+    font-size: 12px;
+}
+
+.icon-button {
+    color: #405168;
+    font-size: 13px;
+}
+
+.file-type-icon {
+    color: #405168;
+    font-size: 12px;
+}
+
+.mobile-menu-toggle {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+}
+
+.academic-checkboxes label {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    gap: 9px;
+}
+
+@media (max-width: 760px) {
+    .account-details,
+    .account-chip > svg,
+    .signout-button span {
+        display: none;
+    }
+
+    .app-topbar-right {
+        min-width: 0;
+    }
+
+    .account-chip {
+        min-width: 44px;
+        justify-content: center;
+    }
+}
+
+.faq-answer[hidden] { display: none; }

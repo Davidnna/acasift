@@ -7,6 +7,7 @@ from app import create_app
 from app.services.email_service import (
     EmailConfigurationError,
     email_is_configured,
+    send_email_change_verification,
     send_password_reset_email,
     send_verification_email,
 )
@@ -83,6 +84,18 @@ class NylasEmailTests(unittest.TestCase):
         self.assertIn("Confirm your email address", payload["body"])
         self.assertIn("Verify my email address", payload["body"])
         self.assertIn("Hello Ada", payload["body"])
+
+    @patch("app.services.email_service.urlopen")
+    def test_email_change_confirmation_is_sent_to_the_new_address(self, mocked_urlopen):
+        mocked_urlopen.return_value = FakeResponse()
+        send_email_change_verification(FakeUser(), "ada.new@example.com", "raw-email-change-token")
+
+        payload = json.loads(mocked_urlopen.call_args.args[0].data.decode("utf-8"))
+        self.assertEqual(payload["to"][0]["email"], "ada.new@example.com")
+        self.assertEqual(payload["from"]["email"], "verify@acasift.nylas.email")
+        self.assertIn("raw-email-change-token", payload["body"])
+        self.assertIn("Confirm your new email address", payload["body"])
+        self.assertIn("Your existing email address remains active until confirmation.", payload["body"])
 
     @patch("app.services.email_service.urlopen")
     def test_password_reset_uses_distinct_security_sender(self, mocked_urlopen):

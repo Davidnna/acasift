@@ -27,6 +27,10 @@ import {
     createFirstAdmin,
     getAccount,
     updateAccountProfile,
+    uploadProfilePicture,
+    removeProfilePicture,
+    requestEmailChange,
+    confirmEmailChange,
     changeAccountPassword,
     getBootstrapStatus,
     getComparison,
@@ -382,6 +386,25 @@ async function accountAction({ request }: ActionFunctionArgs) {
             });
             return { intent, success: 'Your personal information has been updated.' };
         }
+        if (intent === 'profile-picture') {
+            const image = formData.get('image');
+            if (!(image instanceof File) || image.size === 0) {
+                return { intent, error: 'Choose a profile picture before uploading.' };
+            }
+            await uploadProfilePicture(image);
+            return { intent, success: 'Your profile picture has been updated.' };
+        }
+        if (intent === 'remove-picture') {
+            await removeProfilePicture();
+            return { intent, success: 'Your profile picture has been removed.' };
+        }
+        if (intent === 'email-change') {
+            const result = await requestEmailChange({
+                new_email: String(formData.get('new_email') || ''),
+                current_password: String(formData.get('email_current_password') || ''),
+            });
+            return { intent, success: result.message, pendingEmail: result.pending_email };
+        }
         if (intent === 'password') {
             await changeAccountPassword({
                 current_password: String(formData.get('current_password') || ''),
@@ -393,6 +416,16 @@ async function accountAction({ request }: ActionFunctionArgs) {
         return { intent, error: 'Unknown account action.' };
     } catch (error) {
         return { intent, error: error instanceof Error ? error.message : 'The account update could not be completed.' };
+    }
+}
+
+async function confirmEmailChangeAction({ request }: ActionFunctionArgs) {
+    const formData = await request.formData();
+    try {
+        const result = await confirmEmailChange(String(formData.get('token') || ''));
+        return { success: result.message, email: result.email };
+    } catch (error) {
+        return { error: error instanceof Error ? error.message : 'The email address could not be confirmed.' };
     }
 }
 
@@ -539,6 +572,7 @@ export const router = createBrowserRouter([
                     { path: 'forgot-password', loader: loginLoader, action: passwordResetRequestAction, lazy: async () => ({ Component: (await import('./pages/auth')).ForgotPasswordPage }) },
                     { path: 'reset-password', action: passwordResetConfirmAction, lazy: async () => ({ Component: (await import('./pages/auth')).ResetPasswordPage }) },
                     { path: 'join-workspace', loader: workspaceInviteLoader, action: workspaceInviteAction, lazy: async () => ({ Component: (await import('./pages/workspace-invite')).WorkspaceInvitePage }) },
+                    { path: 'confirm-email-change', action: confirmEmailChangeAction, lazy: async () => ({ Component: (await import('./pages/email-change')).EmailChangeConfirmationPage }) },
                 ],
             },
             { path: 'setup/first-admin', loader: firstAdminLoader, action: firstAdminAction, lazy: async () => ({ Component: (await import('./pages/setup')).FirstAdminSetupPage }) },

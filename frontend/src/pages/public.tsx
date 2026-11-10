@@ -107,7 +107,7 @@ const faqItems = [
 export function FaqPage() {
     const [open, setOpen] = useState<number | null>(0);
     return <PublicPage eyebrow="FREQUENTLY ASKED QUESTIONS" title="Questions about AcaSift." intro="Learn about the platform's capabilities, how similarity results should be interpreted and how to obtain an account.">
-        <div className="faq-list">{faqItems.map(([question, answer], i) => <article className={`faq-item ${open === i ? 'faq-open' : ''}`} key={question}><button onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i}><span>{question}</span><ChevronDown size={19} /></button>{open === i && <div className="faq-answer"><p>{answer}</p></div>}</article>)}</div>
+        <div className="faq-list">{faqItems.map(([question, answer], i) => <article className={`faq-item ${open === i ? 'faq-open' : ''}`} key={question}><button type="button" id={`faq-question-${i}`} aria-controls={`faq-answer-${i}`} onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i}><span>{question}</span><ChevronDown size={19} aria-hidden="true" /></button><div className="faq-answer" id={`faq-answer-${i}`} role="region" aria-labelledby={`faq-question-${i}`} hidden={open !== i}><p>{answer}</p></div></article>)}</div>
         <div className="faq-contact"><div><CircleHelp size={22} /><div><h3>Still have a question?</h3><p>Create an individual account using any valid email address. No institutional affiliation is required.</p></div></div><Link viewTransition className="button button-primary" to="/register">Create an account <ArrowRight size={15} /></Link></div>
     </PublicPage>;
 }

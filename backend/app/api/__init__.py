@@ -1,15 +1,17 @@
-import hmac
-import re
 import hashlib
+import hmac
+import io
+import re
 import secrets
+import warnings
 from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, current_app, jsonify, request, session
-
-from flask_login import current_user, login_user, login_required, logout_user
+from PIL import Image, ImageOps, UnidentifiedImageError
+from flask import Blueprint, current_app, jsonify, request, send_file, session
+from flask_login import current_user, login_required, login_user, logout_user
 from flask_wtf.csrf import generate_csrf
+from sqlalchemy import func, select, text
 from werkzeug.security import check_password_hash, generate_password_hash
-from sqlalchemy import select, func, text
 
 from app.decorators import admin_required
 from app.extensions import csrf, db
@@ -18,7 +20,10 @@ from app.models import (
 )
 from app.services.auth_security import consume_auth_limits
 from app.services.email_service import (
-    email_is_configured, send_password_reset_email, send_verification_email,
+    email_is_configured,
+    send_email_change_verification,
+    send_password_reset_email,
+    send_verification_email,
 )
 from app.services.workspace_service import ensure_personal_workspace, get_active_workspace, membership_for, is_workspace_manager
 from app.services.workflow_service import run_comparison, save_uploaded_document
@@ -28,6 +33,15 @@ bp = Blueprint("api", __name__, url_prefix="/api")
 
 def _date(value):
     return value.isoformat() if value else None
+
+
+def _profile_image_url(user):
+    updated_at = user.profile_image_updated_at
+    if not updated_at:
+        return None
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+    return f"/api/users/{user.user_id}/profile-picture?v={int(updated_at.timestamp() * 1_000_000)}"
 
 
 def _user_payload(user):
@@ -42,6 +56,7 @@ def _user_payload(user):
         "is_admin": user.is_admin,
         "is_active": user.is_active,
         "email_verified": bool(user.email_verified_at),
+        "profile_image_url": _profile_image_url(user),
         "created_at": _date(user.created_at),
     }
 
@@ -388,6 +403,9 @@ def confirm_password_reset():
     user.password_hash = generate_password_hash(new_password)
     user.password_reset_token_hash = None
     user.password_reset_expires_at = None
+    user.pending_email = None
+    user.email_change_token_hash = None
+    user.email_change_expires_at = None
     user.auth_version = int(user.auth_version or 0) + 1
     db.session.commit()
     response = jsonify({"message": "Your password has been reset. Sign in using your new password."})
@@ -413,6 +431,16 @@ def account_overview():
     ).limit(5).all()
     return jsonify({
         "user": _user_payload(current_user),
+        "pending_email": (
+            current_user.pending_email
+            if current_user.email_change_token_hash and not _token_expired(current_user.email_change_expires_at)
+            else None
+        ),
+        "email_change_pending": bool(
+            current_user.pending_email
+            and current_user.email_change_token_hash
+            and not _token_expired(current_user.email_change_expires_at)
+        ),
         "activity": {
             "document_count": Document.query.filter_by(user_id=current_user.user_id).count(),
             "comparison_count": Comparison.query.filter_by(user_id=current_user.user_id).count(),
@@ -437,6 +465,218 @@ def update_account_profile():
     return jsonify({"message": "Personal information updated successfully.", "user": _user_payload(current_user)})
 
 
+@bp.post("/account/profile-picture")
+@login_required
+def upload_account_profile_picture():
+    image_file = request.files.get("image")
+    if not image_file or not image_file.filename:
+        return _error("Choose a profile picture to upload.")
+
+    raw_image = image_file.read(5 * 1024 * 1024 + 1)
+    if not raw_image:
+        return _error("The selected image is empty.")
+    if len(raw_image) > 5 * 1024 * 1024:
+        return _error("Profile pictures must be 5 MB or smaller.", 413)
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            source = Image.open(io.BytesIO(raw_image))
+            if source.format not in {"JPEG", "PNG", "WEBP"}:
+                return _error("Use a JPEG, PNG or WebP image.")
+            if getattr(source, "n_frames", 1) != 1:
+                return _error("Animated images are not supported. Choose a still image.")
+            if source.width * source.height > 40_000_000:
+                return _error("This image is too large. Choose an image with fewer pixels.")
+            source.verify()
+
+            source = Image.open(io.BytesIO(raw_image))
+            source = ImageOps.exif_transpose(source)
+            source.thumbnail((512, 512), Image.Resampling.LANCZOS)
+            has_alpha = source.mode in {"RGBA", "LA"} or (
+                source.mode == "P" and "transparency" in source.info
+            )
+            processed = source.convert("RGBA" if has_alpha else "RGB")
+            output = io.BytesIO()
+            processed.save(output, format="WEBP", quality=84, method=6)
+            image_data = output.getvalue()
+            if not image_data or len(image_data) > 600 * 1024:
+                return _error("This image could not be reduced to a suitable profile picture.")
+    except (
+        UnidentifiedImageError,
+        OSError,
+        EOFError,
+        SyntaxError,
+        ValueError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+    ):
+        return _error("The selected file is not a valid supported image.")
+
+    current_user.profile_image_data = image_data
+    current_user.profile_image_mime = "image/webp"
+    current_user.profile_image_updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    response = jsonify({
+        "message": "Your profile picture has been updated.",
+        "user": _user_payload(current_user),
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@bp.delete("/account/profile-picture")
+@login_required
+def remove_account_profile_picture():
+    current_user.profile_image_data = None
+    current_user.profile_image_mime = None
+    current_user.profile_image_updated_at = None
+    db.session.commit()
+    response = jsonify({"message": "Your profile picture has been removed."})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@bp.get("/users/<int:user_id>/profile-picture")
+@login_required
+def get_user_profile_picture(user_id):
+    user = db.session.get(User, user_id)
+    if not user or not user.profile_image_data:
+        return _error("Profile picture not found.", 404)
+
+    if user.user_id != current_user.user_id and not current_user.is_admin:
+        active_workspace = get_active_workspace(current_user)
+        viewer_membership = membership_for(current_user, active_workspace.workspace_id)
+        target_membership = membership_for(user, active_workspace.workspace_id)
+        if not viewer_membership or not target_membership:
+            return _error("Profile picture not found.", 404)
+
+    response = send_file(
+        io.BytesIO(user.profile_image_data),
+        mimetype=user.profile_image_mime or "image/webp",
+        download_name="profile-picture.webp",
+        conditional=False,
+        max_age=86400,
+    )
+    response.headers["Cache-Control"] = "private, max-age=86400"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Vary"] = "Cookie"
+    return response
+
+
+@bp.post("/account/email-change")
+@login_required
+def request_account_email_change():
+    limited = _rate_limited(
+        "email_change_request",
+        str(current_user.user_id),
+        ip_limit=8,
+        identity_limit=4,
+        window_seconds=3600,
+    )
+    if limited:
+        return limited
+
+    data = request.get_json(silent=True) or {}
+    new_email = str(data.get("new_email", "")).strip().lower()
+    current_password = str(data.get("current_password", ""))
+    if not current_password or not current_user.check_password(current_password):
+        return _error("Your current password is incorrect.", 400)
+    if not _valid_email(new_email):
+        return _error("Enter a valid email address.")
+    if new_email == current_user.email.lower():
+        return _error("This is already your current email address.")
+    if not email_is_configured():
+        return _error("Email verification is temporarily unavailable. Please try again later.", 503)
+
+    existing = User.query.filter(func.lower(User.email) == new_email).first()
+    pending = User.query.filter(
+        func.lower(User.pending_email) == new_email,
+        User.email_change_expires_at > datetime.now(timezone.utc),
+        User.user_id != current_user.user_id,
+    ).first()
+    if existing or pending:
+        return _error("That email address is already associated with another account or pending request.", 409)
+
+    raw_token = secrets.token_urlsafe(32)
+    current_user.pending_email = new_email
+    current_user.email_change_token_hash = _token_hash(raw_token)
+    current_user.email_change_expires_at = datetime.now(timezone.utc) + timedelta(
+        hours=current_app.config["EMAIL_VERIFICATION_HOURS"]
+    )
+    db.session.commit()
+
+    try:
+        send_email_change_verification(current_user, new_email, raw_token)
+    except Exception as exc:
+        current_app.logger.warning(
+            "Email change verification delivery was not completed: %s",
+            type(exc).__name__,
+        )
+        current_user.pending_email = None
+        current_user.email_change_token_hash = None
+        current_user.email_change_expires_at = None
+        db.session.commit()
+        return _error(
+            "Your current email address has not changed. We could not send the confirmation message; submit the request again to retry.",
+            503,
+        )
+
+    response = jsonify({
+        "message": "A confirmation link has been sent to your new email address. Your current email remains active until you confirm it.",
+        "pending_email": new_email,
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@bp.post("/auth/confirm-email-change")
+@csrf.exempt
+def confirm_account_email_change():
+    data = request.get_json(silent=True) or {}
+    raw_token = str(data.get("token", ""))
+    limited = _rate_limited("confirm_email_change", None, ip_limit=20, window_seconds=900)
+    if limited:
+        return limited
+    if not raw_token or len(raw_token) > 512:
+        return _error("This email confirmation link is invalid or has expired. Request another email change.", 400)
+
+    user = User.query.filter_by(email_change_token_hash=_token_hash(raw_token)).first()
+    if (
+        not user
+        or not user.is_active
+        or not user.pending_email
+        or _token_expired(user.email_change_expires_at)
+    ):
+        return _error("This email confirmation link is invalid or has expired. Request another email change.", 400)
+
+    new_email = user.pending_email.strip().lower()
+    existing = User.query.filter(
+        func.lower(User.email) == new_email,
+        User.user_id != user.user_id,
+    ).first()
+    if existing:
+        user.pending_email = None
+        user.email_change_token_hash = None
+        user.email_change_expires_at = None
+        db.session.commit()
+        return _error("That email address is no longer available. Request the change using another address.", 409)
+
+    user.email = new_email
+    user.email_verified_at = datetime.now(timezone.utc)
+    user.pending_email = None
+    user.email_change_token_hash = None
+    user.email_change_expires_at = None
+    db.session.commit()
+
+    response = jsonify({
+        "message": "Your email address has been changed and verified successfully.",
+        "email": user.email,
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @bp.post("/account/password")
 @login_required
 def change_account_password():
@@ -455,6 +695,9 @@ def change_account_password():
     current_user.password_hash = generate_password_hash(new_password)
     current_user.password_reset_token_hash = None
     current_user.password_reset_expires_at = None
+    current_user.pending_email = None
+    current_user.email_change_token_hash = None
+    current_user.email_change_expires_at = None
     current_user.auth_version = int(current_user.auth_version or 0) + 1
     db.session.commit()
     login_user(current_user, remember=False, fresh=True)

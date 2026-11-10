@@ -147,6 +147,55 @@ class AcademicWorkflowTests(unittest.TestCase):
             content_type="multipart/form-data",
         )
 
+    def test_init_db_migrates_legacy_request_submissions_and_reviews(self):
+        uploaded = self._submit(
+            self.student_one_client,
+            "Migration Test Document",
+            "A sufficiently long document used to verify preservation during migration.",
+        )
+        self.assertEqual(uploaded.status_code, 201, uploaded.get_json())
+        legacy_submission_id = uploaded.get_json()["submission"]["id"]
+        assessment = self.lecturer_client.post(
+            f"/api/submissions/{legacy_submission_id}/assessment",
+            json={"decision": "discuss_with_student", "feedback": "Migration feedback."},
+        )
+        self.assertEqual(assessment.status_code, 200, assessment.get_json())
+
+        result = self.app.test_cli_runner().invoke(args=["init-db"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        second_run = self.app.test_cli_runner().invoke(args=["init-db"])
+        self.assertEqual(second_run.exit_code, 0, second_run.output)
+
+        from app.submission_models import (
+            DocumentSubmission, SubmissionRequest, SubmissionRequestParticipant,
+            SubmissionRequestReviewer, SubmissionReview,
+        )
+
+        migrated = SubmissionRequest.query.filter_by(
+            legacy_assignment_id=self.assignment_id
+        ).one()
+        self.assertEqual(migrated.title, "Literature Review")
+        self.assertEqual(migrated.status, "open")
+        self.assertEqual(migrated.workspace_id, self.workspace.workspace_id)
+        generic_submission = DocumentSubmission.query.filter_by(
+            legacy_submission_id=legacy_submission_id
+        ).one()
+        self.assertEqual(generic_submission.request_id, migrated.request_id)
+        self.assertTrue(SubmissionRequestParticipant.query.filter_by(
+            request_id=migrated.request_id,
+            user_id=self.student_one.user_id,
+            status="active",
+        ).first())
+        self.assertTrue(SubmissionRequestReviewer.query.filter_by(
+            request_id=migrated.request_id,
+            user_id=self.lecturer.user_id,
+        ).first())
+        self.assertTrue(SubmissionReview.query.filter_by(
+            submission_id=generic_submission.submission_id,
+            reviewer_user_id=self.lecturer.user_id,
+            decision="discuss_with_student",
+        ).first())
+
     def test_course_and_assignment_are_created_for_organisation(self):
         response = self.lecturer_client.get("/api/courses")
         self.assertEqual(response.status_code, 200)

@@ -33,6 +33,10 @@ def create_app(config_class=Config):
         AcademicSubmission, Assignment, AssignmentAssessment, Comparison, Course,
         CourseMembership, Document, User, Workspace, WorkspaceInvite, WorkspaceMembership,
     )
+    from app.submission_models import (
+        DocumentSubmission, SubmissionRequest, SubmissionRequestParticipant,
+        SubmissionRequestReviewer, SubmissionReview,
+    )
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -55,11 +59,13 @@ def create_app(config_class=Config):
     from app.api import bp as api_bp
     from app.api.workspaces import bp as workspaces_api_bp
     from app.academic_api import bp as academic_api_bp
+    from app.submission_api import bp as submission_api_bp
     from app.routes.main import bp as main_bp
 
     app.register_blueprint(api_bp)
     app.register_blueprint(workspaces_api_bp)
     app.register_blueprint(academic_api_bp)
+    app.register_blueprint(submission_api_bp)
     app.register_blueprint(main_bp)
 
     @login_manager.unauthorized_handler
@@ -105,6 +111,11 @@ def create_app(config_class=Config):
                         "email_verified_at": "TIMESTAMP",
                         "email_verification_token_hash": "VARCHAR(64)",
                         "email_verification_expires_at": "TIMESTAMP",
+                        "pending_email": "VARCHAR(150)",
+                        "email_change_token_hash": "VARCHAR(64)",
+                        "email_change_expires_at": "TIMESTAMP",
+                        "profile_image_mime": "VARCHAR(50)",
+                        "profile_image_updated_at": "TIMESTAMP",
                         "password_reset_token_hash": "VARCHAR(64)",
                         "password_reset_expires_at": "TIMESTAMP",
                         "auth_version": "INTEGER NOT NULL DEFAULT 0",
@@ -112,6 +123,15 @@ def create_app(config_class=Config):
                     for column_name, sql_type in user_additions.items():
                         if column_name not in user_column_names:
                             connection.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {sql_type}"))
+                    if "profile_image_data" not in user_column_names:
+                        binary_type = "BYTEA" if db.engine.dialect.name == "postgresql" else "BLOB"
+                        connection.execute(text(
+                            f"ALTER TABLE users ADD COLUMN profile_image_data {binary_type}"
+                        ))
+                    connection.execute(text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email_change_token_hash "
+                        "ON users (email_change_token_hash)"
+                    ))
                     # Existing active accounts predate email verification. Preserve
                     # access by marking them verified during this additive migration.
                     connection.execute(text(
@@ -223,6 +243,118 @@ def create_app(config_class=Config):
                 synchronize_session=False,
             )
             db.session.commit()
+            # Introduce the generic submission model without deleting legacy academic
+            # records. Each legacy assignment and its submissions/reviews are copied
+            # once into the new model, with source IDs retained for auditability.
+            from app.submission_models import (
+                DocumentSubmission, SubmissionRequest, SubmissionRequestParticipant,
+                SubmissionRequestReviewer, SubmissionReview,
+            )
+            for legacy_assignment in Assignment.query.order_by(Assignment.assignment_id.asc()).all():
+                generic_request = SubmissionRequest.query.filter_by(
+                    legacy_assignment_id=legacy_assignment.assignment_id
+                ).first()
+                if generic_request is None:
+                    legacy_status = legacy_assignment.status
+                    request_status = {
+                        "published": "open",
+                        "closed": "closed",
+                        "draft": "draft",
+                    }.get(legacy_status, "archived")
+                    generic_request = SubmissionRequest(
+                        workspace_id=legacy_assignment.course.workspace_id,
+                        title=legacy_assignment.title,
+                        description=legacy_assignment.description,
+                        instructions=legacy_assignment.instructions,
+                        due_at=legacy_assignment.due_at,
+                        status=request_status,
+                        accepted_file_types=["pdf", "docx", "txt"],
+                        max_file_size_mb=20,
+                        allow_resubmissions=legacy_assignment.allow_resubmissions,
+                        allow_external_participants=True,
+                        created_by_user_id=legacy_assignment.created_by_user_id,
+                        legacy_assignment_id=legacy_assignment.assignment_id,
+                        created_at=legacy_assignment.created_at,
+                        updated_at=legacy_assignment.updated_at,
+                    )
+                    db.session.add(generic_request)
+                    db.session.flush()
+
+                course = legacy_assignment.course
+                for course_member in course.memberships:
+                    if course_member.role == "lecturer":
+                        existing_reviewer = SubmissionRequestReviewer.query.filter_by(
+                            request_id=generic_request.request_id,
+                            user_id=course_member.user_id,
+                        ).first()
+                        if not existing_reviewer:
+                            db.session.add(SubmissionRequestReviewer(
+                                request_id=generic_request.request_id,
+                                user_id=course_member.user_id,
+                                assigned_by_user_id=legacy_assignment.created_by_user_id,
+                            ))
+                    elif course_member.role == "student":
+                        existing_participant = SubmissionRequestParticipant.query.filter_by(
+                            request_id=generic_request.request_id,
+                            user_id=course_member.user_id,
+                        ).first()
+                        if existing_participant is None:
+                            db.session.add(SubmissionRequestParticipant(
+                                request_id=generic_request.request_id,
+                                user_id=course_member.user_id,
+                                participation_type="member",
+                                status="active",
+                            ))
+
+                for legacy_submission in legacy_assignment.submissions:
+                    generic_submission = DocumentSubmission.query.filter_by(
+                        legacy_submission_id=legacy_submission.submission_id
+                    ).first()
+                    if generic_submission is None:
+                        generic_submission = DocumentSubmission(
+                            request_id=generic_request.request_id,
+                            contributor_user_id=legacy_submission.student_user_id,
+                            document_id=legacy_submission.document_id,
+                            comparison_id=legacy_submission.comparison_id,
+                            legacy_submission_id=legacy_submission.submission_id,
+                            attempt_number=legacy_submission.attempt_number,
+                            status=legacy_submission.status,
+                            is_late=legacy_submission.is_late,
+                            submitted_at=legacy_submission.submitted_at,
+                        )
+                        db.session.add(generic_submission)
+                        db.session.flush()
+
+                    existing_participant = SubmissionRequestParticipant.query.filter_by(
+                        request_id=generic_request.request_id,
+                        user_id=legacy_submission.student_user_id,
+                    ).first()
+                    if existing_participant is None:
+                        db.session.add(SubmissionRequestParticipant(
+                            request_id=generic_request.request_id,
+                            user_id=legacy_submission.student_user_id,
+                            participation_type="member",
+                            status="active",
+                        ))
+
+                    legacy_assessment = legacy_submission.assessment
+                    if legacy_assessment:
+                        existing_review = SubmissionReview.query.filter_by(
+                            submission_id=generic_submission.submission_id,
+                            reviewer_user_id=legacy_assessment.assessor_user_id,
+                        ).first()
+                        if existing_review is None:
+                            db.session.add(SubmissionReview(
+                                submission_id=generic_submission.submission_id,
+                                reviewer_user_id=legacy_assessment.assessor_user_id,
+                                decision=legacy_assessment.decision,
+                                feedback=legacy_assessment.feedback,
+                                reviewed_at=legacy_assessment.reviewed_at,
+                            ))
+            # Keep legacy workspace role values during this compatibility phase.
+            # The UI and remaining legacy routes will be migrated in the next phase.
+            db.session.commit()
+
             with db.engine.begin() as connection:
                 connection.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_workspace_id ON documents (workspace_id)"))
                 connection.execute(text("CREATE INDEX IF NOT EXISTS ix_documents_visibility_scope ON documents (visibility_scope)"))

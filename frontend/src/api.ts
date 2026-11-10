@@ -109,6 +109,37 @@ export async function updateAccountProfile(payload: {
     return data.user;
 }
 
+export async function uploadProfilePicture(image: File): Promise<User> {
+    const formData = new FormData();
+    formData.append('image', image);
+    const data = await request<{ user: User; message: string; }>('/api/account/profile-picture', {
+        method: 'POST',
+        body: formData,
+    });
+    return data.user;
+}
+
+export async function removeProfilePicture(): Promise<void> {
+    await request('/api/account/profile-picture', { method: 'DELETE' });
+}
+
+export async function requestEmailChange(payload: {
+    new_email: string;
+    current_password: string;
+}): Promise<{ message: string; pending_email: string; }> {
+    return request('/api/account/email-change', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function confirmEmailChange(token: string): Promise<{ message: string; email: string; }> {
+    return request('/api/auth/confirm-email-change', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+    }, { skipCsrf: true });
+}
+
 export async function changeAccountPassword(payload: {
     current_password: string;
     new_password: string;

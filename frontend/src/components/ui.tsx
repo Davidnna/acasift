@@ -11,7 +11,10 @@ export function PageHeading({ eyebrow, title, description, action }: { eyebrow: 
 
 export function Notice({ children, tone = 'info' }: { children: ReactNode; tone?: 'info' | 'warning' | 'success' | 'danger'; }) {
     const Icon = tone === 'success' ? CheckCircle2 : tone === 'warning' || tone === 'danger' ? AlertCircle : Info;
-    return <div className={`notice notice-${tone}`}><Icon size={18} /><div>{children}</div></div>;
+    return <div className={`notice notice-${tone}`} role={tone === 'danger' ? 'alert' : 'status'} aria-live={tone === 'danger' ? 'assertive' : 'polite'}>
+        <Icon size={18} aria-hidden="true" />
+        <div>{children}</div>
+    </div>;
 }
 
 export function StatusPill({ value }: { value: string; }) {
@@ -21,7 +24,7 @@ export function StatusPill({ value }: { value: string; }) {
 }
 
 export function LoadingState({ label = 'Loading your workspace…' }: { label?: string; }) {
-    return <div className="loading-state"><LoaderCircle className="spin" size={22} /><span>{label}</span></div>;
+    return <div className="loading-state" role="status" aria-live="polite"><LoaderCircle className="spin" size={22} aria-hidden="true" /><span>{label}</span></div>;
 }
 
 export function EmptyState({ title, description, action }: { title: string; description: string; action?: ReactNode; }) {

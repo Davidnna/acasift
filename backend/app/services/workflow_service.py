@@ -14,10 +14,11 @@ from app.services.document_service import (
     make_storage_filename,
 )
 from app.services.similarity_service import compare_against_repository
+from app.services.reference_service import resolve_reference_sources
 from app.services.workspace_service import get_active_workspace
 
 
-def save_uploaded_document(file_storage, title, document_type, workspace_id=None, visibility_scope=None):
+def save_uploaded_document(file_storage, title, document_type, workspace_id=None, visibility_scope=None, commit=True):
     if not file_storage or not file_storage.filename:
         raise ValueError("Choose a document to upload.")
 
@@ -59,7 +60,10 @@ def save_uploaded_document(file_storage, title, document_type, workspace_id=None
         processing_status="processed",
     )
     db.session.add(document)
-    db.session.commit()
+    if commit:
+        db.session.commit()
+    else:
+        db.session.flush()
     return document
 
 
@@ -74,30 +78,16 @@ def run_comparison(submitted_document):
     db.session.commit()
 
     try:
-        from sqlalchemy import and_, or_
-
-        reference_visibility = or_(
-            Document.visibility_scope == "platform",
-            and_(
-                Document.workspace_id == submitted_document.workspace_id,
-                or_(
-                    Document.visibility_scope == "workspace",
-                    and_(Document.visibility_scope == "private", Document.user_id == submitted_document.user_id),
-                ),
-            ),
+        eligible_sources = resolve_reference_sources(
+            user_id=current_user.user_id,
+            workspace_id=submitted_document.workspace_id,
+            exclude_document_id=submitted_document.document_id,
+            maximum_per_scope=current_app.config.get("MAX_COMPARISON_SOURCES", 50),
         )
-        references = (
-            Document.query.filter(
-                Document.document_id != submitted_document.document_id,
-                Document.document_type == "reference",
-                Document.processing_status == "processed",
-                reference_visibility,
-            )
-            .order_by(Document.uploaded_at.desc())
-            .limit(current_app.config["MAX_COMPARISON_SOURCES"])
-            .all()
-        )
-
+        references = [document for document, _scope in eligible_sources]
+        scope_by_document_id = {
+            document.document_id: scope for document, scope in eligible_sources
+        }
         analysis = compare_against_repository(
             submitted_document.extracted_text,
             references,
@@ -105,9 +95,11 @@ def run_comparison(submitted_document):
         )
 
         for item in analysis:
+            reference_document = item["reference_document"]
             result = ComparisonResult(
                 comparison_id=comparison.comparison_id,
-                reference_document_id=item["reference_document"].document_id,
+                reference_document_id=reference_document.document_id,
+                source_scope=scope_by_document_id.get(reference_document.document_id),
                 cosine_similarity=item["cosine_similarity"],
                 matched_ngram_coverage=item["matched_ngram_coverage"],
                 matched_ngram_count=item["matched_ngram_count"],

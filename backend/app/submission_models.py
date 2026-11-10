@@ -1,4 +1,4 @@
-"""Generic document submission models used by collaborative workspaces."""
+"""Generic submission and scoped reference collection models."""
 
 from datetime import datetime, timezone
 from sqlalchemy import Index, UniqueConstraint

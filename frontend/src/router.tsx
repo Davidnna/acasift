@@ -38,12 +38,17 @@ import {
     getDashboard,
     getDocuments,
     getReferences,
+    getReferenceLibrary,
     getUsers,
     signIn,
     signOut,
     uploadReference,
+    uploadReferenceLibrary,
+    archiveReferenceLibraryEntry,
+    verifyWorkspaceReferenceEntry,
+    verifyGlobalReferenceEntry,
+    archiveGlobalReferenceEntry,
     uploadSubmission,
-    uploadWorkspaceReference,
     getSubmissionRequests,
     createSubmissionRequest,
     getSubmissionRequest,
@@ -75,8 +80,6 @@ async function requireUser({ request }: LoaderFunctionArgs) {
     return user;
 }
 
-const workspaceManagerRoles = ['owner', 'admin'];
-
 async function appLoader(args: LoaderFunctionArgs) {
     const user = await requireUser(args);
     const workspaceData = await getWorkspaces(args.request.signal);
@@ -103,24 +106,6 @@ async function submissionRequestDetailLoader(args: LoaderFunctionArgs) {
     await requireUser(args);
     return getSubmissionRequest(args.params.requestId || '', args.request.signal);
 }
-
-async function requireWorkspaceRoles(args: LoaderFunctionArgs, allowedRoles: string[]) {
-    await requireUser(args);
-    const workspaceData = await getWorkspaces(args.request.signal);
-    const activeWorkspace = workspaceData.workspaces.find(
-        workspace => workspace.id === workspaceData.active_workspace_id,
-    );
-    if (
-        !activeWorkspace
-        || activeWorkspace.type !== 'shared'
-        || !activeWorkspace.role
-        || !allowedRoles.includes(activeWorkspace.role)
-    ) {
-        throw redirect('/app/dashboard');
-    }
-    return activeWorkspace;
-}
-
 
 async function requireAdmin(args: LoaderFunctionArgs) {
     const user = await requireUser(args);
@@ -567,25 +552,58 @@ async function submissionRequestAction({ request, params }: ActionFunctionArgs) 
     }
 }
 
-async function uploadWorkspaceReferenceAction({ request }: ActionFunctionArgs) {
+async function referenceLibraryLoader(args: LoaderFunctionArgs) {
+    await requireUser(args);
+    return getReferenceLibrary(args.request.signal);
+}
+
+async function referenceLibraryAction({ request }: ActionFunctionArgs) {
     const formData = await request.formData();
+    const intent = String(formData.get('_intent') || 'upload');
     try {
-        await uploadWorkspaceReference(formData, request.signal);
-        throw redirect('/app/documents');
+        if (intent === 'upload') {
+            await uploadReferenceLibrary(formData, request.signal);
+            return { success: 'The reference document was added to the collection.' };
+        }
+        const entryId = Number(formData.get('entry_id'));
+        if (!Number.isInteger(entryId) || entryId < 1) return { error: 'The reference record is invalid.' };
+        if (intent === 'archive') {
+            await archiveReferenceLibraryEntry(entryId);
+            return { success: 'The reference was removed from this collection.' };
+        }
+        if (intent === 'verify') {
+            await verifyWorkspaceReferenceEntry(entryId, formData);
+            return { success: 'Workspace reference permission was recorded.' };
+        }
+        return { error: 'Unknown reference library action.' };
     } catch (error) {
         if (error instanceof Response) throw error;
-        return { error: error instanceof Error ? error.message : 'The workspace reference could not be saved.' };
+        return { error: error instanceof Error ? error.message : 'The reference library could not be updated.' };
     }
 }
 
-async function uploadReferenceAction({ request }: ActionFunctionArgs) {
+async function adminReferencesAction({ request }: ActionFunctionArgs) {
     const formData = await request.formData();
+    const intent = String(formData.get('_intent') || 'upload');
     try {
-        await uploadReference(formData, request.signal);
-        throw redirect('/app/admin/references');
+        if (intent === 'upload') {
+            await uploadReference(formData, request.signal);
+            return { success: 'The document was added to the global reference collection.' };
+        }
+        const entryId = Number(formData.get('entry_id'));
+        if (!Number.isInteger(entryId) || entryId < 1) return { error: 'The reference record is invalid.' };
+        if (intent === 'archive') {
+            await archiveGlobalReferenceEntry(entryId);
+            return { success: 'The global reference was removed from future comparisons.' };
+        }
+        if (intent === 'verify') {
+            await verifyGlobalReferenceEntry(entryId, formData);
+            return { success: 'Global reference permission was recorded.' };
+        }
+        return { error: 'Unknown global reference action.' };
     } catch (error) {
         if (error instanceof Response) throw error;
-        return { error: error instanceof Error ? error.message : 'The reference document could not be saved.' };
+        return { error: error instanceof Error ? error.message : 'The global reference collection could not be updated.' };
     }
 }
 
@@ -638,7 +656,8 @@ export const router = createBrowserRouter([
                     { path: 'dashboard', loader: (args) => loadForUser(args, getDashboard), lazy: async () => ({ Component: (await import('./pages/dashboard')).DashboardPage }) },
                     { path: 'documents', loader: (args) => loadForUser(args, getDocuments), action: uploadSubmissionAction, lazy: async () => ({ Component: (await import('./pages/documents')).DocumentsPage }) },
                     { path: 'documents/new', loader: () => redirect('/app/documents') },
-                    { path: 'references/new', loader: (args) => requireWorkspaceRoles(args, workspaceManagerRoles), action: uploadWorkspaceReferenceAction, lazy: async () => ({ Component: (await import('./pages/workspace-reference')).WorkspaceReferenceUploadPage }) },
+                    { path: 'references', loader: referenceLibraryLoader, action: referenceLibraryAction, lazy: async () => ({ Component: (await import('./pages/reference-library')).ReferenceLibraryPage }) },
+                    { path: 'references/new', loader: () => redirect('/app/references') },
                     { path: 'comparisons/:comparisonId', loader: (args) => loadForUser(args, (signal) => getComparison(args.params.comparisonId || '', signal)), lazy: async () => ({ Component: (await import('./pages/documents')).ComparisonPage }) },
                     {
                         path: 'admin',
@@ -647,7 +666,7 @@ export const router = createBrowserRouter([
                         children: [
                             { index: true, loader: () => redirect('/app/admin/users') },
                             { path: 'users', loader: (args) => loadForAdmin(args, getUsers), action: createUserAction, lazy: async () => ({ Component: (await import('./pages/admin')).AdminUsersPage }) },
-                            { path: 'references', loader: (args) => loadForAdmin(args, getReferences), action: uploadReferenceAction, lazy: async () => ({ Component: (await import('./pages/admin')).AdminReferencesPage }) },
+                            { path: 'references', loader: (args) => loadForAdmin(args, getReferences), action: adminReferencesAction, lazy: async () => ({ Component: (await import('./pages/admin')).AdminReferencesPage }) },
                             { path: 'references/new', loader: () => redirect('/app/admin/references') },
                         ],
                     },

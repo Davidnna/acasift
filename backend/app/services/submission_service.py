@@ -8,69 +8,43 @@ from app.extensions import db
 from app.models import (
     Comparison,
     ComparisonResult,
-    Document,
     MatchedPassage,
     Report,
 )
 from app.services.similarity_service import compare_against_repository
+from app.services.reference_service import resolve_reference_sources, register_reference_entry, entry_for_document
 from app.submission_models import DocumentSubmission
 
 
 def _eligible_sources(submission):
-    request = submission.request
-    submitted_document = submission.document
-    maximum_per_scope = max(1, int(current_app.config.get("MAX_COMPARISON_SOURCES", 50)))
-
-    global_sources = Document.query.filter(
-        Document.document_type == "reference",
-        Document.processing_status == "processed",
-        Document.visibility_scope == "platform",
-        Document.document_id != submitted_document.document_id,
-    ).order_by(Document.uploaded_at.desc()).limit(maximum_per_scope).all()
-
-    workspace_sources = Document.query.filter(
-        Document.document_type == "reference",
-        Document.processing_status == "processed",
-        Document.visibility_scope == "workspace",
-        Document.workspace_id == request.workspace_id,
-        Document.document_id != submitted_document.document_id,
-    ).order_by(Document.uploaded_at.desc()).limit(maximum_per_scope).all()
-
-    request_sources = (
-        Document.query.join(
-            DocumentSubmission,
-            DocumentSubmission.document_id == Document.document_id,
-        )
-        .filter(
-            DocumentSubmission.request_id == request.request_id,
-            DocumentSubmission.contributor_user_id != submission.contributor_user_id,
-            DocumentSubmission.status.in_(("submitted", "analysed", "analysis_failed")),
-            Document.processing_status == "processed",
-            Document.document_id != submitted_document.document_id,
-        )
-        .order_by(DocumentSubmission.submitted_at.desc())
-        .limit(maximum_per_scope)
-        .all()
+    """Resolve global, workspace and same-request references consistently."""
+    return resolve_reference_sources(
+        user_id=submission.contributor_user_id,
+        workspace_id=submission.request.workspace_id,
+        request_id=submission.request_id,
+        exclude_document_id=submission.document_id,
+        exclude_contributor_user_id=submission.contributor_user_id,
+        maximum_per_scope=max(1, int(current_app.config.get("MAX_COMPARISON_SOURCES", 50))),
     )
-
-    # Keep each approved source scope represented. A large global collection must
-    # not consume the entire comparison budget and silently exclude workspace or
-    # same-request evidence. The configured cap applies independently per scope.
-    sources = []
-    seen_hashes = set()
-    for documents in (global_sources, workspace_sources, request_sources):
-        for document in documents:
-            fingerprint = document.file_hash or f"document:{document.document_id}"
-            if fingerprint in seen_hashes:
-                continue
-            seen_hashes.add(fingerprint)
-            sources.append(document)
-
-    return sources
 
 
 def run_submission_request_comparison(submission):
     """Compare a request submission against global, workspace and request sources."""
+    request_scope_key = f"request:{submission.request_id}"
+    if entry_for_document(submission.document_id, request_scope_key) is None:
+        register_reference_entry(
+            submission.document,
+            "request",
+            submission.contributor_user_id,
+            owner_user_id=submission.contributor_user_id,
+            request_id=submission.request_id,
+            status="active",
+            provenance_type="submission_request_document",
+            rights_basis="request_scoped_submission",
+            rights_verified=False,
+        )
+        db.session.commit()
+
     comparison = Comparison(
         submitted_document_id=submission.document_id,
         user_id=submission.contributor_user_id,
@@ -83,7 +57,11 @@ def run_submission_request_comparison(submission):
     db.session.commit()
 
     try:
-        sources = _eligible_sources(submission)
+        eligible_sources = _eligible_sources(submission)
+        sources = [document for document, _scope in eligible_sources]
+        scope_by_document_id = {
+            document.document_id: scope for document, scope in eligible_sources
+        }
         analysis = compare_against_repository(
             submission.document.extracted_text,
             sources,
@@ -95,6 +73,7 @@ def run_submission_request_comparison(submission):
             result = ComparisonResult(
                 comparison_id=comparison.comparison_id,
                 reference_document_id=reference.document_id,
+                source_scope=scope_by_document_id.get(reference.document_id),
                 cosine_similarity=item["cosine_similarity"],
                 matched_ngram_coverage=item["matched_ngram_coverage"],
                 matched_ngram_count=item["matched_ngram_count"],

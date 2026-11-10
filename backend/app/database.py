@@ -3,6 +3,7 @@ from time import perf_counter
 from sqlalchemy import inspect, text
 
 from app.extensions import db
+from app.reference_models import ReferenceEntry
 from app.models import (
     Assignment,
     Comparison,
@@ -23,6 +24,7 @@ from app.submission_models import (
 
 MIGRATION_TABLE = "acasift_schema_migrations"
 LEGACY_BASELINE_VERSION = "2026-11-10-legacy-workspace-submission-baseline"
+REFERENCE_ARCHITECTURE_VERSION = "2026-11-10-unified-reference-architecture-v1"
 
 REQUIRED_COLUMNS = {
     "users": {
@@ -338,7 +340,8 @@ def _run_legacy_data_migration(app):
 
         # Create one private personal workspace for each existing account.
         # Existing submissions and comparisons are migrated into it. Existing
-        # administrator-curated references remain available as platform sources.
+        # administrator-curated references retain their records and receive a
+        # rights-review state in the unified reference migration below.
         for existing_user in User.query.all():
             membership = (
                 WorkspaceMembership.query.join(Workspace)
@@ -525,11 +528,146 @@ def _run_legacy_data_migration(app):
 
 
 
+def _run_reference_architecture_migration(app):
+    """Create scoped reference entries and preserve provenance for existing sources."""
+    from app.models import ComparisonResult
+
+    with app.app_context():
+        # create_all adds the new reference_entries table without modifying existing tables.
+        db.create_all()
+        inspector = inspect(db.engine)
+        if inspector.has_table("comparison_results"):
+            columns = {column["name"] for column in inspector.get_columns("comparison_results")}
+            if "source_scope" not in columns:
+                with db.engine.begin() as connection:
+                    connection.execute(text(
+                        "ALTER TABLE comparison_results ADD COLUMN source_scope VARCHAR(20)"
+                    ))
+            with db.engine.begin() as connection:
+                connection.execute(text(
+                    "CREATE INDEX IF NOT EXISTS ix_comparison_results_source_scope "
+                    "ON comparison_results (source_scope)"
+                ))
+
+        existing_keys = {
+            (entry.document_id, entry.scope_key)
+            for entry in ReferenceEntry.query.with_entities(
+                ReferenceEntry.document_id, ReferenceEntry.scope_key
+            ).all()
+        }
+
+        legacy_references = (
+            db.session.query(Document, Workspace.workspace_type)
+            .outerjoin(Workspace, Workspace.workspace_id == Document.workspace_id)
+            .filter(Document.document_type == "reference")
+            .yield_per(250)
+        )
+        for document, workspace_type in legacy_references:
+            if document.visibility_scope == "platform":
+                scope = "global"
+                scope_key = "global"
+                status = "review_required"
+                owner_user_id = None
+                workspace_id = None
+                rights_basis = "legacy_unverified"
+                provenance_type = "legacy_platform_reference"
+                rights_verified = False
+            elif document.visibility_scope == "workspace" and workspace_type == "shared" and document.workspace_id:
+                scope = "workspace"
+                scope_key = f"workspace:{document.workspace_id}"
+                status = "review_required"
+                owner_user_id = None
+                workspace_id = document.workspace_id
+                rights_basis = "legacy_unverified"
+                provenance_type = "legacy_workspace_reference"
+                rights_verified = False
+            else:
+                scope = "personal"
+                scope_key = f"personal:{document.user_id}"
+                status = "active"
+                owner_user_id = document.user_id
+                workspace_id = None
+                rights_basis = "personal_use_only"
+                provenance_type = "legacy_personal_reference"
+                rights_verified = False
+
+            key = (document.document_id, scope_key)
+            if key in existing_keys:
+                continue
+            db.session.add(ReferenceEntry(
+                document_id=document.document_id,
+                scope=scope,
+                scope_key=scope_key,
+                owner_user_id=owner_user_id,
+                workspace_id=workspace_id,
+                status=status,
+                provenance_type=provenance_type,
+                source_title=document.title,
+                rights_basis=rights_basis,
+                rights_verified=rights_verified,
+                created_by_user_id=document.user_id,
+                created_at=document.uploaded_at,
+                updated_at=document.uploaded_at,
+            ))
+            existing_keys.add(key)
+
+        request_submissions = (
+            db.session.query(DocumentSubmission, Document)
+            .join(Document, Document.document_id == DocumentSubmission.document_id)
+            .yield_per(250)
+        )
+        for submission, document in request_submissions:
+            scope_key = f"request:{submission.request_id}"
+            key = (document.document_id, scope_key)
+            if key in existing_keys:
+                continue
+            db.session.add(ReferenceEntry(
+                document_id=document.document_id,
+                scope="request",
+                scope_key=scope_key,
+                owner_user_id=submission.contributor_user_id,
+                request_id=submission.request_id,
+                status="active" if submission.status in ("submitted", "analysed", "analysis_failed") else "archived",
+                provenance_type="submission_request_document",
+                source_title=document.title,
+                rights_basis="request_scoped_submission",
+                rights_verified=False,
+                created_by_user_id=submission.contributor_user_id,
+                created_at=submission.submitted_at,
+                updated_at=submission.submitted_at,
+            ))
+            existing_keys.add(key)
+
+        db.session.flush()
+        pending_results = (
+            db.session.query(ComparisonResult, Document)
+            .join(Document, Document.document_id == ComparisonResult.reference_document_id)
+            .filter(ComparisonResult.source_scope.is_(None))
+            .yield_per(250)
+        )
+        for result, reference in pending_results:
+            if reference.document_type == "submission":
+                result.source_scope = "request"
+            elif reference.visibility_scope == "platform":
+                result.source_scope = "global"
+            elif reference.visibility_scope == "workspace":
+                result.source_scope = "workspace"
+            else:
+                result.source_scope = "personal"
+
+        db.session.commit()
+        app.logger.info(
+            "Unified reference architecture migration completed: %s reference entries registered.",
+            ReferenceEntry.query.count(),
+        )
+
+
 # Keep migrations in ascending dependency order. Add future schema/data changes
 # here with a new immutable version identifier and an idempotent migration
 # function. Never edit a migration that has already been released.
 MIGRATIONS = (
     (LEGACY_BASELINE_VERSION, _run_legacy_data_migration),
+    (REFERENCE_ARCHITECTURE_VERSION, _run_reference_architecture_migration),
 )
 
 

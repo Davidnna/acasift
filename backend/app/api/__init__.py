@@ -5,6 +5,7 @@ import re
 import secrets
 import warnings
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 from flask import Blueprint, current_app, jsonify, request, send_file, session
@@ -25,7 +26,19 @@ from app.services.email_service import (
 )
 from app.services.workspace_service import ensure_personal_workspace, get_active_workspace, membership_for, is_workspace_manager
 from app.services.workflow_service import run_comparison, save_uploaded_document
-from app.submission_models import DocumentSubmission, SubmissionRequest, SubmissionRequestParticipant
+from app.submission_models import (
+    DocumentSubmission,
+    SubmissionRequest,
+    SubmissionRequestParticipant,
+)
+from app.reference_models import ReferenceEntry
+from app.services.reference_service import (
+    GLOBAL_RIGHTS_BASES,
+    archive_reference_entry,
+    list_reference_entries,
+    reference_entry_payload,
+    register_reference_entry,
+)
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -137,7 +150,7 @@ def _comparison_payload(comparison, include_results=False, hide_peer_source_deta
                     "uploader": None,
                     "user_id": None,
                 }
-            source_scope = (
+            source_scope = result.source_scope or (
                 "request" if is_request_peer else
                 "workspace" if reference.visibility_scope == "workspace" else
                 "personal" if reference.visibility_scope == "private" else
@@ -737,20 +750,23 @@ def dashboard():
         Comparison.user_id == current_user.user_id,
         Comparison.workspace_id == workspace.workspace_id,
     )
-    reference_query = Document.query.filter(
-        Document.document_type == "reference",
-        Document.processing_status == "processed",
+    reference_query = ReferenceEntry.query.filter(
+        ReferenceEntry.status == "active",
+        ReferenceEntry.document.has(Document.processing_status == "processed"),
         (
-            (Document.visibility_scope == "platform")
-            | (
-                (Document.workspace_id == workspace.workspace_id)
-                & (Document.visibility_scope == "workspace")
-            )
-            | (
-                (Document.workspace_id == workspace.workspace_id)
-                & (Document.user_id == current_user.user_id)
-                & (Document.visibility_scope == "private")
-            )
+            (ReferenceEntry.scope == "global")
+            & (ReferenceEntry.rights_verified.is_(True))
+        )
+        | (
+            (ReferenceEntry.scope == "personal")
+            & (ReferenceEntry.owner_user_id == current_user.user_id)
+            & (workspace.workspace_type == "personal")
+        )
+        | (
+            (ReferenceEntry.scope == "workspace")
+            & (ReferenceEntry.workspace_id == workspace.workspace_id)
+            & (ReferenceEntry.rights_verified.is_(True))
+            & (workspace.workspace_type == "shared")
         ),
     )
     request_records = (
@@ -794,7 +810,7 @@ def dashboard():
         "stats": {
             "document_count": document_query.count(),
             "comparison_count": comparison_query.count(),
-            "reference_count": reference_query.count(),
+            "reference_count": reference_query.with_entities(ReferenceEntry.document_id).distinct().count(),
         },
         "recent_documents": [_document_payload(item) for item in document_query.order_by(Document.uploaded_at.desc()).limit(6).all()],
         "recent_comparisons": [_comparison_payload(item) for item in comparison_query.order_by(Comparison.started_at.desc()).limit(6).all()],
@@ -947,29 +963,192 @@ def create_user():
     return jsonify({"message": "User account created successfully.", "user": _user_payload(user)}), 201
 
 
+def _valid_reference_url(value, field_name):
+    value = str(value or "").strip()
+    if not value:
+        return None, None
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None, _error(f"Enter a valid HTTP or HTTPS {field_name}.")
+    if len(value) > 1000:
+        return None, _error(f"The {field_name} is too long.")
+    return value, None
+
+
+def _reference_entry_response(entry):
+    return reference_entry_payload(entry)
+
+
+@bp.get("/reference-library")
+@login_required
+def reference_library():
+    workspace = get_active_workspace(current_user)
+    if workspace.workspace_type == "personal":
+        entries = list_reference_entries(
+            scope="personal",
+            owner_user_id=current_user.user_id,
+        )
+        scope = "personal"
+        can_manage = True
+    else:
+        membership = membership_for(current_user, workspace.workspace_id)
+        entries = list_reference_entries(
+            scope="workspace",
+            workspace_id=workspace.workspace_id,
+        )
+        scope = "workspace"
+        can_manage = is_workspace_manager(membership)
+    return jsonify({
+        "scope": scope,
+        "workspace": {"id": workspace.workspace_id, "name": workspace.name, "type": workspace.workspace_type},
+        "can_manage": can_manage,
+        "entries": [_reference_entry_response(entry) for entry in entries],
+    })
+
+
+@bp.post("/reference-library")
+@login_required
+def upload_reference_library_document():
+    workspace = get_active_workspace(current_user)
+    if workspace.workspace_type == "shared":
+        membership = membership_for(current_user, workspace.workspace_id)
+        if not is_workspace_manager(membership):
+            return _error("Only workspace owners and administrators can manage shared references.", 403)
+        if str(request.form.get("permission_confirmed", "")).lower() not in {"1", "true", "yes", "on"}:
+            return _error("Confirm that you have permission to use this document within the workspace.")
+        scope = "workspace"
+        visibility_scope = "workspace"
+        rights_basis = "workspace_permission"
+        rights_verified = True
+        owner_user_id = None
+        workspace_id = workspace.workspace_id
+    else:
+        scope = "personal"
+        visibility_scope = "private"
+        rights_basis = "personal_use_only"
+        rights_verified = False
+        owner_user_id = current_user.user_id
+        workspace_id = None
+
+    source_url, url_error = _valid_reference_url(request.form.get("source_url"), "source URL")
+    if url_error:
+        return url_error
+    try:
+        document = save_uploaded_document(
+            request.files.get("document"),
+            request.form.get("title", ""),
+            "reference",
+            workspace_id=workspace.workspace_id if scope == "personal" else workspace_id,
+            visibility_scope=visibility_scope,
+            commit=False,
+        )
+        entry = register_reference_entry(
+            document,
+            scope,
+            current_user.user_id,
+            owner_user_id=owner_user_id,
+            workspace_id=workspace_id,
+            status="active",
+            provenance_type="user_upload",
+            source_title=document.title,
+            source_url=source_url,
+            rights_basis=rights_basis,
+            rights_verified=rights_verified,
+            verified_by_user_id=current_user.user_id if rights_verified else None,
+            verified_at=datetime.now(timezone.utc) if rights_verified else None,
+        )
+        db.session.commit()
+        return jsonify({
+            "message": f"Reference document '{document.title}' added to your {scope} reference library.",
+            "entry": _reference_entry_response(entry),
+        }), 201
+    except ValueError as exc:
+        db.session.rollback()
+        return _error(str(exc), 400)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Reference library upload failed.")
+        return _error("The reference document could not be saved.", 500)
+
+
+@bp.delete("/reference-library/<int:entry_id>")
+@login_required
+def archive_reference_library_entry(entry_id):
+    entry = db.session.get(ReferenceEntry, entry_id)
+    if not entry or entry.scope not in {"personal", "workspace"}:
+        return _error("Reference document not found.", 404)
+    if entry.scope == "personal":
+        if entry.owner_user_id != current_user.user_id:
+            return _error("You do not have permission to remove this reference.", 403)
+    else:
+        membership = membership_for(current_user, entry.workspace_id)
+        if not is_workspace_manager(membership):
+            return _error("Only workspace owners and administrators can manage shared references.", 403)
+    archive_reference_entry(entry)
+    db.session.commit()
+    return jsonify({"message": "The reference was removed from this collection."})
+
+
+@bp.post("/reference-library/<int:entry_id>/verify")
+@login_required
+def verify_workspace_reference_entry(entry_id):
+    entry = db.session.get(ReferenceEntry, entry_id)
+    if not entry or entry.scope != "workspace" or entry.status != "review_required":
+        return _error("Reference document not found or no longer requires review.", 404)
+    membership = membership_for(current_user, entry.workspace_id)
+    if not is_workspace_manager(membership):
+        return _error("Only workspace owners and administrators can verify shared references.", 403)
+    if str(request.form.get("permission_confirmed", "")).lower() not in {"1", "true", "yes", "on"}:
+        return _error("Confirm that the workspace has permission to use this document.")
+    entry.status = "active"
+    entry.rights_basis = "workspace_permission"
+    entry.rights_verified = True
+    entry.verified_by_user_id = current_user.user_id
+    entry.verified_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"message": "Workspace reference permission recorded."})
+
+
 @bp.post("/workspace/references")
 @login_required
 def upload_workspace_reference():
+    """Backward-compatible endpoint; new clients use /reference-library."""
     workspace = get_active_workspace(current_user)
+    if workspace.workspace_type != "shared":
+        return _error("Shared reference collections are not available in a personal workspace.", 403)
     membership = membership_for(current_user, workspace.workspace_id)
-    if workspace.workspace_type != "shared" or not is_workspace_manager(membership):
-        return _error("Reference collections are available to owners and administrators of shared workspaces.", 403)
-    scope = "workspace"
+    if not is_workspace_manager(membership):
+        return _error("Only workspace owners and administrators can manage shared references.", 403)
+    if str(request.form.get("permission_confirmed", "")).lower() not in {"1", "true", "yes", "on"}:
+        return _error("Confirm that you have permission to use this document within the workspace.")
     try:
         document = save_uploaded_document(
             request.files.get("document"),
             request.form.get("title", ""),
             "reference",
             workspace_id=workspace.workspace_id,
-            visibility_scope=scope,
+            visibility_scope="workspace",
+            commit=False,
         )
-        return jsonify({
-            "message": f"Reference document '{document.title}' added to {workspace.name}.",
-            "document": _document_payload(document),
-        }), 201
+        entry = register_reference_entry(
+            document,
+            "workspace",
+            current_user.user_id,
+            workspace_id=workspace.workspace_id,
+            status="active",
+            provenance_type="user_upload",
+            rights_basis="workspace_permission",
+            rights_verified=True,
+            verified_by_user_id=current_user.user_id,
+            verified_at=datetime.now(timezone.utc),
+        )
+        db.session.commit()
+        return jsonify({"message": f"Reference document '{document.title}' added to {workspace.name}.", "document": _document_payload(document), "entry": _reference_entry_response(entry)}), 201
     except ValueError as exc:
+        db.session.rollback()
         return _error(str(exc), 400)
     except Exception:
+        db.session.rollback()
         current_app.logger.exception("Workspace reference upload failed.")
         return _error("The reference document could not be saved.", 500)
 
@@ -977,31 +1156,117 @@ def upload_workspace_reference():
 @bp.get("/admin/references")
 @admin_required
 def references():
-    records = Document.query.filter_by(document_type="reference", visibility_scope="platform").order_by(Document.uploaded_at.desc()).all()
-    return jsonify({"documents": [_document_payload(item) for item in records]})
+    entries = list_reference_entries(scope="global", include_inactive=True)
+    payload = [_reference_entry_response(entry) for entry in entries]
+    return jsonify({"entries": payload, "documents": [_document_payload(entry.document) for entry in entries]})
 
 
 @bp.post("/admin/references")
 @admin_required
 def upload_reference():
+    rights_basis = str(request.form.get("rights_basis", "")).strip()
+    if rights_basis not in GLOBAL_RIGHTS_BASES:
+        return _error("Select a valid permission basis for this global reference.")
+    if str(request.form.get("rights_confirmed", "")).lower() not in {"1", "true", "yes", "on"}:
+        return _error("Confirm that AcaSift has the necessary rights to use this document globally.")
+
+    license_name = str(request.form.get("license_name", "")).strip() or None
+    license_url, url_error = _valid_reference_url(request.form.get("license_url"), "licence URL")
+    if url_error:
+        return url_error
+    source_url, url_error = _valid_reference_url(request.form.get("source_url"), "source URL")
+    if url_error:
+        return url_error
+    if rights_basis == "open_license" and (not license_name or not license_url):
+        return _error("Provide the open licence name and its official licence URL.")
+    rights_notes = str(request.form.get("rights_notes", "")).strip()[:2000] or None
+    if rights_basis in {"author_permission", "publisher_agreement", "other_authorization"} and not (source_url or rights_notes):
+        return _error("Provide a source URL or permission note supporting global use.")
+
     try:
         document = save_uploaded_document(
             request.files.get("document"),
             request.form.get("title", ""),
             "reference",
+            commit=False,
         )
+        entry = register_reference_entry(
+            document,
+            "global",
+            current_user.user_id,
+            status="active",
+            provenance_type="administrator_curated",
+            source_title=document.title,
+            source_url=source_url,
+            doi=str(request.form.get("doi", "")).strip()[:255] or None,
+            rights_basis=rights_basis,
+            license_name=license_name,
+            license_url=license_url,
+            rights_notes=rights_notes,
+            rights_verified=True,
+            verified_by_user_id=current_user.user_id,
+            verified_at=datetime.now(timezone.utc),
+        )
+        db.session.commit()
         return jsonify({
-            "message": f"Reference document '{document.title}' added to the repository.",
+            "message": f"Reference document '{document.title}' added to the global collection.",
+            "entry": _reference_entry_response(entry),
             "document": _document_payload(document),
         }), 201
     except ValueError as exc:
+        db.session.rollback()
         return _error(str(exc), 400)
     except Exception:
-        from flask import current_app
-        current_app.logger.exception("Reference document upload failed.")
+        db.session.rollback()
+        current_app.logger.exception("Global reference upload failed.")
         return _error("The reference document could not be saved.", 500)
 
 
+@bp.post("/admin/references/<int:entry_id>/verify")
+@admin_required
+def verify_global_reference_entry(entry_id):
+    entry = db.session.get(ReferenceEntry, entry_id)
+    if not entry or entry.scope != "global" or entry.status != "review_required":
+        return _error("Reference document not found or no longer requires review.", 404)
+    rights_basis = str(request.form.get("rights_basis", "")).strip()
+    if rights_basis not in GLOBAL_RIGHTS_BASES:
+        return _error("Select a valid permission basis for this global reference.")
+    if str(request.form.get("rights_confirmed", "")).lower() not in {"1", "true", "yes", "on"}:
+        return _error("Confirm that AcaSift has the necessary rights to use this document globally.")
+    license_name = str(request.form.get("license_name", "")).strip() or None
+    license_url, url_error = _valid_reference_url(request.form.get("license_url"), "licence URL")
+    if url_error:
+        return url_error
+    source_url, url_error = _valid_reference_url(request.form.get("source_url"), "source URL")
+    if url_error:
+        return url_error
+    if rights_basis == "open_license" and (not license_name or not license_url):
+        return _error("Provide the open licence name and its official licence URL.")
+    rights_notes = str(request.form.get("rights_notes", "")).strip()[:2000] or None
+    if rights_basis in {"author_permission", "publisher_agreement", "other_authorization"} and not (source_url or rights_notes):
+        return _error("Provide a source URL or permission note supporting global use.")
+    entry.status = "active"
+    entry.rights_basis = rights_basis
+    entry.license_name = license_name
+    entry.license_url = license_url
+    entry.source_url = source_url
+    entry.rights_notes = rights_notes
+    entry.rights_verified = True
+    entry.verified_by_user_id = current_user.user_id
+    entry.verified_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"message": "Global reference rights verified. The document is now eligible for comparisons."})
+
+
+@bp.delete("/admin/references/<int:entry_id>")
+@admin_required
+def archive_global_reference_entry(entry_id):
+    entry = db.session.get(ReferenceEntry, entry_id)
+    if not entry or entry.scope != "global":
+        return _error("Global reference not found.", 404)
+    archive_reference_entry(entry)
+    db.session.commit()
+    return jsonify({"message": "The global reference has been removed from future comparisons."})
 
 
 @bp.get("/bootstrap/status")

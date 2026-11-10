@@ -125,6 +125,7 @@ class ComparisonResult(db.Model):
     matched_ngram_count = db.Column(db.Integer, nullable=False, default=0)
     total_query_ngrams = db.Column(db.Integer, nullable=False, default=0)
     coverage_method = db.Column(db.String(20), nullable=False, default="ngram_windows")
+    source_scope = db.Column(db.String(20), nullable=True, index=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
 
     comparison = db.relationship("Comparison", back_populates="results")

@@ -27,6 +27,39 @@ export interface DocumentRecord {
     uploaded_at: string;
 }
 
+export interface ReferenceEntryRecord {
+    id: number;
+    document_id: number;
+    scope: 'global' | 'personal' | 'workspace' | 'request';
+    status: 'active' | 'review_required' | 'withdrawn' | 'archived' | 'quarantined';
+    provenance_type: string;
+    source_title: string | null;
+    source_url: string | null;
+    doi: string | null;
+    rights_basis: string | null;
+    license_name: string | null;
+    license_url: string | null;
+    rights_notes: string | null;
+    rights_verified: boolean;
+    verified_at: string | null;
+    created_at: string | null;
+    document: {
+        id: number;
+        title: string;
+        original_filename: string;
+        file_type: string;
+        uploaded_at: string | null;
+        uploader: string | null;
+    };
+}
+
+export interface ReferenceLibraryData {
+    scope: 'personal' | 'workspace';
+    workspace: { id: number; name: string; type: 'personal' | 'shared'; };
+    can_manage: boolean;
+    entries: ReferenceEntryRecord[];
+}
+
 export interface ComparisonSummary {
     id: number;
     status: string;

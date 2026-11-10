@@ -235,6 +235,7 @@ function PublicFooter() {
 const baseWorkspaceLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; }[] = [
     { to: '/app/dashboard', label: 'Overview', icon: LayoutDashboard, end: true },
     { to: '/app/documents', label: 'My documents', icon: Files, end: true },
+    { to: '/app/references', label: 'Reference library', icon: BookOpen, end: true },
     { to: '/app/account', label: 'My account', icon: Settings2, end: true },
     { to: '/app/workspaces', label: 'Workspaces', icon: Layers3, end: true },
 ];

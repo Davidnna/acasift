@@ -13,6 +13,8 @@ import type {
     SubmissionRequestInvitePreviewData,
     SubmissionRequestInviteRecord,
     SubmissionRequestSubmission,
+    ReferenceEntryRecord,
+    ReferenceLibraryData,
 } from './types';
 
 export class ApiError extends Error {
@@ -176,13 +178,37 @@ export async function createUser(payload: Record<string, string>): Promise<void>
     await request('/api/admin/users', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export async function getReferences(signal?: AbortSignal): Promise<DocumentRecord[]> {
-    const data = await request<{ documents: DocumentRecord[]; }>('/api/admin/references', { signal });
-    return data.documents;
+export async function getReferenceLibrary(signal?: AbortSignal): Promise<ReferenceLibraryData> {
+    return request('/api/reference-library', { signal });
+}
+
+export async function uploadReferenceLibrary(formData: FormData, signal?: AbortSignal): Promise<void> {
+    await request('/api/reference-library', { method: 'POST', body: formData, signal });
+}
+
+export async function archiveReferenceLibraryEntry(entryId: number): Promise<void> {
+    await request(`/api/reference-library/${entryId}`, { method: 'DELETE' });
+}
+
+export async function verifyWorkspaceReferenceEntry(entryId: number, formData: FormData): Promise<void> {
+    await request(`/api/reference-library/${entryId}/verify`, { method: 'POST', body: formData });
+}
+
+export async function getReferences(signal?: AbortSignal): Promise<ReferenceEntryRecord[]> {
+    const data = await request<{ entries: ReferenceEntryRecord[]; }>('/api/admin/references', { signal });
+    return data.entries;
 }
 
 export async function uploadReference(formData: FormData, signal?: AbortSignal): Promise<void> {
     await request('/api/admin/references', { method: 'POST', body: formData, signal });
+}
+
+export async function verifyGlobalReferenceEntry(entryId: number, formData: FormData): Promise<void> {
+    await request(`/api/admin/references/${entryId}/verify`, { method: 'POST', body: formData });
+}
+
+export async function archiveGlobalReferenceEntry(entryId: number): Promise<void> {
+    await request(`/api/admin/references/${entryId}`, { method: 'DELETE' });
 }
 
 
@@ -258,11 +284,6 @@ export async function removeWorkspaceMember(workspaceId: number, userId: number)
 export async function addWorkspaceMember(workspaceId: number, payload: { email: string; role: string; }): Promise<void> {
     await request(`/api/workspaces/${workspaceId}/members`, { method: 'POST', body: JSON.stringify(payload) });
 }
-
-export async function uploadWorkspaceReference(formData: FormData, signal?: AbortSignal): Promise<void> {
-    await request('/api/workspace/references', { method: 'POST', body: formData, signal });
-}
-
 
 export async function registerAccount(payload: {
     first_name: string;

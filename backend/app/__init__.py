@@ -36,6 +36,7 @@ def create_app(config_class=Config):
         DocumentSubmission, SubmissionRequest, SubmissionRequestParticipant,
         SubmissionRequestReviewer, SubmissionReview,
     )
+    from app.reference_models import ReferenceEntry
 
     @login_manager.user_loader
     def load_user(user_id):

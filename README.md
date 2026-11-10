@@ -19,7 +19,7 @@ support human assessment; they do not automatically determine plagiarism or misc
 - Compare submissions against eligible global references, workspace references and other submissions in the same request.
 - Provide request-level review outcomes and feedback while protecting peer-submission identities and excerpts in contributor reports.
 - Preserve historical submissions and reports while older records are migrated into the generic workflow.
-- Maintain platform reference materials and authorised workspace reference collections.
+- Maintain one reference registry spanning global, personal, workspace and Submission Request sources, with provenance and permission records.
 - Support account registration, email verification and password recovery.
 - Let users upload, replace and remove a profile picture from their account page.
 - Let users request an email address change, confirmed through a one-time verification link sent to the new address.
@@ -127,13 +127,18 @@ interface and are not deleted by this release.
 
 ## Reference materials
 
-AcaSift distinguishes personal, workspace, global and request-level reference sources. A document
-is not added to the global reference collection merely because it is uploaded. Global contribution
-requires explicit permission from a person who has the necessary rights. Reference acquisition
-must retain source and licence provenance; publicly accessible does not automatically mean
-reusable. The explicit global-contribution consent interface and external repository ingestion
-pipeline are planned for a later release. In this release, uploaded submissions are not automatically
-added to the global reference collection.
+AcaSift uses one reference registry with four scopes:
+
+- **Global:** platform-wide documents whose global-use permission basis and provenance have been recorded by an administrator.
+- **Personal:** private source documents available only to the owner in their personal workspace.
+- **Workspace:** documents available to authorised members of one shared workspace after a manager records permission for workspace use.
+- **Submission Request:** eligible submissions used only to compare other submissions belonging to the same request.
+
+The comparison service resolves eligible sources through the same registry. Personal comparisons use verified global references and the account owner's personal library. Shared-workspace comparisons use verified global references and verified references in the active workspace. Submission Request comparisons additionally use eligible submissions from that same request, excluding the contributor's own submissions and prior attempts. Duplicate file fingerprints are de-duplicated across scopes.
+
+Older global and shared-workspace references are migrated with a `review_required` status because the previous system did not record their rights basis. They remain available for administrator or workspace-manager review but are excluded from comparisons until the relevant permission is recorded. Personal references remain private and usable by their owner. Historical comparison results retain their recorded source scope.
+
+A document is not added to the global reference collection merely because it is uploaded. Global records require a recorded permission basis, source metadata where applicable, and an administrator attestation. Public accessibility alone does not establish permission to reuse a document. The separate user-facing global-contribution consent and withdrawal workflow, together with external repository ingestion, is planned for a later release. Submission documents are not automatically added to the global collection.
 
 ## Deployment
 

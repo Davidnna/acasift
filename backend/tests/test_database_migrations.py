@@ -8,7 +8,7 @@ from sqlalchemy import text
 from config import Config
 from app import create_app
 from app.extensions import db
-from app.database import LEGACY_BASELINE_VERSION, MIGRATION_TABLE
+from app.database import LEGACY_BASELINE_VERSION, MIGRATION_TABLE, REFERENCE_ARCHITECTURE_VERSION
 
 
 class DatabaseMigrationConfig(Config):
@@ -61,6 +61,22 @@ class DatabaseMigrationTests(unittest.TestCase):
         migration.assert_not_called()
         bootstrap.assert_not_called()
         self.assertIn("current", second.output.lower())
+
+
+    def test_reference_architecture_migration_is_recorded_and_not_repeated(self):
+        first = self.app.test_cli_runner().invoke(args=["init-db"])
+        self.assertEqual(first.exit_code, 0, first.output)
+        record = db.session.execute(
+            text(f"SELECT version, execution_mode FROM {MIGRATION_TABLE} WHERE version = :version"),
+            {"version": REFERENCE_ARCHITECTURE_VERSION},
+        ).first()
+        self.assertIsNotNone(record)
+        self.assertEqual(record.execution_mode, "executed")
+
+        with patch("app.database._run_reference_architecture_migration", side_effect=AssertionError("reference migration reran")) as migration:
+            second = self.app.test_cli_runner().invoke(args=["init-db"])
+        self.assertEqual(second.exit_code, 0, second.output)
+        migration.assert_not_called()
 
     def test_failed_migration_is_not_marked_as_applied(self):
         with patch("app.database._legacy_baseline_status", return_value=(False, ["test pending migration"])), \

@@ -252,12 +252,15 @@ async function workspaceInviteAction({ request }: ActionFunctionArgs) {
 async function submissionRequestInviteLoader({ request }: LoaderFunctionArgs) {
     const url = new URL(request.url);
     const token = url.searchParams.get('token') || '';
+    const next = `${url.pathname}${url.search}`;
+
     if (!token) throw new Response('Submission link is missing.', { status: 404 });
+
     const user = await getCurrentUser(request.signal);
     if (!user) {
-        const next = `${url.pathname}${url.search}`;
         throw redirect(`/login?next=${encodeURIComponent(next)}`);
     }
+
     try {
         return await getSubmissionRequestInvitePreview(token, request.signal);
     } catch (error) {

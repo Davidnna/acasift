@@ -60,7 +60,7 @@ class AcquisitionSearchState(db.Model):
     state_id = db.Column(db.Integer, primary_key=True)
     provider = db.Column(db.String(40), nullable=False)
     query_hash = db.Column(db.String(64), nullable=False)
-    query = db.Column(db.String(500), nullable=False)
+    search_query = db.Column("query", db.String(500), nullable=False)
     cursor = db.Column(db.Text, nullable=True)
     offset = db.Column(db.Integer, nullable=False, default=0)
     page = db.Column(db.Integer, nullable=False, default=1)
@@ -81,7 +81,7 @@ class AcquisitionJob(db.Model):
 
     job_id = db.Column(db.Integer, primary_key=True)
     provider = db.Column(db.String(40), nullable=False)
-    query = db.Column(db.String(500), nullable=False)
+    search_query = db.Column("query", db.String(500), nullable=False)
     requested_limit = db.Column(db.Integer, nullable=False, default=20)
     status = db.Column(db.String(24), nullable=False, default="queued")
     discovered_count = db.Column(db.Integer, nullable=False, default=0)

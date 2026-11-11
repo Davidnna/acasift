@@ -30,7 +30,7 @@ from app.acquisition_models import AcquisitionJob, AcquisitionSearchState, Schol
 from app.services.document_service import calculate_sha256, extract_text, make_storage_filename
 from app.services.reference_service import register_reference_entry
 
-USER_AGENT = "AcaSiftReferenceAcquisition/0.14.0 (+https://acasift.onrender.com)"
+USER_AGENT = "AcaSiftReferenceAcquisition/0.14.1 (+https://acasift.onrender.com)"
 MAX_DOWNLOAD_BYTES = 15 * 1024 * 1024
 MAX_RECORDS_PER_RUN = 25
 MAX_DOWNLOADS_PER_RUN = 2
@@ -665,7 +665,7 @@ def _job_payload(job):
     return {
         "id": job.job_id,
         "provider": job.provider,
-        "query": job.query,
+        "query": job.search_query,
         "requested_limit": job.requested_limit,
         "status": job.status,
         "discovered_count": job.discovered_count,
@@ -714,7 +714,7 @@ def acquisition_dashboard():
         "jobs": [_job_payload(job) for job in jobs],
         "searches": [{
             "provider": state.provider,
-            "query": state.query,
+            "query": state.search_query,
             "total_available": state.total_available,
             "exhausted": bool(state.exhausted),
             "next_page": state.page if state.provider in {"europe_pmc", "doaj", "zenodo"} else None,
@@ -776,7 +776,7 @@ def run_acquisition_job(job_id):
             job.error_message = "This search has reached the end of the available results. Change the search terms to start another search."
             db.session.commit()
             return _job_payload(job)
-        items = discover(job.query, min(MAX_RECORDS_PER_RUN, max(1, job.requested_limit)), state)
+        items = discover(job.search_query, min(MAX_RECORDS_PER_RUN, max(1, job.requested_limit)), state)
         state.last_run_at = utc_now()
         db.session.commit()
         job.discovered_count = len(items)
@@ -850,7 +850,7 @@ def create_and_run_job(provider, query, requested_limit, admin_user_id):
         state = AcquisitionSearchState(
             provider=provider,
             query_hash=query_hash,
-            query=query,
+            search_query=query,
             cursor="*" if provider == "openalex" else None,
             offset=0,
             page=1,
@@ -862,7 +862,7 @@ def create_and_run_job(provider, query, requested_limit, admin_user_id):
         raise ValueError("This provider has no more results for the saved search. Change the search terms to start a new search.")
     job = AcquisitionJob(
         provider=provider,
-        query=query,
+        search_query=query,
         requested_limit=requested_limit,
         status="queued",
         search_state_id=state.state_id,

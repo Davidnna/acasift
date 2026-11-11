@@ -65,6 +65,12 @@ class AcquisitionServiceTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_json())
         return client
 
+    def test_acquisition_search_fields_do_not_shadow_model_query_descriptor(self):
+        self.assertIn("query", AcquisitionJob.__table__.columns)
+        self.assertIn("query", AcquisitionSearchState.__table__.columns)
+        self.assertTrue(callable(getattr(AcquisitionJob.query, "order_by", None)))
+        self.assertTrue(callable(getattr(AcquisitionSearchState.query, "filter_by", None)))
+
     def test_license_policy_accepts_exact_cc_by_and_cc0_only(self):
         self.assertEqual(
             acquisition._normalise_license("https://creativecommons.org/licenses/by/4.0/"),
@@ -91,7 +97,12 @@ class AcquisitionServiceTests(unittest.TestCase):
         admin_client = self._login("admin@example.test")
         response = admin_client.get("/api/admin/acquisition")
         self.assertEqual(response.status_code, 200, response.get_json())
-        self.assertIn("providers", response.get_json())
+        payload = response.get_json()
+        self.assertIn("providers", payload)
+        self.assertIn("jobs", payload)
+        self.assertIn("searches", payload)
+        self.assertIn("records", payload)
+        self.assertIn("counts", payload)
 
     def test_metadata_only_discovery_is_persisted_and_search_is_resumable(self):
         def fake_discover(query, limit, state):
@@ -120,6 +131,8 @@ class AcquisitionServiceTests(unittest.TestCase):
         self.assertEqual(ScholarlyRecord.query.count(), 1)
         self.assertEqual(AcquisitionSearchState.query.count(), 1)
         self.assertEqual(AcquisitionJob.query.count(), 1)
+        self.assertEqual(AcquisitionSearchState.query.one().search_query, "test publication")
+        self.assertEqual(AcquisitionJob.query.one().search_query, "test publication")
         record = ScholarlyRecord.query.one()
         self.assertEqual(record.status, "metadata_only")
         self.assertIsNone(record.document_id)
@@ -128,7 +141,7 @@ class AcquisitionServiceTests(unittest.TestCase):
         state = AcquisitionSearchState(
             provider="crossref",
             query_hash=hashlib.sha256("test query".casefold().encode("utf-8")).hexdigest(),
-            query="test query",
+            search_query="test query",
             offset=25,
             page=1,
             exhausted=False,

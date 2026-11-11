@@ -53,3 +53,9 @@ class Config:
     PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL", "https://acasift.onrender.com").rstrip("/")
     EMAIL_VERIFICATION_HOURS = int(os.environ.get("EMAIL_VERIFICATION_HOURS", "24"))
     PASSWORD_RESET_HOURS = int(os.environ.get("PASSWORD_RESET_HOURS", "1"))
+
+    # Optional scholarly API credentials. Public discovery endpoints continue
+    # to work without keys, subject to each provider's anonymous rate limits.
+    OPENALEX_API_KEY = os.environ.get("OPENALEX_API_KEY", "").strip()
+    SEMANTIC_SCHOLAR_API_KEY = os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "").strip()
+    ACQUISITION_CONTACT_EMAIL = os.environ.get("ACQUISITION_CONTACT_EMAIL", "").strip()

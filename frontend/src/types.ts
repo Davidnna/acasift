@@ -244,3 +244,64 @@ export interface SubmissionRequestInvitePreviewData {
     invited_by: string;
     already_joined: boolean;
 }
+
+
+export interface AcquisitionProvider {
+    id: string;
+    name: string;
+    kind: 'discovery' | 'full_text';
+    configured: boolean;
+}
+
+export interface AcquisitionJobRecord {
+    id: number;
+    provider: string;
+    query: string;
+    requested_limit: number;
+    status: string;
+    discovered_count: number;
+    new_records_count: number;
+    duplicate_count: number;
+    indexed_count: number;
+    metadata_only_count: number;
+    failed_count: number;
+    error_message: string | null;
+    created_at: string | null;
+    started_at: string | null;
+    finished_at: string | null;
+}
+
+export interface ScholarlyRecordSummary {
+    id: number;
+    title: string;
+    doi: string | null;
+    provider: string;
+    year: number | null;
+    rights_status: string;
+    status: string;
+    document_id: number | null;
+}
+
+export interface AcquisitionDashboardData {
+    counts: {
+        total: number;
+        indexed: number;
+        metadata_only: number;
+        eligible: number;
+        failed: number;
+        review_required: number;
+        reference_bank_count: number;
+    };
+    providers: AcquisitionProvider[];
+    jobs: AcquisitionJobRecord[];
+    searches: {
+        provider: string;
+        query: string;
+        total_available: number | null;
+        exhausted: boolean;
+        next_page: number | null;
+        next_offset: number | null;
+        updated_at: string | null;
+    }[];
+    records: ScholarlyRecordSummary[];
+}

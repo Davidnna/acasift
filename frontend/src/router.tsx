@@ -38,6 +38,8 @@ import {
     getDashboard,
     getDocuments,
     getReferences,
+    getAcquisitionDashboard,
+    runAcquisitionDiscovery,
     getUsers,
     signIn,
     signOut,
@@ -573,6 +575,24 @@ async function adminReferencesAction({ request }: ActionFunctionArgs) {
     }
 }
 
+async function adminAcquisitionAction({ request }: ActionFunctionArgs) {
+    const formData = await request.formData();
+    try {
+        const result = await runAcquisitionDiscovery({
+            provider: String(formData.get('provider') || ''),
+            query: String(formData.get('query') || ''),
+            limit: Number(formData.get('limit') || 10),
+        });
+        if (result.job.status === 'failed') {
+            return { error: result.job.error_message || 'The scholarly source could not complete this search.' };
+        }
+        return { success: result.message, job: result.job };
+    } catch (error) {
+        if (error instanceof Response) throw error;
+        return { error: error instanceof Error ? error.message : 'The source search could not be completed.' };
+    }
+}
+
 export const router = createBrowserRouter([
     {
         path: '/',
@@ -633,6 +653,7 @@ export const router = createBrowserRouter([
                             { index: true, loader: () => redirect('/app/admin/users') },
                             { path: 'users', loader: (args) => loadForAdmin(args, getUsers), action: createUserAction, lazy: async () => ({ Component: (await import('./pages/admin')).AdminUsersPage }) },
                             { path: 'references', loader: (args) => loadForAdmin(args, getReferences), action: adminReferencesAction, lazy: async () => ({ Component: (await import('./pages/admin')).AdminReferencesPage }) },
+                            { path: 'acquisition', loader: (args) => loadForAdmin(args, getAcquisitionDashboard), action: adminAcquisitionAction, lazy: async () => ({ Component: (await import('./pages/admin')).AdminAcquisitionPage }) },
                             { path: 'references/new', loader: () => redirect('/app/admin/references') },
                         ],
                     },

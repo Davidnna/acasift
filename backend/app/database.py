@@ -26,6 +26,7 @@ MIGRATION_TABLE = "acasift_schema_migrations"
 LEGACY_BASELINE_VERSION = "2026-11-10-legacy-workspace-submission-baseline"
 REFERENCE_ARCHITECTURE_VERSION = "2026-11-10-unified-reference-architecture-v1"
 SIMPLIFIED_REFERENCE_POLICY_VERSION = "2026-11-10-simplified-reference-comparison-v1"
+ACQUISITION_ENGINE_VERSION = "2026-11-11-multi-source-acquisition-engine-v1"
 
 REQUIRED_COLUMNS = {
     "users": {
@@ -692,10 +693,22 @@ def _run_simplified_reference_policy_migration(app):
 # Keep migrations in ascending dependency order. Add future schema/data changes
 # here with a new immutable version identifier and an idempotent migration
 # function. Never edit a migration that has already been released.
+def _run_acquisition_engine_migration(app):
+    """Create the additive acquisition metadata and job tables."""
+    with app.app_context():
+        # SQLAlchemy create_all only creates missing tables; it does not alter
+        # existing production tables or touch existing documents/reports.
+        db.create_all()
+        app.logger.info("Multi-source acquisition tables are ready.")
+
+
+# Keep migrations in ascending dependency order. Add future migrations
+# without modifying migration functions that have already shipped.
 MIGRATIONS = (
     (LEGACY_BASELINE_VERSION, _run_legacy_data_migration),
     (REFERENCE_ARCHITECTURE_VERSION, _run_reference_architecture_migration),
     (SIMPLIFIED_REFERENCE_POLICY_VERSION, _run_simplified_reference_policy_migration),
+    (ACQUISITION_ENGINE_VERSION, _run_acquisition_engine_migration),
 )
 
 

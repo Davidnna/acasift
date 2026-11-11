@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from config import Config
 from app import create_app
@@ -13,6 +13,7 @@ from app.database import (
     MIGRATION_TABLE,
     REFERENCE_ARCHITECTURE_VERSION,
     SIMPLIFIED_REFERENCE_POLICY_VERSION,
+    ACQUISITION_ENGINE_VERSION,
 )
 
 
@@ -82,6 +83,20 @@ class DatabaseMigrationTests(unittest.TestCase):
             second = self.app.test_cli_runner().invoke(args=["init-db"])
         self.assertEqual(second.exit_code, 0, second.output)
         migration.assert_not_called()
+
+
+    def test_acquisition_engine_tables_are_created_and_migration_is_recorded(self):
+        first = self.app.test_cli_runner().invoke(args=["init-db"])
+        self.assertEqual(first.exit_code, 0, first.output)
+        inspector = inspect(db.engine)
+        self.assertTrue(inspector.has_table("scholarly_records"))
+        self.assertTrue(inspector.has_table("acquisition_jobs"))
+        self.assertTrue(inspector.has_table("acquisition_search_states"))
+        record = db.session.execute(
+            text(f"SELECT version FROM {MIGRATION_TABLE} WHERE version = :version"),
+            {"version": ACQUISITION_ENGINE_VERSION},
+        ).first()
+        self.assertIsNotNone(record)
 
     def test_simplified_reference_policy_migration_is_recorded(self):
         first = self.app.test_cli_runner().invoke(args=["init-db"])

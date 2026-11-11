@@ -1,4 +1,5 @@
 import os
+import json
 from datetime import datetime, timezone
 
 import click
@@ -37,6 +38,7 @@ def create_app(config_class=Config):
         SubmissionRequestReviewer, SubmissionReview,
     )
     from app.reference_models import ReferenceEntry
+    from app.acquisition_models import AcquisitionJob, ScholarlyRecord
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -59,11 +61,13 @@ def create_app(config_class=Config):
     from app.api import bp as api_bp
     from app.api.workspaces import bp as workspaces_api_bp
     from app.submission_api import bp as submission_api_bp
+    from app.acquisition_api import bp as acquisition_api_bp
     from app.routes.main import bp as main_bp
 
     app.register_blueprint(api_bp)
     app.register_blueprint(workspaces_api_bp)
     app.register_blueprint(submission_api_bp)
+    app.register_blueprint(acquisition_api_bp)
     app.register_blueprint(main_bp)
 
     @login_manager.unauthorized_handler
@@ -98,6 +102,23 @@ def create_app(config_class=Config):
         mode = initialize_database(app)
         click.echo(f"Database initialisation complete ({mode}).")
 
+
+    @app.cli.command("acquisition-discover")
+    @click.option("--provider", required=True, type=click.Choice([
+        "openalex", "crossref", "europe_pmc", "doaj", "zenodo", "semantic_scholar", "arxiv"
+    ]))
+    @click.option("--query", required=True)
+    @click.option("--limit", default=10, type=click.IntRange(1, 25))
+    @click.option("--admin-email", required=True)
+    def acquisition_discover(provider, query, limit, admin_email):
+        """Run one bounded scholarly discovery and eligible full-text import."""
+        from app.services.acquisition_service import create_and_run_job
+
+        admin = User.query.filter_by(email=admin_email.strip().lower(), role="admin", is_active=True).first()
+        if not admin:
+            raise click.ClickException("An active platform administrator with that email was not found.")
+        result = create_and_run_job(provider, query, limit, admin.user_id)
+        click.echo(json.dumps(result, indent=2))
 
     @app.cli.command("create-admin")
     @click.option("--first-name", prompt="First name")

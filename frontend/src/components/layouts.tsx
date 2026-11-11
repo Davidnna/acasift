@@ -2,7 +2,7 @@ import { useFetcher, useLoaderData, useNavigation, Outlet, NavLink, Link, useLoc
 import {
     Activity, ArrowUpRight, BookOpen, ChevronDown, CircleHelp,
     FileSearch, Files, LayoutDashboard, LogOut, Menu,
-    Settings2, ShieldCheck, Users, X, ArrowUp, Layers3, ClipboardList,
+    Settings2, ShieldCheck, Users, X, ArrowUp, Layers3, ClipboardList, Database,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
@@ -243,6 +243,7 @@ const sharedWorkspaceLinks: { to: string; label: string; icon: LucideIcon; end?:
 ];
 const adminLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; }[] = [
     { to: '/app/admin/references', label: 'AcaSift Reference Bank', icon: BookOpen, end: true },
+    { to: '/app/admin/acquisition', label: 'Reference Acquisition', icon: Database, end: true },
     { to: '/app/admin/users', label: 'Manage users', icon: Users, end: true },
 ];
 

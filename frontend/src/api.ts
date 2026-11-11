@@ -14,6 +14,8 @@ import type {
     SubmissionRequestInviteRecord,
     SubmissionRequestSubmission,
     ReferenceEntryRecord,
+    AcquisitionDashboardData,
+    AcquisitionJobRecord,
 } from './types';
 
 export class ApiError extends Error {
@@ -383,4 +385,20 @@ export async function getSubmissionRequestInvitePreview(token: string, signal?: 
 
 export async function acceptSubmissionRequestInvite(token: string): Promise<{ message: string; request_id: number; }> {
     return request('/api/submission-request-invites/accept', { method: 'POST', body: JSON.stringify({ token }) });
+}
+
+
+export async function getAcquisitionDashboard(signal?: AbortSignal): Promise<AcquisitionDashboardData> {
+    return request('/api/admin/acquisition', { signal });
+}
+
+export async function runAcquisitionDiscovery(payload: {
+    provider: string;
+    query: string;
+    limit: number;
+}): Promise<{ message: string; job: AcquisitionJobRecord; }> {
+    return request('/api/admin/acquisition/discover', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    });
 }

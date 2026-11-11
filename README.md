@@ -21,6 +21,9 @@ support human assessment; they do not automatically determine plagiarism or misc
 - Provide request-level review outcomes and feedback while protecting peer-submission identities and excerpts in contributor reports.
 - Preserve historical submissions and reports while older records are migrated into the generic workflow.
 - Maintain one administrator-managed Reference Bank with source, licence and permission records.
+- Discover scholarly publications through OpenAlex, Crossref, Europe PMC, DOAJ, Zenodo, Semantic Scholar and arXiv APIs.
+- Deduplicate discovered records by DOI or a normalised title/year fingerprint and retain resumable provider pagination state.
+- Automatically retrieve and index a small bounded batch of full texts only when the source supplies a recognised reuse licence; retain other results as metadata without using them in comparisons.
 - Support account registration, email verification and password recovery.
 - Let users upload, replace and remove a profile picture from their account page.
 - Let users request an email address change, confirmed through a one-time verification link sent to the new address.
@@ -30,6 +33,49 @@ support human assessment; they do not automatically determine plagiarism or misc
 
 - `frontend/` contains the AcaSift user interface.
 - `backend/` contains application services, data access, authentication and analysis features.
+
+
+## Scholarly reference acquisition
+
+Platform administrators can open **Administration → Reference Acquisition** to search connected scholarly services. The initial connector set includes:
+
+- OpenAlex — large-scale scholarly metadata discovery, with cursor pagination.
+- Crossref — DOI and publication metadata, with offset pagination.
+- Europe PMC — biomedical metadata and open-access full-text XML retrieval; the article XML licence is checked before indexing.
+- DOAJ — open-access journal article discovery and licence metadata.
+- Zenodo — research record and file discovery, including record-level licence metadata.
+- Semantic Scholar — paper metadata and open-access locations; an open-access PDF link alone is not treated as a reuse licence.
+- arXiv — preprint metadata and licence-aware PDF locations.
+
+The acquisition process stores a canonical scholarly metadata record, deduplicates records across providers, preserves search pagination state, and attempts no more than two full-text imports in one administrator-triggered run. A run discovers up to 25 records. Repeating the same provider and query continues from its saved cursor, page or offset. Use a different query to start a separate search.
+
+Only exact, recognised CC BY 2.0/3.0/4.0 and CC0 1.0 licence declarations are automatically eligible in this initial release. Public availability, an open-access flag, an abstract, or a PDF link alone is not sufficient. Documents without a confirmed eligible licence remain metadata-only and are not placed in the active comparison corpus. Third-party material exclusions and provider terms still apply; administrators must not treat automated licence detection as a substitute for reviewing source conditions.
+
+### Optional environment settings
+
+```env
+OPENALEX_API_KEY=
+SEMANTIC_SCHOLAR_API_KEY=
+ACQUISITION_CONTACT_EMAIL=
+```
+
+An OpenAlex API key is recommended for cursor paging beyond the first page. A Semantic Scholar API key can improve request access. The contact email is included in polite-pool requests where supported. Keep all API keys in Render environment variables or a local `.env` file; never commit real credentials.
+
+### Controlled scheduled acquisition
+
+A bounded command is available for a local deployment or a separately configured scheduled service:
+
+```bash
+flask --app run.py acquisition-discover --provider openalex --query "computer science" --limit 25 --admin-email administrator@example.com
+```
+
+The command must run with the same database and environment configuration as AcaSift. A production schedule should use a dedicated scheduled job or worker, not the web request process. Render Cron Jobs are a separate billable service; they are not created automatically by this repository. The administrator dashboard runs a bounded acquisition directly when requested.
+
+### Current scale boundary
+
+This release establishes multi-provider discovery, resumable pagination, deduplication, licence-aware retrieval and local full-text ingestion. It is not yet a bulk snapshot importer or a million-document comparison index. The current similarity engine still loads the eligible reference documents for a comparison; large-scale deployment requires a separate inverted-index/search architecture, object storage capacity planning, and background ingestion workers before the corpus grows to hundreds of thousands or millions of full texts.
+
+CORE is not enabled in this release because product use requires a separate licensing arrangement. OpenAIRE bulk dumps and Crossref/OpenAlex bulk snapshot ingestion are candidates for a later high-volume acquisition phase.
 
 ## Run AcaSift locally
 

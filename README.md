@@ -35,7 +35,7 @@ support human assessment; they do not automatically determine plagiarism or misc
 - `backend/` contains application services, data access, authentication and analysis features.
 
 
-## Version 0.14.1 correction
+## Version 0.14.2 correction
 
 This maintenance release fixes a SQLAlchemy model-name collision in the scholarly acquisition models. The Python attributes are named `search_query`, while the existing database column remains `query`; this preserves the production schema and existing acquisition records. The administrator acquisition dashboard and resumable search-state lookups can therefore use Flask-SQLAlchemy's inherited `Model.query` interface correctly. No database migration is required for this attribute-only mapping correction.
 

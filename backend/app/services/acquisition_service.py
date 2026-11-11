@@ -655,8 +655,14 @@ def _pending_full_text_query():
     )
 
 
-def _pending_full_text_records(provider, limit):
-    return _pending_full_text_query(provider).order_by(
+def _pending_full_text_records(limit):
+    """Return the oldest eligible documents from the shared import queue.
+
+    Pending full-text records are global across providers. Discovery jobs may
+    process this queue before fetching another metadata page, so the helper
+    intentionally does not accept or filter by a provider argument.
+    """
+    return _pending_full_text_query().order_by(
         ScholarlyRecord.created_at.asc()
     ).limit(limit).all()
 
@@ -753,7 +759,7 @@ def run_acquisition_job(job_id):
         state = db.session.get(AcquisitionSearchState, job.search_state_id) if job.search_state_id else None
         if not state:
             raise ValueError("The resumable search state is missing. Start a new search.")
-        pending = _pending_full_text_records(job.provider, MAX_DOWNLOADS_PER_RUN)
+        pending = _pending_full_text_records(MAX_DOWNLOADS_PER_RUN)
         if pending:
             for record in pending:
                 result, error = _attempt_full_text(record, job.requested_by_user_id)

@@ -71,6 +71,28 @@ class AcquisitionServiceTests(unittest.TestCase):
         self.assertTrue(callable(getattr(AcquisitionJob.query, "order_by", None)))
         self.assertTrue(callable(getattr(AcquisitionSearchState.query, "filter_by", None)))
 
+    def test_pending_full_text_queue_uses_global_query_without_provider_argument(self):
+        record = ScholarlyRecord(
+            canonical_key="doi:" + ("a" * 64),
+            title="Queued full-text publication",
+            primary_provider="openalex",
+            provider_ids_json="[]",
+            full_text_url="https://example.org/article.pdf",
+            full_text_format="pdf",
+            license_name="CC BY 4.0",
+            license_url="https://creativecommons.org/licenses/by/4.0/",
+            rights_status="eligible",
+            status="eligible",
+            download_attempts=0,
+        )
+        db.session.add(record)
+        db.session.commit()
+
+        pending = acquisition._pending_full_text_records(5)
+
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0].record_id, record.record_id)
+
     def test_license_policy_accepts_exact_cc_by_and_cc0_only(self):
         self.assertEqual(
             acquisition._normalise_license("https://creativecommons.org/licenses/by/4.0/"),

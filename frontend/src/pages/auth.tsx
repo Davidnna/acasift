@@ -14,7 +14,7 @@ function AuthShell({ eyebrow, title, description, icon, children }: {
     return <div className="login-page">
         <div className="login-aside">
             <Link viewTransition to="/" className="login-brand"><span className="brand-mark"><FileSearch size={22} /></span><span>AcaSift<small>Document similarity analysis</small></span></Link>
-            <div className="login-aside-copy"><div className="eyebrow">INDEPENDENT DOCUMENT WORKSPACE</div><h1>Document review,<br /><span>on your terms.</span></h1><p>A private workspace for document similarity analysis. No institutional affiliation or institutional email address is required.</p><div className="login-assurance"><ShieldCheck size={17} /> Similarity indicators support human review.</div></div>
+            <div className="login-aside-copy"><div className="eyebrow">SHARED DOCUMENT REVIEW</div><h1>Document review,<br /><span>with context.</span></h1><p>Join a shared workspace to submit documents, review similarity results and exchange feedback. No institutional affiliation is required.</p><div className="login-assurance"><ShieldCheck size={17} /> Similarity indicators support human review.</div></div>
             <div className="login-aside-bottom">AcaSift · Document similarity analysis</div>
         </div>
         <div className="login-main"><div className="login-card">
@@ -33,7 +33,7 @@ export function RegisterPage() {
     const loginPath = invitationPath ? `/login?next=${encodeURIComponent(invitationPath)}` : '/login';
     const navigation = useNavigation();
     const busy = navigation.state === 'submitting';
-    return <AuthShell eyebrow="CREATE AN ACCOUNT" title="Your workspace starts here." description="Create an individual account using any valid email address. Verify it to activate your AcaSift workspace." icon={<UserPlus size={22} />}>
+    return <AuthShell eyebrow="CREATE AN ACCOUNT" title="Your workspace starts here." description="Create an account using any valid email address. Verify it, then create or join a shared workspace." icon={<UserPlus size={22} />}>
         {actionData?.error && <div className="form-error" role="alert">{actionData.error}</div>}
         {actionData?.success ? <div className="auth-success-panel" role="status"><CheckCircle2 size={24} /><strong>Check your inbox</strong><p>{actionData.success}</p><p>We sent a verification email to <strong>{actionData.email}</strong>.</p>{invitationPath && <p>After verifying your email, return to the invitation you were opening.</p>}<Link viewTransition className="button button-primary login-submit" to={`/resend-verification?email=${encodeURIComponent(actionData.email || '')}`}>Resend verification email <ArrowRight size={16} /></Link>{invitationPath && <Link viewTransition className="button button-secondary login-submit" to={invitationPath}>Continue to invitation <ArrowRight size={16} /></Link>}</div> :
             <Form viewTransition method="post" className="form-stack auth-form">

@@ -1,7 +1,7 @@
-import io
 import os
 import tempfile
 import unittest
+from datetime import datetime, timezone
 
 from werkzeug.security import generate_password_hash
 
@@ -9,7 +9,7 @@ from config import Config
 from app import create_app
 from app.extensions import db
 from app.models import User, Workspace, WorkspaceMembership, Document
-from app.services.workspace_service import ensure_personal_workspace
+from app.submission_models import DocumentSubmission, SubmissionRequest
 
 
 class WorkspaceConfig(Config):
@@ -29,14 +29,8 @@ class WorkspaceTests(unittest.TestCase):
         self.context = self.app.app_context()
         self.context.push()
         db.create_all()
-        self.admin = User(
-            first_name="Platform", last_name="Admin", full_name="Platform Admin",
-            email="admin@example.test", password_hash=generate_password_hash("admin-password-123"),
-            role="admin", is_active=True,
-        )
-        db.session.add(self.admin)
-        db.session.flush()
-        ensure_personal_workspace(self.admin)
+        self.admin = self._make_user("admin@example.test", "Platform Admin")
+        self.workspace = self._make_workspace(self.admin, "Research Group", "owner")
         db.session.commit()
         self.client.post("/api/auth/login", json={
             "email": "admin@example.test", "password": "admin-password-123",
@@ -48,17 +42,75 @@ class WorkspaceTests(unittest.TestCase):
         self.context.pop()
         self.temp_dir.cleanup()
 
-    def test_login_creates_or_returns_personal_workspace(self):
+    def _make_user(self, email, name):
+        first, last = name.split(" ", 1)
+        user = User(
+            first_name=first,
+            last_name=last,
+            full_name=name,
+            email=email,
+            password_hash=generate_password_hash("admin-password-123"),
+            role="admin" if email.startswith("admin") else "user",
+            is_active=True,
+            email_verified_at=datetime.now(timezone.utc),
+        )
+        db.session.add(user)
+        db.session.flush()
+        return user
+
+    def _make_workspace(self, user, name, role="owner"):
+        workspace = Workspace(
+            name=name,
+            workspace_type="shared",
+            status="active",
+            owner_user_id=user.user_id,
+        )
+        db.session.add(workspace)
+        db.session.flush()
+        db.session.add(WorkspaceMembership(
+            workspace_id=workspace.workspace_id,
+            user_id=user.user_id,
+            role=role,
+            status="active",
+        ))
+        db.session.flush()
+        return workspace
+
+    def test_workspace_list_contains_only_shared_workspaces(self):
+        legacy = Workspace(
+            name="Archived personal workspace",
+            workspace_type="personal",
+            status="archived",
+            owner_user_id=self.admin.user_id,
+        )
+        db.session.add(legacy)
+        db.session.flush()
+        db.session.add(WorkspaceMembership(
+            workspace_id=legacy.workspace_id,
+            user_id=self.admin.user_id,
+            role="owner",
+            status="active",
+        ))
+        db.session.commit()
+
         payload = self.client.get("/api/workspaces").get_json()
         self.assertEqual(len(payload["workspaces"]), 1)
-        self.assertEqual(payload["workspaces"][0]["type"], "personal")
-        self.assertEqual(payload["workspaces"][0]["role"], "owner")
+        self.assertEqual(payload["workspaces"][0]["type"], "shared")
+        self.assertEqual(payload["active_workspace_id"], self.workspace.workspace_id)
 
-    def test_personal_workspace_creation_is_idempotent(self):
-        first = ensure_personal_workspace(self.admin)
-        second = ensure_personal_workspace(self.admin)
-        self.assertEqual(first.workspace_id, second.workspace_id)
-        self.assertEqual(Workspace.query.filter_by(owner_user_id=self.admin.user_id, workspace_type="personal").count(), 1)
+    def test_user_without_a_shared_workspace_is_not_given_a_personal_workspace(self):
+        other = self._make_user("other@example.test", "Other User")
+        db.session.commit()
+        other_client = self.app.test_client()
+        login = other_client.post("/api/auth/login", json={
+            "email": "other@example.test", "password": "admin-password-123",
+        })
+        self.assertEqual(login.status_code, 200)
+
+        payload = other_client.get("/api/workspaces").get_json()
+        self.assertEqual(payload["workspaces"], [])
+        self.assertIsNone(payload["active_workspace_id"])
+        self.assertEqual(Workspace.query.filter_by(owner_user_id=other.user_id).count(), 0)
 
     def test_init_db_migrates_existing_organisation_workspaces_to_shared(self):
         legacy = Workspace(
@@ -84,69 +136,60 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(legacy.name, "Legacy University Workspace")
 
     def test_user_cannot_switch_to_workspace_without_membership(self):
-        other = User(
-            first_name="Other", last_name="User", full_name="Other User",
-            email="other@example.test", password_hash=generate_password_hash("other-password-123"),
-            role="user", is_active=True,
-        )
-        db.session.add(other)
-        db.session.flush()
-        other_workspace = ensure_personal_workspace(other)
+        other = self._make_user("other@example.test", "Other User")
+        other_workspace = self._make_workspace(other, "Other Research Group")
         db.session.commit()
         response = self.client.post("/api/workspaces/current", json={
             "workspace_id": other_workspace.workspace_id,
         })
         self.assertEqual(response.status_code, 403)
 
-
-    def test_personal_workspace_cannot_upload_shared_reference_documents(self):
-        response = self.client.post(
-            "/api/workspace/references",
-            data={"document": (io.BytesIO(b"Private workspace reference"), "reference.txt")},
-            content_type="multipart/form-data",
-        )
+    def test_direct_document_upload_is_disabled(self):
+        response = self.client.post("/api/documents", json={})
         self.assertEqual(response.status_code, 410)
 
-    def test_document_list_does_not_expose_another_users_private_submission(self):
-        second = User(
-            first_name="Second", last_name="User", full_name="Second User",
-            email="second@example.test", password_hash=generate_password_hash("second-password-123"),
-            role="user", is_active=True,
+    def test_my_submissions_lists_only_documents_submitted_by_the_current_user(self):
+        request_record = SubmissionRequest(
+            workspace_id=self.workspace.workspace_id,
+            title="Research report collection",
+            status="open",
+            accepted_file_types=["txt"],
+            max_file_size_mb=15,
+            created_by_user_id=self.admin.user_id,
         )
-        db.session.add(second)
+        db.session.add(request_record)
         db.session.flush()
-        second_workspace = ensure_personal_workspace(second)
-        admin_workspace = ensure_personal_workspace(self.admin)
 
-        def make_document(owner, workspace_id, title, document_type="submission", scope="private"):
-            return Document(
-                user_id=owner.user_id,
-                workspace_id=workspace_id,
-                visibility_scope=scope,
-                title=title,
-                original_filename=f"{title}.txt",
-                storage_path=f"{title}.txt",
-                file_type="txt",
-                document_type=document_type,
-                extracted_text="sample text",
-                file_hash=(title.lower().replace(" ", "0") + "0" * 64)[:64],
-                processing_status="processed",
-            )
-
-        db.session.add_all([
-            make_document(self.admin, admin_workspace.workspace_id, "Admin private submission"),
-            make_document(second, second_workspace.workspace_id, "Second private submission"),
-            make_document(self.admin, None, "Platform reference", "reference", "platform"),
-        ])
+        own_document = Document(
+            user_id=self.admin.user_id,
+            workspace_id=self.workspace.workspace_id,
+            visibility_scope="private",
+            title="My submission",
+            original_filename="my-submission.txt",
+            storage_path="my-submission.txt",
+            file_type="txt",
+            document_type="submission",
+            extracted_text="sample text",
+            file_hash="a" * 64,
+            processing_status="processed",
+        )
+        db.session.add(own_document)
+        db.session.flush()
+        db.session.add(DocumentSubmission(
+            request_id=request_record.request_id,
+            contributor_user_id=self.admin.user_id,
+            document_id=own_document.document_id,
+            attempt_number=1,
+            status="submitted",
+        ))
         db.session.commit()
 
         response = self.client.get("/api/documents")
         self.assertEqual(response.status_code, 200)
-        titles = {item["title"] for item in response.get_json()["documents"]}
-        self.assertIn("Admin private submission", titles)
-        self.assertIn("Platform reference", titles)
-        self.assertNotIn("Second private submission", titles)
-
+        documents = response.get_json()["documents"]
+        titles = {item["title"] for item in documents}
+        self.assertEqual(titles, {"My submission"})
+        self.assertEqual(documents[0]["processing_status"], "submitted")
 
 
 if __name__ == "__main__":

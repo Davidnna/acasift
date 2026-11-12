@@ -235,7 +235,7 @@ export function SubmissionRequestDetailPage() {
                 <label htmlFor="submission-file">Choose document</label>
                 <input id="submission-file" type="file" name="document" accept={item.accepted_file_types.map(type => `.${type}`).join(',')} aria-describedby="submission-file-hint" required />
                 <p className="form-hint" id="submission-file-hint">Accepted: {item.accepted_file_types.map(type => type.toUpperCase()).join(', ')} · Maximum size: {item.max_file_size_mb} MB. {item.allow_resubmissions ? 'Resubmissions are allowed.' : 'Only one submission is allowed per account.'}</p>
-                <button className="button button-primary" disabled={busy}>{busy ? 'Submitting and analysing…' : 'Submit and analyse'} <ArrowRight size={15} /></button>
+                <button className="button button-primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit document'} <ArrowRight size={15} /></button>
             </Form>
         </section>}
 
@@ -297,7 +297,8 @@ export function SubmissionRequestDetailPage() {
                     </div>
                     <div className="submission-row-actions">
                         {submission.is_late && <span className="category-tag">Late submission</span>}
-
+                        {data.permissions.can_review && submission.comparison_id && <Link className="button button-secondary button-small" to={`/app/comparisons/${submission.comparison_id}`}><FileSearch size={14} /> View similarity report</Link>}
+                        {data.permissions.can_review && submission.comparison_status === 'processing' && <span className="category-tag">Analysis processing</span>}
                     </div>
                     {submission.review && <div className="submission-review-summary">
                         <strong>Review outcome: {reviewDecisionLabel(submission.review.decision)}</strong>

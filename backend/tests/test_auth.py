@@ -70,14 +70,14 @@ class AuthTests(unittest.TestCase):
         )
         db.session.add(user)
         db.session.flush()
-        workspace = Workspace(name="Ada's workspace", workspace_type="personal", status="active", owner_user_id=user.user_id)
+        workspace = Workspace(name="Ada's workspace", workspace_type="shared", status="active", owner_user_id=user.user_id)
         db.session.add(workspace)
         db.session.flush()
         db.session.add(WorkspaceMembership(workspace_id=workspace.workspace_id, user_id=user.user_id, role="owner", status="active"))
         db.session.commit()
         return user
 
-    def test_public_registration_creates_inactive_user_and_private_workspace(self):
+    def test_public_registration_creates_inactive_user_without_creating_a_workspace(self):
         with patch("app.api.send_verification_email") as send_email:
             response = self.client.post("/api/auth/register", json=self.register_payload())
         self.assertEqual(response.status_code, 201)
@@ -86,8 +86,8 @@ class AuthTests(unittest.TestCase):
         self.assertIsNone(user.email_verified_at)
         self.assertIsNotNone(user.email_verification_token_hash)
         self.assertNotEqual(user.email_verification_token_hash, send_email.call_args.args[1])
-        self.assertEqual(WorkspaceMembership.query.filter_by(user_id=user.user_id).count(), 1)
-        self.assertEqual(Workspace.query.filter_by(owner_user_id=user.user_id, workspace_type="personal").count(), 1)
+        self.assertEqual(WorkspaceMembership.query.filter_by(user_id=user.user_id).count(), 0)
+        self.assertEqual(Workspace.query.filter_by(owner_user_id=user.user_id).count(), 0)
         self.assertEqual(user.role, "user")
 
     def test_registration_requires_email_delivery_configuration(self):
@@ -104,7 +104,7 @@ class AuthTests(unittest.TestCase):
         user = User.query.filter_by(email="ada@example.test").one()
         self.assertFalse(user.is_active)
         self.assertIsNotNone(user.email_verification_token_hash)
-        self.assertEqual(WorkspaceMembership.query.filter_by(user_id=user.user_id).count(), 1)
+        self.assertEqual(WorkspaceMembership.query.filter_by(user_id=user.user_id).count(), 0)
 
     def test_registration_validates_password_confirmation(self):
         response = self.client.post("/api/auth/register", json=self.register_payload(confirm_password="different-password-123"))

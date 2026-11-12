@@ -1,6 +1,6 @@
 import { Form, Link, useActionData, useLoaderData, useNavigation } from 'react-router-dom';
 import {
-    Activity, ArrowRight, Camera, CheckCircle2, FileSearch, FileText,
+    Activity, ArrowRight, Camera, CheckCircle2, FileText,
     ImagePlus, LockKeyhole, Mail, ShieldCheck, Trash2, UserRound, KeyRound,
 } from 'lucide-react';
 import { Notice, PageHeading, StatusPill, formatDate, formatDateTime } from '../components/ui';
@@ -162,16 +162,13 @@ export function AccountPage() {
                 </section>
 
                 <section className="panel account-panel">
-                    <div className="panel-heading"><div><h2><Activity size={18} aria-hidden="true" /> Your activity</h2><p>Recent work in AcaSift.</p></div></div>
+                    <div className="panel-heading"><div><h2><Activity size={18} aria-hidden="true" /> Submission activity</h2><p>Your recent document submissions.</p></div></div>
                     <div className="account-activity-stats">
-                        <div><FileText size={18} aria-hidden="true" /><strong>{data.activity.document_count}</strong><span>Documents</span></div>
-                        <div><FileSearch size={18} aria-hidden="true" /><strong>{data.activity.comparison_count}</strong><span>Comparisons</span></div>
+                        <div><FileText size={18} aria-hidden="true" /><strong>{data.activity.submission_count}</strong><span>Submissions</span></div>
                     </div>
                     <div className="account-activity-list">
-                        <h3>Recent comparisons</h3>
-                        {data.activity.recent_comparisons.length ? data.activity.recent_comparisons.map(item => <Link to={`/app/comparisons/${item.id}`} className="account-activity-item" key={item.id}><span><strong>{item.submitted_document.title}</strong><small>{formatDate(item.started_at)}</small></span><StatusPill value={item.status} /></Link>) : <p className="account-empty">No comparisons yet.</p>}
-                        <h3>Recent documents</h3>
-                        {data.activity.recent_documents.length ? data.activity.recent_documents.map(item => <div className="account-activity-item" key={item.id}><span><strong>{item.title}</strong><small>{item.original_filename} · {formatDate(item.uploaded_at)}</small></span><StatusPill value={item.processing_status} /></div>) : <p className="account-empty">No documents uploaded yet.</p>}
+                        <h3>Recent submissions</h3>
+                        {data.activity.recent_submissions.length ? data.activity.recent_submissions.map(item => <div className="account-activity-item" key={item.id}><span><strong>{item.title}</strong><small>{item.original_filename} · {formatDate(item.uploaded_at)}</small></span><StatusPill value={item.processing_status} /></div>) : <p className="account-empty">No submissions yet.</p>}
                     </div>
                 </section>
             </aside>

@@ -16,7 +16,6 @@ from app.submission_models import (
     SubmissionRequestReviewer,
 )
 from config import Config
-from app.services.workspace_service import ensure_personal_workspace
 
 
 class SubmissionConfig(Config):
@@ -59,7 +58,6 @@ class SubmissionRequestTests(unittest.TestCase):
                 role=role,
                 status="active",
             ))
-            ensure_personal_workspace(user)
         db.session.commit()
 
         self.owner_client = self._login(self.owner)
@@ -189,18 +187,61 @@ class SubmissionRequestTests(unittest.TestCase):
 
     def _external_user(self):
         user = self._make_user("external@example.test")
-        ensure_personal_workspace(user)
         db.session.commit()
         return user, self._login(user)
 
-    def test_personal_workspace_cannot_create_submission_request(self):
-        personal = ensure_personal_workspace(self.owner)
+    def test_archived_legacy_workspace_cannot_create_submission_request(self):
+        legacy = Workspace(
+            name="Archived legacy workspace",
+            workspace_type="personal",
+            status="archived",
+            owner_user_id=self.owner.user_id,
+        )
+        db.session.add(legacy)
+        db.session.flush()
+        db.session.add(WorkspaceMembership(
+            workspace_id=legacy.workspace_id,
+            user_id=self.owner.user_id,
+            role="owner",
+            status="active",
+        ))
         db.session.commit()
         response = self.owner_client.post("/api/submission-requests", json={
-            "workspace_id": personal.workspace_id,
+            "workspace_id": legacy.workspace_id,
             "title": "Not allowed",
         })
         self.assertEqual(response.status_code, 403)
+
+    def test_legacy_personal_submission_request_is_inaccessible_even_if_still_active(self):
+        legacy = Workspace(
+            name="Unmigrated legacy workspace",
+            workspace_type="personal",
+            status="active",
+            owner_user_id=self.owner.user_id,
+        )
+        db.session.add(legacy)
+        db.session.flush()
+        legacy_request = SubmissionRequest(
+            workspace_id=legacy.workspace_id,
+            title="Legacy private request",
+            status="open",
+            accepted_file_types=["txt"],
+            max_file_size_mb=15,
+            allow_external_participants=True,
+            created_by_user_id=self.owner.user_id,
+        )
+        db.session.add(legacy_request)
+        db.session.flush()
+        db.session.add(SubmissionRequestParticipant(
+            request_id=legacy_request.request_id,
+            user_id=self.member.user_id,
+            participation_type="external",
+            status="active",
+        ))
+        db.session.commit()
+
+        response = self.member_client.get(f"/api/submission-requests/{legacy_request.request_id}")
+        self.assertEqual(response.status_code, 404)
 
     def test_shared_workspace_documents_must_be_submitted_through_a_request(self):
         response = self.owner_client.post(
@@ -211,7 +252,7 @@ class SubmissionRequestTests(unittest.TestCase):
             },
             content_type="multipart/form-data",
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 410)
         self.assertEqual(Document.query.filter_by(title="Direct shared upload").count(), 0)
 
 

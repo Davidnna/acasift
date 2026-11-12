@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models import Document, Workspace
-from app.submission_models import DocumentSubmission
+from app.models import Document
+from app.submission_models import DocumentSubmission, SubmissionRequest
 from app.reference_models import ReferenceEntry
 
 ACTIVE_STATUS = "active"
@@ -149,17 +149,19 @@ def resolve_reference_sources(
     exclude_document_id=None,
     exclude_contributor_user_id=None,
 ):
-    """Resolve sources using AcaSift's two simple comparison workflows.
-
-    Personal-workspace documents are compared only with the platform's
-    permission-verified global reference bank. Submission Request documents
-    are compared only with eligible peer submissions in that same request.
-    No user-managed personal or workspace reference collections participate.
-    """
-    workspace = db.session.get(Workspace, workspace_id) if workspace_id else None
+    """Resolve only eligible peer submissions from the specified request."""
     candidates = []
 
     if request_id is not None:
+        request_record = db.session.get(SubmissionRequest, request_id)
+        if (
+            not request_record
+            or request_record.workspace_id != workspace_id
+            or not request_record.workspace
+            or request_record.workspace.status != "active"
+            or request_record.workspace.workspace_type != "shared"
+        ):
+            return []
         request_query = (
             DocumentSubmission.query.options(joinedload(DocumentSubmission.document))
             .join(Document, Document.document_id == DocumentSubmission.document_id)
@@ -178,20 +180,6 @@ def resolve_reference_sources(
             DocumentSubmission.submission_id.desc(),
         ).all()
         candidates.extend((submission.document, "request") for submission in request_submissions)
-    elif workspace and workspace.workspace_type == "personal":
-        global_entries = (
-            ReferenceEntry.query.options(joinedload(ReferenceEntry.document))
-            .filter(
-                ReferenceEntry.scope == "global",
-                ReferenceEntry.status == ACTIVE_STATUS,
-                ReferenceEntry.rights_verified.is_(True),
-                ReferenceEntry.document.has(Document.processing_status == "processed"),
-            )
-            .order_by(ReferenceEntry.created_at.desc(), ReferenceEntry.entry_id.desc())
-            .all()
-        )
-        candidates.extend((entry.document, "global") for entry in global_entries)
-
     # De-duplicate identical files so a source cannot inflate the report.
     result = []
     seen_hashes = set()

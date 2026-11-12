@@ -15,7 +15,6 @@ from app.database import (
 from app.extensions import db
 from app.models import Comparison, ComparisonResult, Document, User, Workspace, WorkspaceMembership
 from app.services.reference_service import register_reference_entry, resolve_reference_sources
-from app.services.workspace_service import ensure_personal_workspace
 from app.submission_models import DocumentSubmission, SubmissionRequest
 from app.reference_models import ReferenceEntry
 
@@ -41,9 +40,9 @@ class ReferenceArchitectureTests(unittest.TestCase):
         self.member = self._make_user("member@example.test")
         self.other = self._make_user("other@example.test")
         db.session.flush()
-        self.owner_personal = ensure_personal_workspace(self.owner)
-        self.member_personal = ensure_personal_workspace(self.member)
-        self.other_personal = ensure_personal_workspace(self.other)
+        self.owner_personal = self._make_legacy_personal_workspace(self.owner)
+        self.member_personal = self._make_legacy_personal_workspace(self.member)
+        self.other_personal = self._make_legacy_personal_workspace(self.other)
 
         self.shared = Workspace(
             name="Shared Research Group",
@@ -62,9 +61,9 @@ class ReferenceArchitectureTests(unittest.TestCase):
         self.owner_client = self._login(self.owner)
         self.member_client = self._login(self.member)
         with self.owner_client.session_transaction() as session:
-            session["active_workspace_id"] = self.owner_personal.workspace_id
+            session["active_workspace_id"] = self.shared.workspace_id
         with self.member_client.session_transaction() as session:
-            session["active_workspace_id"] = self.member_personal.workspace_id
+            session["active_workspace_id"] = self.shared.workspace_id
 
     def tearDown(self):
         db.session.remove()
@@ -85,6 +84,24 @@ class ReferenceArchitectureTests(unittest.TestCase):
         )
         db.session.add(user)
         return user
+
+    def _make_legacy_personal_workspace(self, user):
+        workspace = Workspace(
+            name=f"{user.full_name} legacy workspace",
+            workspace_type="personal",
+            status="archived",
+            owner_user_id=user.user_id,
+        )
+        db.session.add(workspace)
+        db.session.flush()
+        db.session.add(WorkspaceMembership(
+            workspace_id=workspace.workspace_id,
+            user_id=user.user_id,
+            role="owner",
+            status="active",
+        ))
+        db.session.flush()
+        return workspace
 
     def _login(self, user):
         client = self.app.test_client()
@@ -157,7 +174,7 @@ class ReferenceArchitectureTests(unittest.TestCase):
         self.assertTrue(entry.rights_verified)
         self.assertEqual(entry.status, "active")
 
-    def test_personal_comparison_uses_only_the_central_reference_bank(self):
+    def test_legacy_personal_workspace_is_not_a_comparison_scope(self):
         global_doc = self._document(self.owner, "Global source", visibility_scope="platform")
         personal_doc = self._document(self.owner, "Owner personal source", workspace_id=self.owner_personal.workspace_id)
         other_personal_doc = self._document(self.other, "Other personal source", workspace_id=self.other_personal.workspace_id)
@@ -175,7 +192,7 @@ class ReferenceArchitectureTests(unittest.TestCase):
             workspace_id=self.owner_personal.workspace_id,
         )
         personal_titles = {document.title for document, _scope in personal_sources}
-        self.assertEqual(personal_titles, {"Global source"})
+        self.assertEqual(personal_titles, set())
         self.assertNotIn("Owner personal source", personal_titles)
         self.assertNotIn("Other personal source", personal_titles)
 

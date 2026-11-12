@@ -153,9 +153,6 @@ def create_app(config_class=Config):
                 email_verified_at=datetime.now(timezone.utc),
             )
             db.session.add(user)
-            db.session.flush()
-            from app.services.workspace_service import ensure_personal_workspace
-            ensure_personal_workspace(user)
             db.session.commit()
         click.echo(f"Administrator account created for {email}.")
 

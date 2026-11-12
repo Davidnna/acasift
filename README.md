@@ -1,61 +1,55 @@
 # AcaSift
 
-AcaSift is an independent document similarity analysis and plagiarism detection platform. It helps
-individuals and groups compare documents with authorised reference materials, inspect matching
-passages and review similarity indicators. It does not require institutional affiliation. Results
-support human assessment; they do not automatically determine plagiarism or misconduct.
+AcaSift is an independent document similarity analysis platform built around shared workspaces and structured document submissions. Workspace administrators create Submission Requests, participants submit documents, and AcaSift compares eligible submissions made to the same request. Workspace owners, administrators and reviewers assigned to a request can inspect similarity results and matching passages. Contributors receive a submission receipt and any reviewer feedback recorded for them.
+
+AcaSift does not require institutional affiliation. Similarity indicators support human assessment; they do not automatically determine plagiarism or misconduct.
 
 ## What AcaSift does
 
 - Analyse PDF, DOCX and TXT documents for textual similarity.
-- Display comparison reports, matching passages and source information.
-- Keep personal documents and reports private to their owners.
-- Provide private personal workspaces and shared workspaces for teams, groups and other collaborations.
-- Support workspace owners, administrators and members with role-based access.
-- Manage workspace invitations, including revocation, optional expiry and usage limits.
-- Create Submission Requests to collect documents from workspace members and authenticated external participants.
-- Generate restricted request links with optional expiration, usage limits and revocation.
-- Assign request-level reviewers without granting workspace administration privileges.
-- Compare private-workspace documents against AcaSift's central Reference Bank.
-- Compare shared Submission Request documents against other eligible submissions in that same request.
-- Provide request-level review outcomes and feedback while protecting peer-submission identities and excerpts in contributor reports.
-- Preserve historical submissions and reports while older records are migrated into the generic workflow.
-- Maintain one administrator-managed Reference Bank with source, licence and permission records.
-- Discover scholarly publications through OpenAlex, Crossref, Europe PMC, DOAJ, Zenodo, Semantic Scholar and arXiv APIs.
-- Deduplicate discovered records by DOI or a normalised title/year fingerprint and retain resumable provider pagination state.
-- Automatically retrieve and index a small bounded batch of full texts only when the source supplies a recognised reuse licence; retain other results as metadata without using them in comparisons.
-- Support account registration, email verification and password recovery.
-- Let users upload, replace and remove a profile picture from their account page.
-- Let users request an email address change, confirmed through a one-time verification link sent to the new address.
-- Provide keyboard-friendly navigation, visible focus states, screen-reader announcements and responsive layouts.
+- Extract readable text and identify overlapping word sequences.
+- Provide shared workspaces with owner, administrator and member permissions.
+- Allow verified users to create workspaces or join through invitation links.
+- Let workspace administrators create Submission Requests with instructions, accepted formats, deadlines and submission rules.
+- Accept submissions from workspace members and authenticated external participants using request-specific links.
+- Compare each submission only with eligible submissions made to the same Submission Request.
+- Restrict similarity reports, matching passages and peer-submission details to workspace administrators and reviewers assigned to the request.
+- Give contributors submission receipts and access to reviewer feedback without exposing similarity reports.
+- Support request-level review outcomes and reviewer assignment.
+- Support account registration, email verification, password recovery, profile pictures and verified email changes.
+- Provide responsive, keyboard-accessible interfaces and visible focus states.
 
-## Project folders
+## Project structure
 
-- `frontend/` contains the AcaSift user interface.
-- `backend/` contains application services, data access, authentication and analysis features.
+- `backend/` contains the Flask application, API routes, database models, migrations, authentication and document-analysis services.
+- `frontend/` contains the React and TypeScript application.
+- `Dockerfile` builds the frontend and backend into the current single-origin production service.
 
+## Shared-workspace workflow
 
-## Version 0.14.2 correction
+1. A user creates an AcaSift account and verifies the email address.
+2. The user creates a shared workspace or joins one through an invitation link.
+3. A workspace owner or administrator creates a Submission Request describing the documents to be collected.
+4. Workspace members or authenticated external participants submit documents to that request.
+5. AcaSift extracts the text and compares each submission with eligible peer submissions belonging to the same request. A contributor's own submissions and previous attempts are excluded from peer-source comparison.
+6. Workspace administrators and assigned reviewers inspect the similarity results and matching passages, then record a review outcome and optional feedback.
+7. Contributors can return to the request to see their submission receipt and any feedback. They cannot view similarity scores, matching passages or other participants' documents.
 
-This maintenance release fixes a SQLAlchemy model-name collision in the scholarly acquisition models. The Python attributes are named `search_query`, while the existing database column remains `query`; this preserves the production schema and existing acquisition records. The administrator acquisition dashboard and resumable search-state lookups can therefore use Flask-SQLAlchemy's inherited `Model.query` interface correctly. No database migration is required for this attribute-only mapping correction.
+Documents from unrelated requests are not included in a request's comparison. The current release does not perform internet-wide searches, semantic paraphrase detection, cross-language comparison or OCR of scanned image-only PDFs.
 
-## Scholarly reference acquisition
+## Historical data and migration
 
-Platform administrators can open **Administration → Reference Acquisition** to search connected scholarly services. The initial connector set includes:
+AcaSift previously supported personal workspaces. The shared-workspace-only migration archives active personal workspaces and leaves their stored documents, comparison records and historical membership rows intact. These archived personal workspaces are not returned by active workspace queries and cannot be used for new document uploads or comparisons. Existing shared workspaces, accounts, Submission Requests, submissions and review records are retained.
 
-- OpenAlex — large-scale scholarly metadata discovery, with cursor pagination.
-- Crossref — DOI and publication metadata, with offset pagination.
-- Europe PMC — biomedical metadata and open-access full-text XML retrieval; the article XML licence is checked before indexing.
-- DOAJ — open-access journal article discovery and licence metadata.
-- Zenodo — research record and file discovery, including record-level licence metadata.
-- Semantic Scholar — paper metadata and open-access locations; an open-access PDF link alone is not treated as a reuse licence.
-- arXiv — preprint metadata and licence-aware PDF locations.
+Database changes are managed through the versioned migration ledger `acasift_schema_migrations`. Do not delete or manually edit the migration ledger. Future schema or data changes must be implemented as new, idempotent migrations.
 
-The acquisition process stores a canonical scholarly metadata record, deduplicates records across providers, preserves search pagination state, and attempts no more than two full-text imports in one administrator-triggered run. A run discovers up to 25 records. Repeating the same provider and query continues from its saved cursor, page or offset. Use a different query to start a separate search.
+## Platform-managed reference services
 
-Only exact, recognised CC BY 2.0/3.0/4.0 and CC0 1.0 licence declarations are automatically eligible in this initial release. Public availability, an open-access flag, an abstract, or a PDF link alone is not sufficient. Documents without a confirmed eligible licence remain metadata-only and are not placed in the active comparison corpus. Third-party material exclusions and provider terms still apply; administrators must not treat automated licence detection as a substitute for reviewing source conditions.
+Platform administrators can use **Administration → Reference Acquisition** to discover scholarly records through OpenAlex, Crossref, Europe PMC, DOAJ, Zenodo, Semantic Scholar and arXiv. The acquisition service stores scholarly metadata, preserves resumable pagination state and attempts bounded full-text retrieval where a recognised reuse licence is confirmed. Records without confirmed reuse rights remain metadata-only.
 
-### Optional environment settings
+The platform-managed reference collection is administered separately. In the current release, shared Submission Request comparisons use peer submissions from the same request; the reference collection is not included in those request reports. Do not treat public accessibility or an open-access label alone as permission to retain or reuse a document.
+
+Optional environment settings:
 
 ```env
 OPENALEX_API_KEY=
@@ -63,23 +57,7 @@ SEMANTIC_SCHOLAR_API_KEY=
 ACQUISITION_CONTACT_EMAIL=
 ```
 
-An OpenAlex API key is recommended for cursor paging beyond the first page. A Semantic Scholar API key can improve request access. The contact email is included in polite-pool requests where supported. Keep all API keys in Render environment variables or a local `.env` file; never commit real credentials.
-
-### Controlled scheduled acquisition
-
-A bounded command is available for a local deployment or a separately configured scheduled service:
-
-```bash
-flask --app run.py acquisition-discover --provider openalex --query "computer science" --limit 25 --admin-email administrator@example.com
-```
-
-The command must run with the same database and environment configuration as AcaSift. A production schedule should use a dedicated scheduled job or worker, not the web request process. Render Cron Jobs are a separate billable service; they are not created automatically by this repository. The administrator dashboard runs a bounded acquisition directly when requested.
-
-### Current scale boundary
-
-This release establishes multi-provider discovery, resumable pagination, deduplication, licence-aware retrieval and local full-text ingestion. It is not yet a bulk snapshot importer or a million-document comparison index. The current similarity engine still loads the eligible reference documents for a comparison; large-scale deployment requires a separate inverted-index/search architecture, object storage capacity planning, and background ingestion workers before the corpus grows to hundreds of thousands or millions of full texts.
-
-CORE is not enabled in this release because product use requires a separate licensing arrangement. OpenAIRE bulk dumps and Crossref/OpenAlex bulk snapshot ingestion are candidates for a later high-volume acquisition phase.
+Keep API keys and other credentials in the hosting provider's private environment settings or a local `.env` file. Never commit real credentials, API keys or database connection strings.
 
 ## Run AcaSift locally
 
@@ -91,7 +69,7 @@ CORE is not enabled in this release because product use requires a separate lice
 
 ### 1. Configure the backend
 
-Open a terminal in the project folder and run:
+Open a terminal in the project folder:
 
 ```bash
 cd backend
@@ -100,10 +78,12 @@ python -m venv .venv
 
 Activate the virtual environment:
 
-```bash
+```powershell
 # Windows PowerShell
 .venv\Scripts\Activate.ps1
+```
 
+```bash
 # macOS / Linux
 source .venv/bin/activate
 ```
@@ -114,9 +94,7 @@ Install the Python packages:
 pip install -r requirements.txt
 ```
 
-Copy `.env.example` to `.env` and set a private `SECRET_KEY`. The example uses a local SQLite
-database. Email verification, password recovery and email address changes require valid Nylas
-email settings; without those settings, public registration is unavailable.
+Copy `.env.example` to `.env` and set a private `SECRET_KEY`. The example configuration uses a local SQLite database. Email verification, password recovery and email address changes require valid Nylas email settings; without those settings, public registration is unavailable.
 
 Initialise the database and start the backend:
 
@@ -137,79 +115,19 @@ npm install
 npm run dev
 ```
 
-Open the local address printed by Vite, normally `http://127.0.0.1:5173`. During local development,
-frontend API requests are forwarded to the backend at `http://127.0.0.1:5000`.
+Open the local address printed by Vite, normally `http://127.0.0.1:5173`. During local development, frontend API requests are forwarded to the backend at `http://127.0.0.1:5000`.
 
-### 3. Build the application
-
-To create the production frontend bundle:
+### 3. Build the production frontend
 
 ```bash
 cd frontend
 npm run build
 ```
 
-The production bundle is placed in `backend/app/static/spa` and is served by the backend in the
-current single-origin deployment.
+The production bundle is placed in `backend/app/static/spa` and is served by the backend in the current single-origin deployment.
 
-## Document submission workflow
+## Production deployment
 
-A shared workspace owner or administrator can create a Submission Request to collect documents
-for a defined purpose. A request has a title, description, instructions, opening time, optional deadline, accepted file types,
-maximum file size, late-submission and resubmission settings, and a status. Workspace members can
-discover open requests and join them. Request-level reviewers can be assigned independently of
-workspace administration privileges.
+The current hosted configuration builds the frontend and backend together so that authentication sessions and security checks remain same-origin. The application expects the hosting provider to supply the database connection, application secret, email delivery settings and any optional scholarly API credentials as environment variables.
 
-Administrators can create request-specific links for external participants. A link grants access to
-one request only; participants must sign in with a verified AcaSift account and do not become
-workspace members. Links support optional expiration, usage limits and revocation. Participants
-can upload documents, view their own reports and receive review feedback.
-
-Each request submission is compared only against other eligible submissions belonging to that same
-request. It is not compared against the global Reference Bank, workspace documents or submissions
-from unrelated requests. A contributor's own submissions and previous attempts are excluded from
-peer-source comparison. Contributor reports hide peer identities and peer excerpts; authorised
-reviewers and workspace administrators can inspect the underlying evidence. Private material from
-unrelated users or workspaces is not exposed by this comparison policy.
-
-Older structured records from previous releases are retained as migration sources. They are
-converted into Submission Requests, preserving their documents, comparison links, participant
-relationships and review feedback. The original records are not exposed through the active product
-interface and are not deleted by this release.
-
-## Reference materials
-
-AcaSift maintains one central **Reference Bank**, managed by platform administrators. It contains
-documents that have an appropriate recorded basis for retention and use in private similarity
-checks. Each record retains its source, licence or permission basis, and verification information.
-Public accessibility alone does not establish permission to reuse a document.
-
-Users do not upload or manage personal or workspace reference documents. A document uploaded in a
-personal workspace is compared with eligible documents in the central Reference Bank. Documents
-submitted to a shared Submission Request are compared with other eligible submissions in that same
-request; they are not added to the Reference Bank.
-
-Older personal, workspace and request-level reference registry entries are archived by the
-simplified reference-policy migration. Their underlying document records and files are retained to
-protect historical data, but they are no longer eligible for new comparisons. Existing comparison
-reports retain their original source records and labels for historical traceability.
-
-## Deployment
-
-The frontend and backend source code are maintained in separate folders. The current hosted
-configuration builds the frontend and backend together so that authentication sessions and
-security checks remain same-origin. A separate frontend and API deployment can be introduced when
-a shared custom domain and the required cross-origin session configuration are available.
-
-Database initialisation uses a versioned migration ledger named `acasift_schema_migrations`.
-The initial schema is created during first-time bootstrap. Existing databases are checked against
-migration invariants before an already-completed legacy migration baseline is recorded. Completed
-migrations are not rerun on ordinary application restarts. Future schema or data changes must be
-implemented as new, versioned migrations; do not delete or manually edit the migration ledger.
-Startup logs report database-initialisation duration and the start of the Gunicorn web server.
-
-For hosted deployments, configure the database connection, application secret and email delivery
-settings in the hosting provider's private environment settings. Private checks use all eligible
-documents in the central Reference Bank; Submission Request checks use all eligible peer submissions
-within the same request. Never commit real credentials, API keys or private database connection
-strings to the repository.
+The web process must bind to the port supplied by the hosting provider. Database initialisation runs through the versioned migration system before Gunicorn starts. A separate frontend/API deployment can be introduced later if a shared custom domain and the required cross-origin session configuration are available.

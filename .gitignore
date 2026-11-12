@@ -23,3 +23,6 @@ frontend/dist/
 
 # Operating system and editor files
 .DS_Store
+
+# Generated frontend bundle
+backend/app/static/spa/

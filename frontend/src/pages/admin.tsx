@@ -23,7 +23,8 @@ export function AdminReferencesPage() {
     const navigation = useNavigation();
     const busy = navigation.state === 'submitting';
     return <>
-        <PageHeading eyebrow="ADMINISTRATION" title="AcaSift Reference Bank" description="Manage the platform's authorised source documents used for private document checks." />
+        <PageHeading eyebrow="ADMINISTRATION" title="AcaSift Reference Bank" description="Manage platform-held source documents and their reuse permissions." />
+        <Notice tone="info">The current shared-workspace comparison workflow compares submissions within the same Submission Request. This platform-managed collection is administered separately and is not included in those request reports.</Notice>
         {actionData?.error && <Notice tone="danger">{actionData.error}</Notice>}
         {actionData?.success && <Notice tone="success">{actionData.success}</Notice>}
         <section className="panel form-panel">
@@ -66,7 +67,7 @@ export function AdminReferencesPage() {
             </Form>
         </section>
         <section className="panel">
-            <div className="panel-heading"><div><h2>Reference Bank records</h2><p>{entries.filter(entry => entry.status === 'active').length} active sources available for private comparisons · {entries.length} total records</p></div></div>
+            <div className="panel-heading"><div><h2>Reference Bank records</h2><p>{entries.filter(entry => entry.status === 'active').length} active platform sources · {entries.length} total records</p></div></div>
             {entries.length ? <div className="reference-entry-list">{entries.map(entry => <article className="reference-entry-card" key={entry.id}>
                 <div className="reference-entry-main">
                     <div className="reference-entry-icon"><BookOpen size={19} /></div>
@@ -129,6 +130,7 @@ export function AdminAcquisitionPage() {
             title="Reference Acquisition"
             description="Discover scholarly publications from trusted research services and add eligible full texts to the AcaSift Reference Bank."
         />
+        <Notice tone="info">The current shared-workspace comparison workflow compares submissions within the same Submission Request. Acquired reference records are managed separately and are not currently included in those request reports.</Notice>
         {actionData?.error && <Notice tone="danger">{actionData.error}</Notice>}
         {actionData?.success && actionData.job && <Notice tone="success">
             {actionData.success} Job #{actionData.job.id}: {actionData.job.discovered_count} records discovered, {actionData.job.indexed_count} full texts indexed, {actionData.job.metadata_only_count} metadata-only records and {actionData.job.failed_count} failed records. {actionData.job.error_message || ''}
@@ -136,10 +138,10 @@ export function AdminAcquisitionPage() {
 
         <div className="stats-grid">
             <div className="stat-card"><div className="stat-card-top"><span>Metadata records</span><span className="stat-icon"><Database size={17} /></span></div><strong>{data.counts.total.toLocaleString()}</strong><small>Unique scholarly records discovered</small></div>
-            <div className="stat-card"><div className="stat-card-top"><span>Indexed full texts</span><span className="stat-icon"><FileText size={17} /></span></div><strong>{data.counts.indexed.toLocaleString()}</strong><small>Available in the comparison bank</small></div>
+            <div className="stat-card"><div className="stat-card-top"><span>Indexed full texts</span><span className="stat-icon"><FileText size={17} /></span></div><strong>{data.counts.indexed.toLocaleString()}</strong><small>Indexed in the platform Reference Bank</small></div>
             <div className="stat-card"><div className="stat-card-top"><span>Metadata only</span><span className="stat-icon"><Search size={17} /></span></div><strong>{data.counts.metadata_only.toLocaleString()}</strong><small>Full text or reusable licence not confirmed</small></div>
             <div className="stat-card"><div className="stat-card-top"><span>Eligible pending</span><span className="stat-icon"><Clock3 size={17} /></span></div><strong>{data.counts.eligible.toLocaleString()}</strong><small>Full-text imports awaiting processing</small></div>
-            <div className="stat-card"><div className="stat-card-top"><span>Active global references</span><span className="stat-icon"><CheckCircle2 size={17} /></span></div><strong>{data.counts.reference_bank_count.toLocaleString()}</strong><small>Permission-verified comparison sources</small></div>
+            <div className="stat-card"><div className="stat-card-top"><span>Active global references</span><span className="stat-icon"><CheckCircle2 size={17} /></span></div><strong>{data.counts.reference_bank_count.toLocaleString()}</strong><small>Permission-verified platform sources</small></div>
         </div>
 
         <section className="panel form-panel">

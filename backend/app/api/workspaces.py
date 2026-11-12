@@ -17,7 +17,6 @@ from app.submission_models import (
 )
 from app.services.auth_security import consume_auth_limits
 from app.services.workspace_service import (
-    ensure_personal_workspace,
     get_active_workspace,
     is_workspace_manager,
     membership_for,
@@ -92,12 +91,13 @@ def workspaces():
             WorkspaceMembership.user_id == current_user.user_id,
             WorkspaceMembership.status == "active",
             Workspace.status == "active",
+            Workspace.workspace_type == "shared",
         ).order_by(Workspace.created_at.asc()).all()
     )
-    active_membership = membership_for(current_user, active.workspace_id)
+    active_membership = membership_for(current_user, active.workspace_id) if active else None
     members = []
     invites = []
-    if is_workspace_manager(active_membership) and active.workspace_type == "shared":
+    if active and is_workspace_manager(active_membership):
         members = [{
             "id": item.user.user_id,
             "full_name": item.user.full_name,
@@ -112,12 +112,10 @@ def workspaces():
             ).order_by(WorkspaceInvite.created_at.desc()).all()
         ]
     return jsonify({
-        "active_workspace_id": active.workspace_id,
+        "active_workspace_id": active.workspace_id if active else None,
         "workspaces": [_workspace_payload(item.workspace, item) for item in memberships],
         "pending_request": None,
-        "can_manage_members": bool(
-            is_workspace_manager(active_membership) and active.workspace_type == "shared"
-        ),
+        "can_manage_members": bool(is_workspace_manager(active_membership)),
         "is_workspace_owner": bool(active_membership and active_membership.role == "owner"),
         "members": members,
         "invites": invites,
@@ -191,8 +189,6 @@ def workspace_members(workspace_id):
     membership = membership_for(current_user, workspace_id)
     if not is_workspace_manager(membership):
         return _error("Only workspace owners and administrators can manage members.", 403)
-    if membership.workspace.workspace_type != "shared":
-        return _error("Personal workspaces cannot have additional members.", 400)
     records = WorkspaceMembership.query.filter_by(workspace_id=workspace_id, status="active").all()
     return jsonify({"members": [{
         "id": item.user.user_id,
@@ -208,8 +204,6 @@ def add_workspace_member(workspace_id):
     membership = membership_for(current_user, workspace_id)
     if not is_workspace_manager(membership):
         return _error("Only workspace owners and administrators can manage members.", 403)
-    if membership.workspace.workspace_type != "shared":
-        return _error("Personal workspaces cannot have additional members.", 400)
     data = request.get_json(silent=True) or {}
     email = str(data.get("email", "")).strip().lower()
     role = str(data.get("role", "member")).strip().lower()
@@ -242,8 +236,6 @@ def update_workspace_member_role(workspace_id, user_id):
     actor_membership = membership_for(current_user, workspace_id)
     if not is_workspace_manager(actor_membership):
         return _error("Only workspace owners and administrators can manage member roles.", 403)
-    if actor_membership.workspace.workspace_type != "shared":
-        return _error("Personal workspaces do not have additional members.", 400)
     target = WorkspaceMembership.query.filter_by(
         workspace_id=workspace_id, user_id=user_id, status="active"
     ).first()
@@ -302,8 +294,6 @@ def manage_workspace(workspace_id):
     if not is_workspace_manager(membership):
         return _error("You do not have permission to manage this workspace.", 403)
     workspace = membership.workspace
-    if workspace.workspace_type != "shared":
-        return _error("Personal workspace details cannot be changed here.", 400)
 
     data = request.get_json(silent=True) or {}
     name = str(data.get("name", "")).strip()
@@ -326,9 +316,6 @@ def leave_workspace(workspace_id):
     if not membership:
         return _error("You are not an active member of this workspace.", 404)
     workspace = membership.workspace
-    if workspace.workspace_type != "shared":
-        return _error("A personal workspace cannot be left. You can manage it from your account.", 400)
-
     now = datetime.now(timezone.utc)
     if membership.role == "owner":
         successors = WorkspaceMembership.query.filter(
@@ -386,10 +373,7 @@ def leave_workspace(workspace_id):
     if session.get("active_workspace_id") == workspace_id:
         session.pop("active_workspace_id", None)
     db.session.commit()
-    if session.get("active_workspace_id") is None:
-        personal = ensure_personal_workspace(current_user)
-        session["active_workspace_id"] = personal.workspace_id
-        db.session.commit()
+    get_active_workspace(current_user)
     return jsonify({"message": message, "workspace_id": workspace_id})
 
 
@@ -400,8 +384,6 @@ def delete_workspace(workspace_id):
     if not membership or membership.role != "owner":
         return _error("Only the workspace owner can delete this workspace.", 403)
     workspace = membership.workspace
-    if workspace.workspace_type != "shared":
-        return _error("Personal workspaces cannot be deleted from workspace management.", 400)
 
     now = datetime.now(timezone.utc)
     workspace.status = "deleted"
@@ -423,9 +405,7 @@ def delete_workspace(workspace_id):
 
     if session.get("active_workspace_id") == workspace_id:
         session.pop("active_workspace_id", None)
-    personal = ensure_personal_workspace(current_user)
-    session["active_workspace_id"] = personal.workspace_id
-    db.session.commit()
+    get_active_workspace(current_user)
     return jsonify({"message": "Workspace deleted successfully."})
 
 
@@ -448,7 +428,7 @@ def create_workspace_invite(workspace_id):
         return _error("Only workspace owners and administrators can create invitation links.", 403)
     workspace = membership.workspace
     if workspace.workspace_type != "shared":
-        return _error("Personal workspaces cannot issue invitation links.", 400)
+        return _error("Invitation links are available only for shared workspaces.", 400)
 
     data = request.get_json(silent=True) or {}
     role = str(data.get("role", "member")).strip().lower()
@@ -518,6 +498,8 @@ def preview_workspace_invite():
     invite = WorkspaceInvite.query.filter_by(token_hash=token_hash).first()
     if not invite:
         return _error("This invitation link is invalid or no longer exists.", 404)
+    if invite.workspace.workspace_type != "shared":
+        return _error("This invitation link is no longer available.", 410)
     status = _invite_status(invite)
     if status != "active":
         messages = {
@@ -564,6 +546,8 @@ def accept_workspace_invite():
     invite = WorkspaceInvite.query.filter_by(token_hash=token_hash).with_for_update().first()
     if not invite or invite.workspace.status != "active":
         return _error("This invitation link is invalid or no longer available.", 404)
+    if invite.workspace.workspace_type != "shared":
+        return _error("This invitation link is no longer available.", 410)
     status = _invite_status(invite)
     if status != "active":
         messages = {

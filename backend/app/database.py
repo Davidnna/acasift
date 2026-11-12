@@ -27,6 +27,7 @@ LEGACY_BASELINE_VERSION = "2026-11-10-legacy-workspace-submission-baseline"
 REFERENCE_ARCHITECTURE_VERSION = "2026-11-10-unified-reference-architecture-v1"
 SIMPLIFIED_REFERENCE_POLICY_VERSION = "2026-11-10-simplified-reference-comparison-v1"
 ACQUISITION_ENGINE_VERSION = "2026-11-11-multi-source-acquisition-engine-v1"
+SHARED_WORKSPACES_ONLY_VERSION = "2026-11-12-shared-workspaces-only-v1"
 
 REQUIRED_COLUMNS = {
     "users": {
@@ -114,16 +115,6 @@ def _legacy_baseline_status(app):
         return False, [f"missing columns: {'; '.join(missing_columns)}"]
 
     checks = (
-        (
-            "users_missing_personal_workspace",
-            """SELECT COUNT(*) FROM users u
-               WHERE NOT EXISTS (
-                   SELECT 1
-                   FROM workspace_memberships wm
-                   JOIN workspaces w ON w.workspace_id = wm.workspace_id
-                   WHERE wm.user_id = u.user_id AND w.workspace_type = 'personal'
-               )""",
-        ),
         (
             "legacy_assignments_not_converted",
             """SELECT COUNT(*) FROM assignments a
@@ -667,8 +658,7 @@ def _run_reference_architecture_migration(app):
 def _run_simplified_reference_policy_migration(app):
     """Retire user-managed reference scopes without deleting historical files.
 
-    New personal comparisons use the administrator-managed global bank. New
-    Submission Request comparisons resolve peer submissions directly from
+    Active comparisons now resolve peer submissions directly from
     document_submissions. Personal, workspace and request ReferenceEntry rows
     are therefore archived but retained for historical traceability.
     """
@@ -702,6 +692,26 @@ def _run_acquisition_engine_migration(app):
         app.logger.info("Multi-source acquisition tables are ready.")
 
 
+def _run_shared_workspaces_only_migration(app):
+    """Archive legacy personal workspaces without deleting their records.
+
+    Existing documents, comparisons and membership history remain in the
+    database for audit and recovery, but archived personal workspaces are no
+    longer returned by active workspace queries or available to users.
+    """
+    with app.app_context():
+        with db.engine.begin() as connection:
+            result = connection.execute(text(
+                "UPDATE workspaces SET status = 'archived' "
+                "WHERE workspace_type = 'personal' AND status = 'active'"
+            ))
+            archived_count = result.rowcount or 0
+        app.logger.info(
+            "Shared-workspace-only migration completed: archived %s legacy personal workspaces.",
+            archived_count,
+        )
+
+
 # Keep migrations in ascending dependency order. Add future migrations
 # without modifying migration functions that have already shipped.
 MIGRATIONS = (
@@ -709,6 +719,7 @@ MIGRATIONS = (
     (REFERENCE_ARCHITECTURE_VERSION, _run_reference_architecture_migration),
     (SIMPLIFIED_REFERENCE_POLICY_VERSION, _run_simplified_reference_policy_migration),
     (ACQUISITION_ENGINE_VERSION, _run_acquisition_engine_migration),
+    (SHARED_WORKSPACES_ONLY_VERSION, _run_shared_workspaces_only_migration),
 )
 
 

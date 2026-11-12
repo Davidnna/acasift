@@ -2876,7 +2876,7 @@ h1,h2,h3 {
 }
 .account-activity-stats {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 9px;
 }
 .account-activity-stats>div {

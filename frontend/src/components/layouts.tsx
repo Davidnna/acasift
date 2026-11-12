@@ -234,7 +234,7 @@ function PublicFooter() {
 
 const baseWorkspaceLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; }[] = [
     { to: '/app/dashboard', label: 'Overview', icon: LayoutDashboard, end: true },
-    { to: '/app/documents', label: 'My documents', icon: Files, end: true },
+    { to: '/app/documents', label: 'My submissions', icon: Files, end: true },
     { to: '/app/account', label: 'My account', icon: Settings2, end: true },
     { to: '/app/workspaces', label: 'Workspaces', icon: Layers3, end: true },
 ];
@@ -267,8 +267,7 @@ export function AppLayout() {
         document.addEventListener('keydown', closeOnEscape);
         return () => document.removeEventListener('keydown', closeOnEscape);
     }, [mobileNav]);
-    const canUseSharedFeatures = activeWorkspace?.type === 'shared';
-    const visibleWorkspaceLinks = canUseSharedFeatures
+    const visibleWorkspaceLinks = activeWorkspace
         ? [baseWorkspaceLinks[0], ...sharedWorkspaceLinks, ...baseWorkspaceLinks.slice(1)]
         : baseWorkspaceLinks;
     return <div className="app-shell">
@@ -291,7 +290,7 @@ export function AppLayout() {
                     <span className="avatar">
                         {user.profile_image_url ? <img src={user.profile_image_url} alt="" /> : (user.first_name?.[0] || user.full_name.slice(0, 1)).toUpperCase()}
                     </span>
-                    <span className="account-details"><strong>{user.full_name}</strong><small>{user.is_admin ? 'Platform administrator' : activeWorkspace?.type === 'shared' ? `${activeWorkspace.role === 'owner' ? 'Owner' : activeWorkspace.role === 'admin' ? 'Administrator' : 'Member'} · Shared workspace` : 'Personal workspace'}</small></span>
+                    <span className="account-details"><strong>{user.full_name}</strong><small>{user.is_admin ? 'Platform administrator' : activeWorkspace ? `${activeWorkspace.role === 'owner' ? 'Owner' : activeWorkspace.role === 'admin' ? 'Administrator' : 'Member'} · Shared workspace` : 'No workspace selected'}</small></span>
                     <ChevronDown size={15} aria-hidden="true" />
                 </Link>
                 <fetcher.Form method="post" action="/logout"><button className="icon-button signout-button" type="submit" disabled={signingOut} title="Sign out" aria-label="Sign out"><LogOut size={17} aria-hidden="true" /><span>Sign out</span></button></fetcher.Form>

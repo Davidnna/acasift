@@ -30,7 +30,7 @@ from app.acquisition_models import AcquisitionJob, AcquisitionSearchState, Schol
 from app.services.document_service import calculate_sha256, extract_text, make_storage_filename
 from app.services.reference_service import register_reference_entry
 
-USER_AGENT = "AcaSiftReferenceAcquisition/0.14.1 (+https://acasift.onrender.com)"
+USER_AGENT = "AcaSiftReferenceAcquisition/0.15.0 (+https://acasift.onrender.com)"
 MAX_DOWNLOAD_BYTES = 15 * 1024 * 1024
 MAX_RECORDS_PER_RUN = 25
 MAX_DOWNLOADS_PER_RUN = 2

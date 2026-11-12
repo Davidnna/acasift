@@ -89,12 +89,11 @@ export interface ComparisonDetail extends ComparisonSummary {
 
 export interface DashboardData {
     stats: {
-        document_count: number;
-        comparison_count: number;
+        submission_count: number;
+        request_count: number;
     };
-    recent_documents: DocumentRecord[];
-    recent_comparisons: ComparisonSummary[];
-    my_submission_requests?: {
+    recent_submissions: DocumentRecord[];
+    my_submission_requests: {
         id: number;
         title: string;
         workspace_name: string | null;
@@ -111,10 +110,8 @@ export interface AccountData {
     pending_email: string | null;
     email_change_pending: boolean;
     activity: {
-        document_count: number;
-        comparison_count: number;
-        recent_documents: DocumentRecord[];
-        recent_comparisons: ComparisonSummary[];
+        submission_count: number;
+        recent_submissions: DocumentRecord[];
     };
 }
 
@@ -128,7 +125,7 @@ export interface WorkspaceRecord {
     id: number;
     name: string;
     description: string | null;
-    type: 'personal' | 'shared';
+    type: 'shared';
     status: string;
     role: 'owner' | 'admin' | 'member' | null;
     is_owner: boolean;
@@ -148,7 +145,7 @@ export interface WorkspaceInviteRecord {
 }
 
 export interface WorkspaceData {
-    active_workspace_id: number;
+    active_workspace_id: number | null;
     workspaces: WorkspaceRecord[];
     pending_request: null;
     can_manage_members: boolean;

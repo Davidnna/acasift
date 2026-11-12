@@ -170,8 +170,9 @@ class Workspace(db.Model):
     workspace_id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(180), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    # personal workspaces are private; shared workspaces support open collaboration.
-    workspace_type = db.Column(db.String(24), nullable=False, default="personal", index=True)
+    # Active AcaSift workspaces are shared collaboration spaces. The legacy
+    # "personal" value is retained only on archived historical records.
+    workspace_type = db.Column(db.String(24), nullable=False, default="shared", index=True)
     status = db.Column(db.String(24), nullable=False, default="active", index=True)
     owner_user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False, index=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)

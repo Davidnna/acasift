@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Form, Link, useActionData, useLoaderData, useNavigation } from 'react-router-dom';
 import {
-    Layers3, Users, Copy, Link2, ShieldCheck,
+    Users, Copy, Link2, ShieldCheck,
     Clock3, Ban, UserPlus, Plus,
 } from 'lucide-react';
 import { Notice, PageHeading } from '../components/ui';
@@ -30,7 +30,6 @@ export function WorkspacesPage() {
     const busy = navigation.state === 'submitting';
     const [copied, setCopied] = useState(false);
     const active = data.workspaces.find(item => item.id === data.active_workspace_id);
-    const isShared = active?.type === 'shared';
 
     async function copyInvite() {
         if (!actionData?.inviteUrl) return;
@@ -46,12 +45,12 @@ export function WorkspacesPage() {
     return <>
         <PageHeading
             eyebrow="WORKSPACE MANAGEMENT"
-            title="Your workspaces"
-            description="Keep individual work private or collaborate with others in shared workspaces."
+            title="Shared workspaces"
+            description="Create a workspace for your group or join one using an invitation link."
         />
         {actionData?.error && <Notice tone="danger">{actionData.error}</Notice>}
         {actionData?.success && <Notice tone="success">{actionData.success}</Notice>}
-        {actionData?.inviteUrl && data.can_manage_members && isShared && <section className="panel workspace-invite-created">
+        {actionData?.inviteUrl && data.can_manage_members && <section className="panel workspace-invite-created">
             <div className="panel-heading">
                 <div><h2><Link2 size={17} /> Invitation link created</h2><p>Copy and share this link. It will only work while it remains active.</p></div>
             </div>
@@ -66,21 +65,22 @@ export function WorkspacesPage() {
 
         <section className="panel">
             <div className="panel-heading">
-                <div><h2><Layers3 size={17} /> Available workspaces</h2><p>Choose where your new documents and comparisons should be stored.</p></div>
+                <div><h2><Users size={17} /> Your workspaces</h2><p>Choose the shared workspace you want to work in.</p></div>
             </div>
             <div className="workspace-card-list">
                 {data.workspaces.map(workspace => <div className={`workspace-choice ${workspace.id === data.active_workspace_id ? 'workspace-choice-active' : ''}`} key={workspace.id}>
-                    <div className="workspace-choice-icon">{workspace.type === 'shared' ? <Users size={19} /> : <Layers3 size={19} />}</div>
+                    <div className="workspace-choice-icon"><Users size={19} /></div>
                     <div className="workspace-choice-copy">
                         <strong>{workspace.name}</strong>
-                        <span>{workspace.type === 'personal' ? 'Private personal workspace' : `Shared workspace · ${workspace.member_count} members`} · {formatWorkspaceRole(workspace.role)}</span>
+                        <span>{workspace.member_count} members · {formatWorkspaceRole(workspace.role)}</span>
                         {workspace.description && <span>{workspace.description}</span>}
                     </div>
                     {workspace.id === data.active_workspace_id ? <span className="category-tag">Current workspace</span> : <Form method="post"><input type="hidden" name="_intent" value="switch" /><input type="hidden" name="workspace_id" value={workspace.id} /><button className="button button-secondary button-small" disabled={busy}>Switch workspace</button></Form>}
                 </div>)}
             </div>
-            {active && <p className="form-hint">New personal documents and comparisons will be associated with <strong>{active.name}</strong>. Submission Request documents remain associated with their request.</p>}
-            {isShared && active && <section className="workspace-settings">
+            {!data.workspaces.length && <p className="muted-note">You have not joined a shared workspace yet. Create one below or open an invitation link.</p>}
+            {active && <p className="form-hint"><strong>{active.name}</strong> is your current shared workspace. Documents are submitted through its Submission Requests.</p>}
+            {active && <section className="workspace-settings">
                 {data.can_manage_members && <>
                     <div className="panel-divider" />
                     <div className="panel-heading"><div><h2>Workspace details</h2><p>Update the name and description shown to members.</p></div></div>
@@ -109,7 +109,7 @@ export function WorkspacesPage() {
                     </Form>
                 </div>}
             </section>}
-            {data.can_manage_members && isShared && <div className="form-actions"><Link className="button button-primary" to="/app/submission-requests"><Plus size={15} /> Manage submission requests</Link></div>}
+            {data.can_manage_members && <div className="form-actions"><Link className="button button-primary" to="/app/submission-requests"><Plus size={15} /> Manage submission requests</Link></div>}
         </section>
 
         <div className="admin-content-grid">
@@ -128,7 +128,7 @@ export function WorkspacesPage() {
                 </Form>
             </section>
 
-            {isShared && data.can_manage_members && <>
+            {data.can_manage_members && <>
                 <section className="panel form-panel">
                     <div className="panel-heading">
                         <div><h2><Link2 size={17} /> Invite people with a link</h2><p>Anyone with the link can join as a workspace member while it remains active.</p></div>

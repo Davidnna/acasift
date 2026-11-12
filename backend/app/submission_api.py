@@ -195,7 +195,11 @@ def _submission_payload(row, include_contributor=False):
 
 
 def _get_request_access(item):
-    if not item.workspace or item.workspace.status != "active":
+    if (
+        not item.workspace
+        or item.workspace.status != "active"
+        or item.workspace.workspace_type != "shared"
+    ):
         return {
             "membership": None,
             "participant": None,
@@ -363,7 +367,12 @@ def create_submission_request():
 @login_required
 def submission_request_detail(request_id):
     item = db.session.get(SubmissionRequest, request_id)
-    if not item or not item.workspace or item.workspace.status != "active":
+    if (
+        not item
+        or not item.workspace
+        or item.workspace.status != "active"
+        or item.workspace.workspace_type != "shared"
+    ):
         return _error("Submission request not found.", 404)
 
     access = _get_request_access(item)
@@ -530,7 +539,14 @@ def preview_submission_request_invite():
     if status != "active":
         return _error("This submission link is no longer active.", 410)
     item = invite.request
-    if not item or not item.workspace or item.workspace.status != "active" or item.status != "open" or not item.allow_external_participants:
+    if (
+        not item
+        or not item.workspace
+        or item.workspace.status != "active"
+        or item.workspace.workspace_type != "shared"
+        or item.status != "open"
+        or not item.allow_external_participants
+    ):
         return _error("This submission request is not accepting external participants.", 410)
     existing = _participant(item.request_id, current_user.user_id)
     response = jsonify({
@@ -580,7 +596,14 @@ def accept_submission_request_invite():
     if _invite_status(invite) != "active":
         return _error("This submission link is no longer active.", 410)
     item = invite.request
-    if not item or not item.workspace or item.workspace.status != "active" or item.status != "open" or not item.allow_external_participants:
+    if (
+        not item
+        or not item.workspace
+        or item.workspace.status != "active"
+        or item.workspace.workspace_type != "shared"
+        or item.status != "open"
+        or not item.allow_external_participants
+    ):
         return _error("This submission request is not accepting external participants.", 410)
 
     participation_type = "member" if membership_for(current_user, item.workspace_id) else "external"

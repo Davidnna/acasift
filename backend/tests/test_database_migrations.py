@@ -14,7 +14,9 @@ from app.database import (
     REFERENCE_ARCHITECTURE_VERSION,
     SIMPLIFIED_REFERENCE_POLICY_VERSION,
     ACQUISITION_ENGINE_VERSION,
+    SHARED_WORKSPACES_ONLY_VERSION,
 )
+from app.models import User, Workspace, WorkspaceMembership
 
 
 class DatabaseMigrationConfig(Config):
@@ -123,6 +125,49 @@ class DatabaseMigrationTests(unittest.TestCase):
 
         self.assertNotEqual(result.exit_code, 0)
         self.assertIsNone(self._migration_record())
+
+    def test_shared_workspace_only_migration_archives_legacy_personal_workspaces(self):
+        db.create_all()
+        user = User(
+            first_name="Legacy",
+            last_name="Owner",
+            full_name="Legacy Owner",
+            email="legacy-owner@example.test",
+            password_hash="test-hash",
+            role="user",
+            is_active=True,
+        )
+        db.session.add(user)
+        db.session.flush()
+        workspace = Workspace(
+            name="Legacy personal workspace",
+            workspace_type="personal",
+            status="active",
+            owner_user_id=user.user_id,
+        )
+        db.session.add(workspace)
+        db.session.flush()
+        db.session.add(WorkspaceMembership(
+            workspace_id=workspace.workspace_id,
+            user_id=user.user_id,
+            role="owner",
+            status="active",
+        ))
+        db.session.commit()
+
+        result = self.app.test_cli_runner().invoke(args=["init-db"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        db.session.refresh(workspace)
+        self.assertEqual(workspace.status, "archived")
+        self.assertEqual(workspace.workspace_type, "personal")
+        self.assertIsNotNone(db.session.get(User, user.user_id))
+
+        record = db.session.execute(
+            text(f"SELECT version, execution_mode FROM {MIGRATION_TABLE} WHERE version = :version"),
+            {"version": SHARED_WORKSPACES_ONLY_VERSION},
+        ).first()
+        self.assertIsNotNone(record)
+        self.assertEqual(record.execution_mode, "executed")
 
 
 if __name__ == "__main__":

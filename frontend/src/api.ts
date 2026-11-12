@@ -161,10 +161,6 @@ export async function getDocuments(signal?: AbortSignal): Promise<DocumentRecord
     return data.documents;
 }
 
-export async function uploadSubmission(formData: FormData, signal?: AbortSignal): Promise<{ comparison_id: number; }> {
-    return request('/api/documents', { method: 'POST', body: formData, signal });
-}
-
 export async function getComparison(id: string, signal?: AbortSignal): Promise<ComparisonDetail> {
     const data = await request<{ comparison: ComparisonDetail; }>(`/api/comparisons/${id}`, { signal });
     return data.comparison;

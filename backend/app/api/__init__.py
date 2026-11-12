@@ -24,8 +24,8 @@ from app.services.email_service import (
     send_password_reset_email,
     send_verification_email,
 )
-from app.services.workspace_service import ensure_personal_workspace, get_active_workspace, membership_for, is_workspace_manager
-from app.services.workflow_service import run_comparison, save_uploaded_document
+from app.services.workspace_service import get_active_workspace, membership_for, is_workspace_manager
+from app.services.reference_document_service import save_reference_document
 from app.submission_models import (
     DocumentSubmission,
     SubmissionRequest,
@@ -106,6 +106,13 @@ def _document_payload(document):
         "processing_status": document.processing_status,
         "uploaded_at": _date(document.uploaded_at),
     }
+
+
+def _submission_document_payload(submission):
+    payload = _document_payload(submission.document)
+    # Contributors receive a submission receipt, not internal analysis state.
+    payload["processing_status"] = "submitted"
+    return payload
 
 
 def _comparison_payload(comparison, include_results=False, hide_peer_source_details=False):
@@ -248,9 +255,7 @@ def login():
         return _error("This account is currently inactive. Contact AcaSift support.", 403)
 
     login_user(user, remember=False, fresh=True)
-    personal = ensure_personal_workspace(user)
-    session["active_workspace_id"] = personal.workspace_id
-    db.session.commit()
+    get_active_workspace(user)
     response = jsonify({"user": _user_payload(user)})
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -295,8 +300,6 @@ def register_account():
     )
     try:
         db.session.add(user)
-        db.session.flush()
-        ensure_personal_workspace(user)
         db.session.commit()
     except Exception:
         db.session.rollback()
@@ -345,10 +348,9 @@ def verify_email():
     user.email_verification_token_hash = None
     user.email_verification_expires_at = None
     user.is_active = True
-    personal = ensure_personal_workspace(user)
     db.session.commit()
     login_user(user, remember=False, fresh=True)
-    session["active_workspace_id"] = personal.workspace_id
+    get_active_workspace(user)
     response = jsonify({"message": "Your email address has been verified.", "user": _user_payload(user)})
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -456,12 +458,19 @@ def logout():
 @bp.get("/account")
 @login_required
 def account_overview():
-    documents = Document.query.filter_by(user_id=current_user.user_id).order_by(
-        Document.uploaded_at.desc()
+    shared_submissions = (
+        DocumentSubmission.query
+        .join(SubmissionRequest, SubmissionRequest.request_id == DocumentSubmission.request_id)
+        .join(Workspace, Workspace.workspace_id == SubmissionRequest.workspace_id)
+        .filter(
+            DocumentSubmission.contributor_user_id == current_user.user_id,
+            Workspace.workspace_type == "shared",
+        )
+    )
+    submissions = shared_submissions.order_by(
+        DocumentSubmission.submitted_at.desc()
     ).limit(5).all()
-    comparisons = Comparison.query.filter_by(user_id=current_user.user_id).order_by(
-        Comparison.started_at.desc()
-    ).limit(5).all()
+    submission_count = shared_submissions.count()
     return jsonify({
         "user": _user_payload(current_user),
         "pending_email": (
@@ -475,10 +484,8 @@ def account_overview():
             and not _token_expired(current_user.email_change_expires_at)
         ),
         "activity": {
-            "document_count": Document.query.filter_by(user_id=current_user.user_id).count(),
-            "comparison_count": Comparison.query.filter_by(user_id=current_user.user_id).count(),
-            "recent_documents": [_document_payload(item) for item in documents],
-            "recent_comparisons": [_comparison_payload(item) for item in comparisons],
+            "submission_count": submission_count,
+            "recent_submissions": [_submission_document_payload(item) for item in submissions],
         },
     })
 
@@ -579,6 +586,8 @@ def get_user_profile_picture(user_id):
 
     if user.user_id != current_user.user_id and not current_user.is_admin:
         active_workspace = get_active_workspace(current_user)
+        if not active_workspace:
+            return _error("Profile picture not found.", 404)
         viewer_membership = membership_for(current_user, active_workspace.workspace_id)
         target_membership = membership_for(user, active_workspace.workspace_id)
         if not viewer_membership or not target_membership:
@@ -740,22 +749,27 @@ def change_account_password():
 @bp.get("/dashboard")
 @login_required
 def dashboard():
-    workspace = get_active_workspace(current_user)
-    document_query = Document.query.filter_by(
-        user_id=current_user.user_id,
-        workspace_id=workspace.workspace_id,
-        document_type="submission",
+    submissions_query = (
+        DocumentSubmission.query
+        .join(SubmissionRequest, SubmissionRequest.request_id == DocumentSubmission.request_id)
+        .join(Workspace, Workspace.workspace_id == SubmissionRequest.workspace_id)
+        .filter(
+            DocumentSubmission.contributor_user_id == current_user.user_id,
+            Workspace.workspace_type == "shared",
+        )
     )
-    comparison_query = Comparison.query.filter(
-        Comparison.user_id == current_user.user_id,
-        Comparison.workspace_id == workspace.workspace_id,
-    )
+    recent_submissions = submissions_query.order_by(
+        DocumentSubmission.submitted_at.desc(),
+        DocumentSubmission.submission_id.desc(),
+    ).limit(6).all()
+
     request_records = (
         SubmissionRequest.query.join(SubmissionRequestParticipant)
         .join(SubmissionRequest.workspace)
         .filter(
             SubmissionRequestParticipant.user_id == current_user.user_id,
             SubmissionRequestParticipant.status == "active",
+            Workspace.workspace_type == "shared",
             Workspace.status == "active",
             SubmissionRequest.status.in_(("draft", "open", "closed", "archived")),
         )
@@ -767,7 +781,12 @@ def dashboard():
         DocumentSubmission.request_id,
         func.count(DocumentSubmission.submission_id),
         func.max(DocumentSubmission.submitted_at),
-    ).filter_by(contributor_user_id=current_user.user_id).group_by(
+    ).join(SubmissionRequest, SubmissionRequest.request_id == DocumentSubmission.request_id).join(
+        Workspace, Workspace.workspace_id == SubmissionRequest.workspace_id
+    ).filter(
+        DocumentSubmission.contributor_user_id == current_user.user_id,
+        Workspace.workspace_type == "shared",
+    ).group_by(
         DocumentSubmission.request_id
     ).all()
     summary_by_request = {
@@ -789,11 +808,12 @@ def dashboard():
 
     return jsonify({
         "stats": {
-            "document_count": document_query.count(),
-            "comparison_count": comparison_query.count(),
+            "submission_count": submissions_query.count(),
+            "request_count": len(my_submission_requests),
         },
-        "recent_documents": [_document_payload(item) for item in document_query.order_by(Document.uploaded_at.desc()).limit(6).all()],
-        "recent_comparisons": [_comparison_payload(item) for item in comparison_query.order_by(Comparison.started_at.desc()).limit(6).all()],
+        "recent_submissions": [
+            _submission_document_payload(item) for item in recent_submissions
+        ],
         "my_submission_requests": my_submission_requests,
     })
 
@@ -801,43 +821,30 @@ def dashboard():
 @bp.get("/documents")
 @login_required
 def documents():
-    workspace = get_active_workspace(current_user)
-    query = Document.query.filter_by(
-        document_type="submission",
-        user_id=current_user.user_id,
-        workspace_id=workspace.workspace_id,
+    records = (
+        DocumentSubmission.query.join(
+            Document,
+            Document.document_id == DocumentSubmission.document_id,
+        )
+        .join(SubmissionRequest, SubmissionRequest.request_id == DocumentSubmission.request_id)
+        .join(Workspace, Workspace.workspace_id == SubmissionRequest.workspace_id)
+        .filter(
+            DocumentSubmission.contributor_user_id == current_user.user_id,
+            Workspace.workspace_type == "shared",
+        )
+        .order_by(DocumentSubmission.submitted_at.desc(), DocumentSubmission.submission_id.desc())
+        .all()
     )
-    records = query.order_by(Document.uploaded_at.desc()).all()
-    return jsonify({"documents": [_document_payload(item) for item in records]})
+    return jsonify({"documents": [_submission_document_payload(item) for item in records]})
 
 
 @bp.post("/documents")
 @login_required
 def upload_submission():
-    workspace = get_active_workspace(current_user)
-    if workspace.workspace_type != "personal":
-        return _error(
-            "In a shared workspace, submit documents through a Submission Request so they can be compared with other submissions to that request.",
-            403,
-        )
-    try:
-        document = save_uploaded_document(
-            request.files.get("document"),
-            request.form.get("title", ""),
-            "submission",
-        )
-        comparison = run_comparison(document)
-        return jsonify({
-            "message": "Document uploaded and similarity analysis completed.",
-            "comparison_id": comparison.comparison_id,
-            "comparison": _comparison_payload(comparison),
-        }), 201
-    except ValueError as exc:
-        return _error(str(exc), 400)
-    except Exception:
-        from flask import current_app
-        current_app.logger.exception("Submission upload or comparison failed.")
-        return _error("The document was stored, but similarity analysis could not be completed. Check the application log.", 500)
+    return _error(
+        "Documents must be submitted through an open Submission Request in a shared workspace.",
+        410,
+    )
 
 
 @bp.get("/comparisons/<int:comparison_id>")
@@ -847,33 +854,30 @@ def comparison_detail(comparison_id):
     from app.submission_models import DocumentSubmission, SubmissionRequestReviewer
 
     generic_submission = DocumentSubmission.query.filter_by(comparison_id=comparison_id).first()
-    hide_peer_source_details = False
-    if generic_submission:
-        submission_request = generic_submission.request
-        if not submission_request.workspace or submission_request.workspace.status != "active":
-            return _error("This report is no longer available.", 404)
-        membership = membership_for(current_user, submission_request.workspace_id)
-        is_manager = is_workspace_manager(membership)
-        is_reviewer = bool(membership and SubmissionRequestReviewer.query.filter_by(
-            request_id=submission_request.request_id,
-            user_id=current_user.user_id,
-        ).first())
-        # Shared-request comparison reports are restricted to reviewers and
-        # workspace managers. Contributors receive submission receipts and
-        # reviewer feedback through the Submission Request page only.
-        if not (is_manager or is_reviewer):
-            return _error("This comparison is available only to authorised reviewers.", 403)
-        hide_peer_source_details = False
-    else:
-        if comparison.user_id != current_user.user_id:
-            return _error("You do not have permission to view this report.", 403)
-        if comparison.workspace_id and not membership_for(current_user, comparison.workspace_id):
-            return _error("This report belongs to a workspace you can no longer access.", 403)
+    if not generic_submission:
+        return _error("This report is no longer available.", 404)
+
+    submission_request = generic_submission.request
+    if (
+        not submission_request.workspace
+        or submission_request.workspace.status != "active"
+        or submission_request.workspace.workspace_type != "shared"
+    ):
+        return _error("This report is no longer available.", 404)
+    membership = membership_for(current_user, submission_request.workspace_id)
+    is_manager = is_workspace_manager(membership)
+    is_reviewer = bool(membership and SubmissionRequestReviewer.query.filter_by(
+        request_id=submission_request.request_id,
+        user_id=current_user.user_id,
+    ).first())
+    # Contributors receive submission receipts and reviewer feedback only.
+    if not (is_manager or is_reviewer):
+        return _error("This comparison is available only to authorised reviewers.", 403)
 
     return jsonify({"comparison": _comparison_payload(
         comparison,
         include_results=True,
-        hide_peer_source_details=hide_peer_source_details,
+        hide_peer_source_details=False,
     )})
 
 
@@ -920,8 +924,6 @@ def create_user():
         email_verified_at=datetime.now(timezone.utc),
     )
     db.session.add(user)
-    db.session.flush()
-    ensure_personal_workspace(user)
     db.session.commit()
     return jsonify({"message": "User account created successfully.", "user": _user_payload(user)}), 201
 
@@ -946,7 +948,7 @@ def _reference_entry_response(entry):
 @login_required
 def retired_user_reference_library():
     return _error(
-        "AcaSift manages its reference bank centrally. Personal and workspace reference uploads are not available.",
+        "Reference collections are managed centrally by AcaSift administrators.",
         410,
     )
 
@@ -1009,10 +1011,9 @@ def upload_reference():
         return _error("Provide a source URL or permission note supporting global use.")
 
     try:
-        document = save_uploaded_document(
+        document = save_reference_document(
             request.files.get("document"),
             request.form.get("title", ""),
-            "reference",
             commit=False,
         )
         entry = register_reference_entry(
@@ -1165,8 +1166,6 @@ def bootstrap_first_admin():
                         email_verified_at=datetime.now(timezone.utc),
                     )
                     db.session.add(created_user)
-                    db.session.flush()
-                    ensure_personal_workspace(created_user)
 
     except Exception:
         db.session.rollback()
@@ -1180,9 +1179,7 @@ def bootstrap_first_admin():
 
     # Sign in only after the database transaction commits successfully.
     login_user(created_user, remember=False, fresh=True)
-    personal = ensure_personal_workspace(created_user)
-    session["active_workspace_id"] = personal.workspace_id
-    db.session.commit()
+    get_active_workspace(created_user)
     response = jsonify({
         "message": "Your AcaSift administrator account has been created.",
         "user": _user_payload(created_user),

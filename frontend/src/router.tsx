@@ -46,7 +46,6 @@ import {
     uploadReference,
     verifyGlobalReferenceEntry,
     archiveGlobalReferenceEntry,
-    uploadSubmission,
     getSubmissionRequests,
     createSubmissionRequest,
     getSubmissionRequest,
@@ -85,6 +84,13 @@ async function appLoader(args: LoaderFunctionArgs) {
         workspace => workspace.id === workspaceData.active_workspace_id,
     ) || null;
     return { user, activeWorkspace };
+}
+
+function requireActiveWorkspaceId(data: { active_workspace_id: number | null; }): number {
+    if (data.active_workspace_id === null) {
+        throw new Error('Create or join a shared workspace before managing workspace activity.');
+    }
+    return data.active_workspace_id;
 }
 
 async function submissionRequestsLoader(args: LoaderFunctionArgs) {
@@ -291,17 +297,6 @@ async function logoutAction() {
     return redirect('/');
 }
 
-async function uploadSubmissionAction({ request }: ActionFunctionArgs) {
-    const formData = await request.formData();
-    try {
-        const result = await uploadSubmission(formData, request.signal);
-        throw redirect(`/app/comparisons/${result.comparison_id}`);
-    } catch (error) {
-        if (error instanceof Response) throw error;
-        return { error: error instanceof Error ? error.message : 'The document could not be analysed.' };
-    }
-}
-
 async function createUserAction({ request }: ActionFunctionArgs) {
     const formData = await request.formData();
     const payload = {
@@ -338,7 +333,7 @@ async function workspacesAction({ request }: ActionFunctionArgs) {
         }
         if (intent === 'add-member') {
             const data = await getWorkspaces();
-            await addWorkspaceMember(data.active_workspace_id, {
+            await addWorkspaceMember(requireActiveWorkspaceId(data), {
                 email: String(formData.get('email') || ''),
                 role: String(formData.get('role') || 'member'),
             });
@@ -346,7 +341,7 @@ async function workspacesAction({ request }: ActionFunctionArgs) {
         }
         if (intent === 'manage') {
             const data = await getWorkspaces();
-            const result = await manageWorkspace(data.active_workspace_id, {
+            const result = await manageWorkspace(requireActiveWorkspaceId(data), {
                 name: String(formData.get('name') || ''),
                 description: String(formData.get('description') || ''),
             });
@@ -354,19 +349,19 @@ async function workspacesAction({ request }: ActionFunctionArgs) {
         }
         if (intent === 'leave') {
             const data = await getWorkspaces();
-            const result = await leaveWorkspace(data.active_workspace_id);
+            const result = await leaveWorkspace(requireActiveWorkspaceId(data));
             return { success: result.message };
         }
         if (intent === 'delete') {
             const data = await getWorkspaces();
-            const result = await deleteWorkspace(data.active_workspace_id);
+            const result = await deleteWorkspace(requireActiveWorkspaceId(data));
             return { success: result.message };
         }
         if (intent === 'create-invite') {
             const data = await getWorkspaces();
             const expiryValue = String(formData.get('expires_at') || '');
             const maxValue = String(formData.get('max_uses') || '');
-            const result = await createWorkspaceInvite(data.active_workspace_id, {
+            const result = await createWorkspaceInvite(requireActiveWorkspaceId(data), {
                 role: 'member',
                 expires_at: expiryValue ? new Date(expiryValue).toISOString() : null,
                 max_uses: maxValue ? Number(maxValue) : null,
@@ -375,13 +370,13 @@ async function workspacesAction({ request }: ActionFunctionArgs) {
         }
         if (intent === 'revoke-invite') {
             const data = await getWorkspaces();
-            const result = await revokeWorkspaceInvite(data.active_workspace_id, Number(formData.get('invite_id')));
+            const result = await revokeWorkspaceInvite(requireActiveWorkspaceId(data), Number(formData.get('invite_id')));
             return { success: result.message };
         }
         if (intent === 'update-role') {
             const data = await getWorkspaces();
             const result = await updateWorkspaceMemberRole(
-                data.active_workspace_id,
+                requireActiveWorkspaceId(data),
                 Number(formData.get('user_id')),
                 String(formData.get('role') || 'member'),
             );
@@ -389,7 +384,7 @@ async function workspacesAction({ request }: ActionFunctionArgs) {
         }
         if (intent === 'remove-member') {
             const data = await getWorkspaces();
-            const result = await removeWorkspaceMember(data.active_workspace_id, Number(formData.get('user_id')));
+            const result = await removeWorkspaceMember(requireActiveWorkspaceId(data), Number(formData.get('user_id')));
             return { success: result.message };
         }
         return { error: 'Unknown workspace action.' };
@@ -461,13 +456,13 @@ async function submissionRequestsAction({ request }: ActionFunctionArgs) {
         const opensValue = String(formData.get('opens_at') || '');
         const dueValue = String(formData.get('due_at') || '');
         const result = await createSubmissionRequest({
-            workspace_id: workspaceData.active_workspace_id,
+            workspace_id: requireActiveWorkspaceId(workspaceData),
             title: String(formData.get('title') || ''),
             description: String(formData.get('description') || ''),
             instructions: String(formData.get('instructions') || ''),
             opens_at: opensValue ? new Date(opensValue).toISOString() : null,
             due_at: dueValue ? new Date(dueValue).toISOString() : null,
-            accepted_file_types: formData.getAll('accepted_file_types').map(value => String(value)),
+            accepted_file_types: formData.getAll('accepted_file_types').map((value: FormDataEntryValue) => String(value)),
             max_file_size_mb: Number(formData.get('max_file_size_mb') || 15),
             allow_late_submissions: formData.get('allow_late_submissions') === 'on',
             allow_resubmissions: formData.get('allow_resubmissions') === 'on',
@@ -562,7 +557,7 @@ async function adminReferencesAction({ request }: ActionFunctionArgs) {
         if (!Number.isInteger(entryId) || entryId < 1) return { error: 'The reference record is invalid.' };
         if (intent === 'archive') {
             await archiveGlobalReferenceEntry(entryId);
-            return { success: 'The document was removed from future private checks.' };
+            return { success: 'The document was removed from future platform reference use.' };
         }
         if (intent === 'verify') {
             await verifyGlobalReferenceEntry(entryId, formData);
@@ -634,16 +629,9 @@ export const router = createBrowserRouter([
                     { path: 'workspaces', loader: (args) => loadForUser(args, getWorkspaces), action: workspacesAction, lazy: async () => ({ Component: (await import('./pages/workspaces')).WorkspacesPage }) },
                     { path: 'submission-requests', loader: submissionRequestsLoader, action: submissionRequestsAction, lazy: async () => ({ Component: (await import('./pages/submission-requests')).SubmissionRequestsPage }) },
                     { path: 'submission-requests/:requestId', loader: submissionRequestDetailLoader, action: submissionRequestAction, lazy: async () => ({ Component: (await import('./pages/submission-requests')).SubmissionRequestDetailPage }) },
-                    { path: 'courses', loader: () => redirect('/app/submission-requests') },
-                    { path: 'courses/:courseId', loader: () => redirect('/app/submission-requests') },
-                    { path: 'assignments', loader: () => redirect('/app/submission-requests') },
-                    { path: 'assignments/:assignmentId', loader: () => redirect('/app/submission-requests') },
-                    { path: 'submissions/:submissionId', loader: () => redirect('/app/submission-requests') },
                     { path: 'dashboard', loader: (args) => loadForUser(args, getDashboard), lazy: async () => ({ Component: (await import('./pages/dashboard')).DashboardPage }) },
-                    { path: 'documents', loader: (args) => loadForUser(args, getDocuments), action: uploadSubmissionAction, lazy: async () => ({ Component: (await import('./pages/documents')).DocumentsPage }) },
-                    { path: 'documents/new', loader: () => redirect('/app/documents') },
-                    { path: 'references', loader: () => redirect('/app/documents') },
-                    { path: 'references/new', loader: () => redirect('/app/documents') },
+                    { path: 'documents', loader: (args) => loadForUser(args, getDocuments), lazy: async () => ({ Component: (await import('./pages/documents')).DocumentsPage }) },
+                    { path: 'documents/new', loader: () => redirect('/app/submission-requests') },
                     { path: 'comparisons/:comparisonId', loader: (args) => loadForUser(args, (signal) => getComparison(args.params.comparisonId || '', signal)), lazy: async () => ({ Component: (await import('./pages/documents')).ComparisonPage }) },
                     {
                         path: 'admin',

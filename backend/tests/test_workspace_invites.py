@@ -10,7 +10,6 @@ from config import Config
 from app import create_app
 from app.extensions import db
 from app.models import User, Workspace, WorkspaceInvite, WorkspaceMembership
-from app.services.workspace_service import ensure_personal_workspace
 
 
 class InviteConfig(Config):
@@ -32,7 +31,6 @@ class WorkspaceInviteTests(unittest.TestCase):
         db.create_all()
 
         self.owner = self._make_user("owner@example.test", "Workspace Owner")
-        ensure_personal_workspace(self.owner)
         db.session.commit()
 
         self.owner_client = self.app.test_client()
@@ -64,7 +62,6 @@ class WorkspaceInviteTests(unittest.TestCase):
         )
         db.session.add(user)
         db.session.flush()
-        ensure_personal_workspace(user)
         db.session.commit()
         return user
 

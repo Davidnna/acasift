@@ -1,4 +1,8 @@
-"""AcaSift Reference Bank records and retained legacy provenance metadata."""
+"""Legacy reference metadata mappings retained for production-record compatibility.
+
+The 0.16.0 application no longer exposes permanent reference-bank uploads or
+reference acquisition. Historical rows remain available for audit/migration only.
+"""
 
 from datetime import datetime, timezone
 from sqlalchemy import Index, UniqueConstraint
@@ -11,7 +15,7 @@ def utc_now():
 
 
 class ReferenceEntry(db.Model):
-    """A scoped placement of a canonical document in a reference collection."""
+    """Historical reference placement; not used by new similarity comparisons."""
 
     __tablename__ = "reference_entries"
     __table_args__ = (

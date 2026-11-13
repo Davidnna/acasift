@@ -36,16 +36,6 @@ def legacy_admin_users():
     return redirect("/app/admin/users", code=302)
 
 
-@bp.get("/admin/references")
-def legacy_admin_references():
-    return redirect("/app/admin/references", code=302)
-
-
-@bp.get("/admin/references/upload")
-def legacy_admin_reference_upload():
-    return redirect("/app/admin/references", code=302)
-
-
 @bp.route("/", defaults={"path": ""})
 @bp.route("/<path:path>")
 def spa(path):

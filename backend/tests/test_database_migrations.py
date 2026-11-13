@@ -15,6 +15,7 @@ from app.database import (
     SIMPLIFIED_REFERENCE_POLICY_VERSION,
     ACQUISITION_ENGINE_VERSION,
     SHARED_WORKSPACES_ONLY_VERSION,
+    EXTERNAL_SCHOLARLY_ANALYSIS_VERSION,
 )
 from app.models import User, Workspace, WorkspaceMembership
 
@@ -117,6 +118,31 @@ class DatabaseMigrationTests(unittest.TestCase):
             second = self.app.test_cli_runner().invoke(args=["init-db"])
         self.assertEqual(second.exit_code, 0, second.output)
         migration.assert_not_called()
+
+    def test_external_scholarly_analysis_schema_is_created_and_migration_recorded(self):
+        result = self.app.test_cli_runner().invoke(args=["init-db"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        inspector = inspect(db.engine)
+        self.assertTrue(inspector.has_table("external_comparison_results"))
+        self.assertTrue(inspector.has_table("external_matched_passages"))
+        comparison_columns = {
+            column["name"] for column in inspector.get_columns("comparisons")
+        }
+        self.assertIn("external_search_status", comparison_columns)
+        result_columns = {
+            column["name"] for column in inspector.get_columns("comparison_results")
+        }
+        self.assertIn("fuzzy_coverage", result_columns)
+        self.assertIn("semantic_similarity", result_columns)
+        passage_columns = {
+            column["name"] for column in inspector.get_columns("matched_passages")
+        }
+        self.assertIn("match_method", passage_columns)
+        record = db.session.execute(
+            text(f"SELECT version FROM {MIGRATION_TABLE} WHERE version = :version"),
+            {"version": EXTERNAL_SCHOLARLY_ANALYSIS_VERSION},
+        ).first()
+        self.assertIsNotNone(record)
 
     def test_failed_migration_is_not_marked_as_applied(self):
         with patch("app.database._legacy_baseline_status", return_value=(False, ["test pending migration"])), \

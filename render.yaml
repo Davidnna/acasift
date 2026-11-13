@@ -41,3 +41,16 @@ services:
         value: "24"
       - key: PASSWORD_RESET_HOURS
         value: "1"
+
+      - key: MAX_EXTERNAL_SOURCES
+        value: "24"
+      - key: MAX_EXTERNAL_DOWNLOADS
+        value: "8"
+      - key: MAX_EXTERNAL_DOWNLOAD_MB
+        value: "12"
+      - key: ENABLE_LOCAL_SEMANTIC
+        value: "false"
+      - key: SEMANTIC_MODEL_NAME
+        value: "sentence-transformers/all-MiniLM-L6-v2"
+      - key: SEMANTIC_MATCH_THRESHOLD
+        value: "0.82"

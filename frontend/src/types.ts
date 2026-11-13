@@ -27,38 +27,24 @@ export interface DocumentRecord {
     uploaded_at: string;
 }
 
-export interface ReferenceEntryRecord {
-    id: number;
-    document_id: number;
-    scope: 'global' | 'personal' | 'workspace' | 'request';
-    status: 'active' | 'review_required' | 'withdrawn' | 'archived' | 'quarantined';
-    provenance_type: string;
-    source_title: string | null;
-    source_url: string | null;
-    doi: string | null;
-    rights_basis: string | null;
-    license_name: string | null;
-    license_url: string | null;
-    rights_notes: string | null;
-    rights_verified: boolean;
-    verified_at: string | null;
-    created_at: string | null;
-    document: {
-        id: number;
-        title: string;
-        original_filename: string;
-        file_type: string;
-        uploaded_at: string | null;
-        uploader: string | null;
-    };
-}
-
 export interface ComparisonSummary {
     id: number;
     status: string;
     started_at: string;
     completed_at?: string | null;
     submitted_document: DocumentRecord;
+    external_search_status?: 'pending' | 'running' | 'completed' | 'partial' | 'unavailable' | 'failed';
+    external_search_error?: string | null;
+    external_search_completed_at?: string | null;
+    external_sources_discovered?: number;
+    external_sources_compared?: number;
+    external_sources_with_matches?: number;
+    external_provider_summary?: Record<string, {
+        queries_attempted: number;
+        queries_succeeded: number;
+        records_returned: number;
+        errors: string[];
+    }>;
 }
 
 export interface Passage {
@@ -69,6 +55,8 @@ export interface Passage {
     reference_end: number;
     matched_text: string;
     reference_text: string;
+    match_method?: string;
+    match_score?: number;
 }
 
 export interface ComparisonResult {
@@ -80,11 +68,54 @@ export interface ComparisonResult {
     matched_ngram_count: number;
     total_query_ngrams: number;
     coverage_method?: string;
+    fuzzy_similarity: number;
+    fuzzy_coverage: number;
+    semantic_similarity: number | null;
+    semantic_coverage: number | null;
+    semantic_status: string;
+    composite_similarity: number;
     passages: Passage[];
+}
+
+export interface ExternalComparisonPassage {
+    id: number;
+    submitted_start: number;
+    submitted_end: number;
+    matched_text: string;
+    source_excerpt: string;
+    match_method: string;
+    match_score: number;
+}
+
+export interface ExternalComparisonResult {
+    id: number;
+    provider: string;
+    providers: string[];
+    title: string;
+    authors: string[];
+    year: number | null;
+    journal: string | null;
+    doi: string | null;
+    source_url: string | null;
+    full_text_url: string | null;
+    license_name: string | null;
+    license_url: string | null;
+    cosine_similarity: number;
+    exact_ngram_coverage: number;
+    matched_ngram_count: number;
+    total_query_ngrams: number;
+    fuzzy_similarity: number;
+    fuzzy_coverage: number;
+    semantic_similarity: number | null;
+    semantic_coverage: number | null;
+    semantic_status: string;
+    composite_similarity: number;
+    passages: ExternalComparisonPassage[];
 }
 
 export interface ComparisonDetail extends ComparisonSummary {
     results: ComparisonResult[];
+    external_results: ExternalComparisonResult[];
 }
 
 export interface DashboardData {
@@ -240,65 +271,4 @@ export interface SubmissionRequestInvitePreviewData {
     submission_request: SubmissionRequestRecord;
     invited_by: string;
     already_joined: boolean;
-}
-
-
-export interface AcquisitionProvider {
-    id: string;
-    name: string;
-    kind: 'discovery' | 'full_text';
-    configured: boolean;
-}
-
-export interface AcquisitionJobRecord {
-    id: number;
-    provider: string;
-    query: string;
-    requested_limit: number;
-    status: string;
-    discovered_count: number;
-    new_records_count: number;
-    duplicate_count: number;
-    indexed_count: number;
-    metadata_only_count: number;
-    failed_count: number;
-    error_message: string | null;
-    created_at: string | null;
-    started_at: string | null;
-    finished_at: string | null;
-}
-
-export interface ScholarlyRecordSummary {
-    id: number;
-    title: string;
-    doi: string | null;
-    provider: string;
-    year: number | null;
-    rights_status: string;
-    status: string;
-    document_id: number | null;
-}
-
-export interface AcquisitionDashboardData {
-    counts: {
-        total: number;
-        indexed: number;
-        metadata_only: number;
-        eligible: number;
-        failed: number;
-        review_required: number;
-        reference_bank_count: number;
-    };
-    providers: AcquisitionProvider[];
-    jobs: AcquisitionJobRecord[];
-    searches: {
-        provider: string;
-        query: string;
-        total_available: number | null;
-        exhausted: boolean;
-        next_page: number | null;
-        next_offset: number | null;
-        updated_at: string | null;
-    }[];
-    records: ScholarlyRecordSummary[];
 }

@@ -1,8 +1,8 @@
 import { useFetcher, useLoaderData, useNavigation, Outlet, NavLink, Link, useLocation } from 'react-router-dom';
 import {
-    Activity, ArrowUpRight, BookOpen, ChevronDown, CircleHelp,
+    Activity, ArrowUpRight, ChevronDown, CircleHelp,
     FileSearch, Files, LayoutDashboard, LogOut, Menu,
-    Settings2, ShieldCheck, Users, X, ArrowUp, Layers3, ClipboardList, Database,
+    Settings2, ShieldCheck, Users, X, ArrowUp, Layers3, ClipboardList,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
@@ -242,8 +242,6 @@ const sharedWorkspaceLinks: { to: string; label: string; icon: LucideIcon; end?:
     { to: '/app/submission-requests', label: 'Submission Requests', icon: ClipboardList, end: true },
 ];
 const adminLinks: { to: string; label: string; icon: LucideIcon; end?: boolean; }[] = [
-    { to: '/app/admin/references', label: 'AcaSift Reference Bank', icon: BookOpen, end: true },
-    { to: '/app/admin/acquisition', label: 'Reference Acquisition', icon: Database, end: true },
     { to: '/app/admin/users', label: 'Manage users', icon: Users, end: true },
 ];
 

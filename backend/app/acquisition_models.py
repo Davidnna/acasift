@@ -1,4 +1,8 @@
-"""Persistent scholarly discovery and full-text acquisition records."""
+"""Legacy acquisition metadata mappings retained for production-record compatibility.
+
+The 0.16.0 application retires persistent scholarly acquisition and full-text
+ingestion. Existing rows are not deleted; new comparisons use transient discovery.
+"""
 
 from datetime import datetime, timezone
 

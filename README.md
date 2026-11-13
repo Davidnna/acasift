@@ -12,7 +12,11 @@ AcaSift does not require institutional affiliation. Similarity indicators suppor
 - Allow verified users to create workspaces or join through invitation links.
 - Let workspace administrators create Submission Requests with instructions, accepted formats, deadlines and submission rules.
 - Accept submissions from workspace members and authenticated external participants using request-specific links.
-- Compare each submission only with eligible submissions made to the same Submission Request.
+- Compare each submission with all eligible peer submissions made to the same Submission Request.
+- Run concurrent, targeted scholarly searches across OpenAlex, Crossref, Europe PMC, DOAJ, Zenodo, Semantic Scholar and arXiv.
+- Temporarily retrieve publicly accessible full text only when a recognised reuse licence is confirmed; discard the full text after comparison.
+- Report source-linked exact N-gram matches, fuzzy sentence matches, TF-IDF lexical similarity and optional local semantic sentence matches.
+- Retain bibliographic metadata, source/DOI links, similarity metrics and short evidence excerpts—not permanent copies of external papers.
 - Restrict similarity reports, matching passages and peer-submission details to workspace administrators and reviewers assigned to the request.
 - Give contributors submission receipts and access to reviewer feedback without exposing similarity reports.
 - Support request-level review outcomes and reviewer assignment.
@@ -35,7 +39,7 @@ AcaSift does not require institutional affiliation. Similarity indicators suppor
 6. Workspace administrators and assigned reviewers inspect the similarity results and matching passages, then record a review outcome and optional feedback.
 7. Contributors can return to the request to see their submission receipt and any feedback. They cannot view similarity scores, matching passages or other participants' documents.
 
-Documents from unrelated requests are not included in a request's comparison. The current release does not perform internet-wide searches, semantic paraphrase detection, cross-language comparison or OCR of scanned image-only PDFs.
+Documents from unrelated requests are not included in a request's peer comparison. Each report also includes any permitted external scholarly sources found during the live search. Semantic sentence matching is available only when the optional local embedding model is installed and enabled. Cross-language comparison and OCR of scanned image-only PDFs are not supported.
 
 ## Historical data and migration
 
@@ -43,18 +47,30 @@ AcaSift previously supported personal workspaces. The shared-workspace-only migr
 
 Database changes are managed through the versioned migration ledger `acasift_schema_migrations`. Do not delete or manually edit the migration ledger. Future schema or data changes must be implemented as new, idempotent migrations.
 
-## Platform-managed reference services
+## Live external scholarly comparison (0.16.0)
 
-Platform administrators can use **Administration → Reference Acquisition** to discover scholarly records through OpenAlex, Crossref, Europe PMC, DOAJ, Zenodo, Semantic Scholar and arXiv. The acquisition service stores scholarly metadata, preserves resumable pagination state and attempts bounded full-text retrieval where a recognised reuse licence is confirmed. Records without confirmed reuse rights remain metadata-only.
+Each Submission Request comparison now performs targeted scholarly discovery across OpenAlex, Crossref, Europe PMC, DOAJ, Zenodo, Semantic Scholar and arXiv. Provider searches run concurrently. Search queries are derived from a small set of document title/keyword phrases; the complete submitted document is not sent to scholarly metadata providers.
 
-The platform-managed reference collection is administered separately. In the current release, shared Submission Request comparisons use peer submissions from the same request; the reference collection is not included in those request reports. Do not treat public accessibility or an open-access label alone as permission to retain or reuse a document.
+A source's full text is retrieved only when it is publicly accessible and a recognised reuse licence is confirmed in provider metadata or, for eligible Europe PMC XML, in the article XML itself. Retrieved PDF, HTML, XML or text is processed in memory for the current comparison and discarded. To bound request time and memory use, the default run limit is 24 scholarly metadata records and 8 permitted full-text downloads; these limits are configurable. Every full text successfully retrieved within those limits is compared. AcaSift does not create a permanent external reference-document repository.
+
+Reviewer reports retain bibliographic metadata, DOI and source links, similarity metrics, and short matched evidence excerpts. External full-text content is not retained. The report distinguishes TF-IDF lexical similarity, exact N-gram coverage, fuzzy sentence coverage and semantic sentence coverage. The combined overlap indicator is a reviewer-prioritisation measure, not a probability of plagiarism or a misconduct finding.
+
+Semantic sentence matching uses a local SentenceTransformer model and is optional because it requires additional memory and CPU resources. To enable it, install `backend/requirements-semantic.txt`, set `ENABLE_LOCAL_SEMANTIC=true`, and configure `SEMANTIC_MODEL_NAME`. It is disabled by default in the Render configuration. When it is not enabled, the report clearly marks semantic analysis as not enabled; if the model is configured but cannot load, it is marked unavailable. The combined indicator reweights the other coverage measures when semantic coverage is unavailable.
+
+The former administrator reference-acquisition workflow and permanent reference-bank interface are retired in 0.16.0. Historical database tables and production records are retained for compatibility and audit purposes. The 0.16.0 migration archives legacy reference entries and retires old acquisition metadata without deleting source documents, uploaded files or audit history. These records are not used by new comparisons and are no longer exposed through the application interface.
 
 Optional environment settings:
 
 ```env
 OPENALEX_API_KEY=
 SEMANTIC_SCHOLAR_API_KEY=
-ACQUISITION_CONTACT_EMAIL=
+SCHOLARLY_SEARCH_CONTACT_EMAIL=
+MAX_EXTERNAL_SOURCES=24
+MAX_EXTERNAL_DOWNLOADS=8
+MAX_EXTERNAL_DOWNLOAD_MB=12
+ENABLE_LOCAL_SEMANTIC=false
+SEMANTIC_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+SEMANTIC_MATCH_THRESHOLD=0.82
 ```
 
 Keep API keys and other credentials in the hosting provider's private environment settings or a local `.env` file. Never commit real credentials, API keys or database connection strings.

@@ -5,6 +5,8 @@ from app.services.similarity_service import (
     compare_against_repository,
     find_ngram_matches,
     token_spans,
+    find_fuzzy_matches,
+    compare_text_pair,
 )
 
 
@@ -91,6 +93,33 @@ class NgramMatchingTests(unittest.TestCase):
         tokens = token_spans(text)
         self.assertEqual(tokens[1][0], "final")
         self.assertEqual(text[tokens[1][1]:tokens[1][2]], "ﬁnal")
+
+    def test_fuzzy_sentence_matching_detects_small_word_changes(self):
+        submitted = (
+            "The research examines community health interventions that improve "
+            "hypertension control in rural populations."
+        )
+        reference = (
+            "The research examines community health strategies that improve "
+            "hypertension control in rural populations."
+        )
+        result = find_fuzzy_matches(submitted, reference)
+        self.assertGreater(result["coverage"], 0)
+        self.assertGreaterEqual(result["similarity"], 88)
+        self.assertEqual(result["passages"][0]["match_method"], "fuzzy_sentence")
+
+    def test_composite_similarity_reports_all_method_metrics(self):
+        submitted = (
+            "Transparent document review requires careful source attribution, "
+            "consistent evidence evaluation, reproducible methods and clear reporting."
+        )
+        reference = submitted + " Additional context follows."
+        result = compare_text_pair(submitted, reference, ngram_size=5)
+        self.assertGreater(result["matched_ngram_coverage"], 0)
+        self.assertIn("fuzzy_coverage", result)
+        self.assertIn("semantic_status", result)
+        self.assertIn("composite_similarity", result)
+        self.assertIn(result["semantic_status"], {"not_configured", "unavailable", "completed"})
 
     def test_empty_inputs_return_zero_metrics(self):
         result = find_ngram_matches("", "some reference text", n=5)

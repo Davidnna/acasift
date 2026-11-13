@@ -1,0 +1,3 @@
+# Optional local sentence-embedding model for semantic sentence comparison.
+# Install only when the Render instance has sufficient memory and CPU capacity.
+sentence-transformers>=3.3,<6.0

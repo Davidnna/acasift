@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from urllib.parse import urlparse, parse_qs
+from unittest.mock import patch
 
 from werkzeug.security import generate_password_hash
 
@@ -31,6 +32,15 @@ class SubmissionRequestTests(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         SubmissionConfig.UPLOAD_FOLDER = os.path.join(self.temp_dir.name, "uploads")
         self.app = create_app(SubmissionConfig)
+        self.external_analysis_patch = patch(
+            "app.services.submission_service.compare_with_live_scholarly_sources",
+            return_value={
+                "status": "completed", "sources_discovered": 0,
+                "sources_compared": 0, "sources_with_matches": 0,
+                "providers": {}, "evidence": [],
+            },
+        )
+        self.external_analysis_patch.start()
         self.context = self.app.app_context()
         self.context.push()
         db.create_all()
@@ -68,6 +78,7 @@ class SubmissionRequestTests(unittest.TestCase):
                 session["active_workspace_id"] = self.workspace.workspace_id
 
     def tearDown(self):
+        self.external_analysis_patch.stop()
         db.session.remove()
         db.drop_all()
         self.context.pop()
@@ -395,6 +406,8 @@ class SubmissionRequestTests(unittest.TestCase):
         self.assertIsNotNone(second_reviewer_submission["comparison_id"])
         reviewer_report = self.reviewer_client.get(f"/api/comparisons/{second_reviewer_submission['comparison_id']}")
         self.assertEqual(reviewer_report.status_code, 200, reviewer_report.get_json())
+        self.assertEqual(reviewer_report.get_json()["comparison"]["external_search_status"], "completed")
+        self.assertEqual(reviewer_report.get_json()["comparison"]["external_results"], [])
         reviewer_peer = [row for row in reviewer_report.get_json()["comparison"]["results"] if row["source_scope"] == "request"]
         self.assertEqual(reviewer_peer[0]["reference_document"]["title"], "First contributor report")
         self.assertEqual(reviewer_peer[0]["reference_document"]["uploader"], self.member.full_name)

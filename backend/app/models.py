@@ -101,6 +101,13 @@ class Comparison(db.Model):
     status = db.Column(db.String(30), nullable=False, default="processing")
     started_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
     completed_at = db.Column(db.DateTime(timezone=True))
+    external_search_status = db.Column(db.String(24), nullable=False, default="pending")
+    external_search_error = db.Column(db.Text, nullable=True)
+    external_search_completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    external_sources_discovered = db.Column(db.Integer, nullable=False, default=0)
+    external_sources_compared = db.Column(db.Integer, nullable=False, default=0)
+    external_sources_with_matches = db.Column(db.Integer, nullable=False, default=0)
+    external_provider_summary = db.Column(db.Text, nullable=True)
 
     user = db.relationship("User", back_populates="comparisons")
     submitted_document = db.relationship(
@@ -111,6 +118,12 @@ class Comparison(db.Model):
     )
     report = db.relationship(
         "Report", back_populates="comparison", uselist=False, cascade="all, delete-orphan"
+    )
+    external_results = db.relationship(
+        "ExternalComparisonResult",
+        back_populates="comparison",
+        cascade="all, delete-orphan",
+        lazy=True,
     )
 
 
@@ -125,6 +138,12 @@ class ComparisonResult(db.Model):
     matched_ngram_count = db.Column(db.Integer, nullable=False, default=0)
     total_query_ngrams = db.Column(db.Integer, nullable=False, default=0)
     coverage_method = db.Column(db.String(20), nullable=False, default="ngram_windows")
+    fuzzy_similarity = db.Column(db.Numeric(7, 4), nullable=False, default=0)
+    fuzzy_coverage = db.Column(db.Numeric(7, 4), nullable=False, default=0)
+    semantic_similarity = db.Column(db.Numeric(7, 4), nullable=True)
+    semantic_coverage = db.Column(db.Numeric(7, 4), nullable=True)
+    composite_similarity = db.Column(db.Numeric(7, 4), nullable=False, default=0)
+    semantic_status = db.Column(db.String(24), nullable=False, default="not_configured")
     source_scope = db.Column(db.String(20), nullable=True, index=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
 
@@ -147,8 +166,76 @@ class MatchedPassage(db.Model):
     reference_start = db.Column(db.Integer, nullable=False)
     reference_end = db.Column(db.Integer, nullable=False)
     matched_text = db.Column(db.Text, nullable=False)
+    match_method = db.Column(db.String(32), nullable=False, default="exact_ngram")
+    match_score = db.Column(db.Numeric(7, 4), nullable=False, default=100)
 
     result = db.relationship("ComparisonResult", back_populates="passages")
+
+
+class ExternalComparisonResult(db.Model):
+    """Bibliographic metadata and similarity metrics for one temporary OA source."""
+
+    __tablename__ = "external_comparison_results"
+    __table_args__ = (
+        Index("ix_external_comparison_results_comparison", "comparison_id", "composite_similarity"),
+    )
+
+    external_result_id = db.Column(db.Integer, primary_key=True)
+    comparison_id = db.Column(
+        db.Integer, db.ForeignKey("comparisons.comparison_id"), nullable=False, index=True
+    )
+    provider = db.Column(db.String(60), nullable=False)
+    providers_json = db.Column(db.Text, nullable=False, default="[]")
+    provider_id = db.Column(db.String(255), nullable=True)
+    title = db.Column(db.String(1000), nullable=False)
+    authors_json = db.Column(db.Text, nullable=False, default="[]")
+    publication_year = db.Column(db.Integer, nullable=True)
+    journal_title = db.Column(db.String(500), nullable=True)
+    doi = db.Column(db.String(255), nullable=True, index=True)
+    source_url = db.Column(db.String(2000), nullable=True)
+    full_text_url = db.Column(db.String(2000), nullable=True)
+    license_name = db.Column(db.String(160), nullable=True)
+    license_url = db.Column(db.String(1000), nullable=True)
+    cosine_similarity = db.Column(db.Numeric(7, 4), nullable=False, default=0)
+    exact_ngram_coverage = db.Column(db.Numeric(7, 4), nullable=False, default=0)
+    matched_ngram_count = db.Column(db.Integer, nullable=False, default=0)
+    total_query_ngrams = db.Column(db.Integer, nullable=False, default=0)
+    fuzzy_similarity = db.Column(db.Numeric(7, 4), nullable=False, default=0)
+    fuzzy_coverage = db.Column(db.Numeric(7, 4), nullable=False, default=0)
+    semantic_similarity = db.Column(db.Numeric(7, 4), nullable=True)
+    semantic_coverage = db.Column(db.Numeric(7, 4), nullable=True)
+    semantic_status = db.Column(db.String(24), nullable=False, default="not_configured")
+    composite_similarity = db.Column(db.Numeric(7, 4), nullable=False, default=0)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+
+    comparison = db.relationship("Comparison", back_populates="external_results")
+    passages = db.relationship(
+        "ExternalMatchedPassage",
+        back_populates="result",
+        cascade="all, delete-orphan",
+        lazy=True,
+    )
+
+
+class ExternalMatchedPassage(db.Model):
+    """Short evidence excerpts only; the retrieved full text is never persisted."""
+
+    __tablename__ = "external_matched_passages"
+    external_passage_id = db.Column(db.Integer, primary_key=True)
+    external_result_id = db.Column(
+        db.Integer,
+        db.ForeignKey("external_comparison_results.external_result_id"),
+        nullable=False,
+        index=True,
+    )
+    submitted_start = db.Column(db.Integer, nullable=False)
+    submitted_end = db.Column(db.Integer, nullable=False)
+    matched_text = db.Column(db.String(350), nullable=False)
+    source_excerpt = db.Column(db.String(350), nullable=False)
+    match_method = db.Column(db.String(32), nullable=False)
+    match_score = db.Column(db.Numeric(7, 4), nullable=False, default=100)
+
+    result = db.relationship("ExternalComparisonResult", back_populates="passages")
 
 
 class Report(db.Model):

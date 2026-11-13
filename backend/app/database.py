@@ -28,6 +28,7 @@ REFERENCE_ARCHITECTURE_VERSION = "2026-11-10-unified-reference-architecture-v1"
 SIMPLIFIED_REFERENCE_POLICY_VERSION = "2026-11-10-simplified-reference-comparison-v1"
 ACQUISITION_ENGINE_VERSION = "2026-11-11-multi-source-acquisition-engine-v1"
 SHARED_WORKSPACES_ONLY_VERSION = "2026-11-12-shared-workspaces-only-v1"
+EXTERNAL_SCHOLARLY_ANALYSIS_VERSION = "2026-11-13-live-external-scholarly-analysis-v1"
 
 REQUIRED_COLUMNS = {
     "users": {
@@ -680,6 +681,72 @@ def _run_simplified_reference_policy_migration(app):
         )
 
 
+def _run_external_scholarly_analysis_migration(app):
+    """Add external evidence tables and similarity metrics without deleting data."""
+    with app.app_context():
+        db.create_all()
+        additions = {
+            "comparisons": {
+                "external_search_status": "VARCHAR(24) NOT NULL DEFAULT 'pending'",
+                "external_search_error": "TEXT",
+                "external_search_completed_at": "TIMESTAMP",
+                "external_sources_discovered": "INTEGER NOT NULL DEFAULT 0",
+                "external_sources_compared": "INTEGER NOT NULL DEFAULT 0",
+                "external_sources_with_matches": "INTEGER NOT NULL DEFAULT 0",
+                "external_provider_summary": "TEXT",
+            },
+            "comparison_results": {
+                "fuzzy_similarity": "NUMERIC(7,4) NOT NULL DEFAULT 0",
+                "fuzzy_coverage": "NUMERIC(7,4) NOT NULL DEFAULT 0",
+                "semantic_similarity": "NUMERIC(7,4)",
+                "semantic_coverage": "NUMERIC(7,4)",
+                "composite_similarity": "NUMERIC(7,4) NOT NULL DEFAULT 0",
+                "semantic_status": "VARCHAR(24) NOT NULL DEFAULT 'not_configured'",
+            },
+            "matched_passages": {
+                "match_method": "VARCHAR(32) NOT NULL DEFAULT 'exact_ngram'",
+                "match_score": "NUMERIC(7,4) NOT NULL DEFAULT 100",
+            },
+        }
+        inspector = inspect(db.engine)
+        with db.engine.begin() as connection:
+            for table_name, columns in additions.items():
+                if not inspector.has_table(table_name):
+                    continue
+                existing = {
+                    column["name"] for column in inspector.get_columns(table_name)
+                }
+                for column_name, sql_type in columns.items():
+                    if column_name not in existing:
+                        connection.execute(text(
+                            f"ALTER TABLE {table_name} "
+                            f"ADD COLUMN {column_name} {sql_type}"
+                        ))
+
+            # Retire the former permanent reference-bank/acquisition workflow
+            # without deleting any source documents, metadata or audit records.
+            if inspector.has_table("reference_entries"):
+                connection.execute(text(
+                    "UPDATE reference_entries SET status = 'archived', "
+                    "updated_at = CURRENT_TIMESTAMP WHERE status <> 'archived'"
+                ))
+            if inspector.has_table("scholarly_records"):
+                connection.execute(text(
+                    "UPDATE scholarly_records SET status = 'retired' "
+                    "WHERE status <> 'retired'"
+                ))
+            if inspector.has_table("acquisition_jobs"):
+                connection.execute(text(
+                    "UPDATE acquisition_jobs SET status = 'retired', "
+                    "error_message = COALESCE(error_message, "
+                    "'Persistent acquisition was retired in AcaSift 0.16.0.') "
+                    "WHERE status IN ('queued', 'running', 'partial')"
+                ))
+        app.logger.info(
+            "Live external scholarly analysis schema is ready; legacy reference and acquisition records were retained and archived."
+        )
+
+
 # Keep migrations in ascending dependency order. Add future schema/data changes
 # here with a new immutable version identifier and an idempotent migration
 # function. Never edit a migration that has already been released.
@@ -720,6 +787,7 @@ MIGRATIONS = (
     (SIMPLIFIED_REFERENCE_POLICY_VERSION, _run_simplified_reference_policy_migration),
     (ACQUISITION_ENGINE_VERSION, _run_acquisition_engine_migration),
     (SHARED_WORKSPACES_ONLY_VERSION, _run_shared_workspaces_only_migration),
+    (EXTERNAL_SCHOLARLY_ANALYSIS_VERSION, _run_external_scholarly_analysis_migration),
 )
 
 

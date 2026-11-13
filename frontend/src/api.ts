@@ -13,9 +13,6 @@ import type {
     SubmissionRequestInvitePreviewData,
     SubmissionRequestInviteRecord,
     SubmissionRequestSubmission,
-    ReferenceEntryRecord,
-    AcquisitionDashboardData,
-    AcquisitionJobRecord,
 } from './types';
 
 export class ApiError extends Error {
@@ -174,24 +171,6 @@ export async function getUsers(signal?: AbortSignal): Promise<User[]> {
 export async function createUser(payload: Record<string, string>): Promise<void> {
     await request('/api/admin/users', { method: 'POST', body: JSON.stringify(payload) });
 }
-
-export async function getReferences(signal?: AbortSignal): Promise<ReferenceEntryRecord[]> {
-    const data = await request<{ entries: ReferenceEntryRecord[]; }>('/api/admin/references', { signal });
-    return data.entries;
-}
-
-export async function uploadReference(formData: FormData, signal?: AbortSignal): Promise<void> {
-    await request('/api/admin/references', { method: 'POST', body: formData, signal });
-}
-
-export async function verifyGlobalReferenceEntry(entryId: number, formData: FormData): Promise<void> {
-    await request(`/api/admin/references/${entryId}/verify`, { method: 'POST', body: formData });
-}
-
-export async function archiveGlobalReferenceEntry(entryId: number): Promise<void> {
-    await request(`/api/admin/references/${entryId}`, { method: 'DELETE' });
-}
-
 
 export async function getBootstrapStatus(signal?: AbortSignal): Promise<boolean> {
     const data = await request<{ available: boolean; }>('/api/bootstrap/status', { signal });
@@ -381,20 +360,4 @@ export async function getSubmissionRequestInvitePreview(token: string, signal?: 
 
 export async function acceptSubmissionRequestInvite(token: string): Promise<{ message: string; request_id: number; }> {
     return request('/api/submission-request-invites/accept', { method: 'POST', body: JSON.stringify({ token }) });
-}
-
-
-export async function getAcquisitionDashboard(signal?: AbortSignal): Promise<AcquisitionDashboardData> {
-    return request('/api/admin/acquisition', { signal });
-}
-
-export async function runAcquisitionDiscovery(payload: {
-    provider: string;
-    query: string;
-    limit: number;
-}): Promise<{ message: string; job: AcquisitionJobRecord; }> {
-    return request('/api/admin/acquisition/discover', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-    });
 }

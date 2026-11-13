@@ -1,11 +1,11 @@
 import hashlib
 import hmac
 import io
+import json
 import re
 import secrets
 import warnings
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlparse
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 from flask import Blueprint, current_app, jsonify, request, send_file, session
@@ -25,19 +25,10 @@ from app.services.email_service import (
     send_verification_email,
 )
 from app.services.workspace_service import get_active_workspace, membership_for, is_workspace_manager
-from app.services.reference_document_service import save_reference_document
 from app.submission_models import (
     DocumentSubmission,
     SubmissionRequest,
     SubmissionRequestParticipant,
-)
-from app.reference_models import ReferenceEntry
-from app.services.reference_service import (
-    GLOBAL_RIGHTS_BASES,
-    archive_reference_entry,
-    list_reference_entries,
-    reference_entry_payload,
-    register_reference_entry,
 )
 
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -122,11 +113,27 @@ def _comparison_payload(comparison, include_results=False, hide_peer_source_deta
         "started_at": _date(comparison.started_at),
         "completed_at": _date(comparison.completed_at),
         "submitted_document": _document_payload(comparison.submitted_document),
+        "external_search_status": comparison.external_search_status,
+        "external_search_error": comparison.external_search_error,
+        "external_search_completed_at": _date(comparison.external_search_completed_at),
+        "external_sources_discovered": comparison.external_sources_discovered or 0,
+        "external_sources_compared": comparison.external_sources_compared or 0,
+        "external_sources_with_matches": comparison.external_sources_with_matches or 0,
     }
+    try:
+        payload["external_provider_summary"] = json.loads(
+            comparison.external_provider_summary or "{}"
+        )
+    except (TypeError, ValueError):
+        payload["external_provider_summary"] = {}
     if include_results:
         results = sorted(
             comparison.results,
-            key=lambda item: (float(item.cosine_similarity), float(item.matched_ngram_coverage)),
+            key=lambda item: (
+                float(item.composite_similarity or 0),
+                float(item.cosine_similarity),
+                float(item.matched_ngram_coverage),
+            ),
             reverse=True,
         )
         payload["results"] = []
@@ -147,6 +154,8 @@ def _comparison_payload(comparison, include_results=False, hide_peer_source_deta
                         if hide_peer_source_details and is_request_peer
                         else (reference.extracted_text or "")[passage.reference_start:passage.reference_end]
                     ),
+                    "match_method": passage.match_method,
+                    "match_score": float(passage.match_score or 0),
                 })
             reference_payload = _document_payload(reference)
             if hide_peer_source_details and is_request_peer:
@@ -172,7 +181,78 @@ def _comparison_payload(comparison, include_results=False, hide_peer_source_deta
                 "matched_ngram_count": result.matched_ngram_count,
                 "total_query_ngrams": result.total_query_ngrams,
                 "coverage_method": result.coverage_method,
+                "fuzzy_similarity": float(result.fuzzy_similarity or 0),
+                "fuzzy_coverage": float(result.fuzzy_coverage or 0),
+                "semantic_similarity": (
+                    float(result.semantic_similarity)
+                    if result.semantic_similarity is not None else None
+                ),
+                "semantic_coverage": (
+                    float(result.semantic_coverage)
+                    if result.semantic_coverage is not None else None
+                ),
+                "semantic_status": result.semantic_status,
+                "composite_similarity": float(result.composite_similarity or 0),
                 "passages": passages,
+            })
+
+        external_results = sorted(
+            comparison.external_results,
+            key=lambda item: (
+                float(item.composite_similarity or 0),
+                float(item.exact_ngram_coverage or 0),
+                float(item.fuzzy_coverage or 0),
+            ),
+            reverse=True,
+        )
+        payload["external_results"] = []
+        for result in external_results:
+            try:
+                authors = json.loads(result.authors_json or "[]")
+            except (TypeError, ValueError):
+                authors = []
+            try:
+                providers = json.loads(result.providers_json or "[]")
+            except (TypeError, ValueError):
+                providers = []
+            payload["external_results"].append({
+                "id": result.external_result_id,
+                "provider": result.provider,
+                "providers": providers,
+                "title": result.title,
+                "authors": authors,
+                "year": result.publication_year,
+                "journal": result.journal_title,
+                "doi": result.doi,
+                "source_url": result.source_url,
+                "full_text_url": result.full_text_url,
+                "license_name": result.license_name,
+                "license_url": result.license_url,
+                "cosine_similarity": float(result.cosine_similarity or 0),
+                "exact_ngram_coverage": float(result.exact_ngram_coverage or 0),
+                "matched_ngram_count": result.matched_ngram_count,
+                "total_query_ngrams": result.total_query_ngrams,
+                "fuzzy_similarity": float(result.fuzzy_similarity or 0),
+                "fuzzy_coverage": float(result.fuzzy_coverage or 0),
+                "semantic_similarity": (
+                    float(result.semantic_similarity)
+                    if result.semantic_similarity is not None else None
+                ),
+                "semantic_coverage": (
+                    float(result.semantic_coverage)
+                    if result.semantic_coverage is not None else None
+                ),
+                "semantic_status": result.semantic_status,
+                "composite_similarity": float(result.composite_similarity or 0),
+                "passages": [{
+                    "id": passage.external_passage_id,
+                    "submitted_start": passage.submitted_start,
+                    "submitted_end": passage.submitted_end,
+                    "matched_text": passage.matched_text,
+                    "source_excerpt": passage.source_excerpt,
+                    "match_method": passage.match_method,
+                    "match_score": float(passage.match_score or 0),
+                } for passage in result.passages],
             })
     return payload
 
@@ -926,173 +1006,6 @@ def create_user():
     db.session.add(user)
     db.session.commit()
     return jsonify({"message": "User account created successfully.", "user": _user_payload(user)}), 201
-
-
-def _valid_reference_url(value, field_name):
-    value = str(value or "").strip()
-    if not value:
-        return None, None
-    parsed = urlparse(value)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        return None, _error(f"Enter a valid HTTP or HTTPS {field_name}.")
-    if len(value) > 1000:
-        return None, _error(f"The {field_name} is too long.")
-    return value, None
-
-
-def _reference_entry_response(entry):
-    return reference_entry_payload(entry)
-
-
-@bp.route("/reference-library", methods=["GET", "POST"])
-@login_required
-def retired_user_reference_library():
-    return _error(
-        "Reference collections are managed centrally by AcaSift administrators.",
-        410,
-    )
-
-
-@bp.route("/reference-library/<int:entry_id>", methods=["DELETE", "POST"])
-@login_required
-def retired_user_reference_entry(entry_id):
-    return _error(
-        "User-managed reference collections are no longer available.",
-        410,
-    )
-
-
-@bp.post("/reference-library/<int:entry_id>/verify")
-@login_required
-def retired_user_reference_verification(entry_id):
-    return _error(
-        "User-managed reference collections are no longer available.",
-        410,
-    )
-
-
-@bp.post("/workspace/references")
-@login_required
-def retired_workspace_reference_upload():
-    return _error(
-        "Shared documents must be submitted through a Submission Request.",
-        410,
-    )
-
-
-@bp.get("/admin/references")
-@admin_required
-def references():
-    entries = list_reference_entries(scope="global", include_inactive=True)
-    payload = [_reference_entry_response(entry) for entry in entries]
-    return jsonify({"entries": payload, "documents": [_document_payload(entry.document) for entry in entries]})
-
-
-@bp.post("/admin/references")
-@admin_required
-def upload_reference():
-    rights_basis = str(request.form.get("rights_basis", "")).strip()
-    if rights_basis not in GLOBAL_RIGHTS_BASES:
-        return _error("Select a valid permission basis for this global reference.")
-    if str(request.form.get("rights_confirmed", "")).lower() not in {"1", "true", "yes", "on"}:
-        return _error("Confirm that AcaSift has the necessary rights to use this document globally.")
-
-    license_name = str(request.form.get("license_name", "")).strip() or None
-    license_url, url_error = _valid_reference_url(request.form.get("license_url"), "licence URL")
-    if url_error:
-        return url_error
-    source_url, url_error = _valid_reference_url(request.form.get("source_url"), "source URL")
-    if url_error:
-        return url_error
-    if rights_basis == "open_license" and (not license_name or not license_url):
-        return _error("Provide the open licence name and its official licence URL.")
-    rights_notes = str(request.form.get("rights_notes", "")).strip()[:2000] or None
-    if rights_basis in {"author_permission", "publisher_agreement", "other_authorization"} and not (source_url or rights_notes):
-        return _error("Provide a source URL or permission note supporting global use.")
-
-    try:
-        document = save_reference_document(
-            request.files.get("document"),
-            request.form.get("title", ""),
-            commit=False,
-        )
-        entry = register_reference_entry(
-            document,
-            "global",
-            current_user.user_id,
-            status="active",
-            provenance_type="administrator_curated",
-            source_title=document.title,
-            source_url=source_url,
-            doi=str(request.form.get("doi", "")).strip()[:255] or None,
-            rights_basis=rights_basis,
-            license_name=license_name,
-            license_url=license_url,
-            rights_notes=rights_notes,
-            rights_verified=True,
-            verified_by_user_id=current_user.user_id,
-            verified_at=datetime.now(timezone.utc),
-        )
-        db.session.commit()
-        return jsonify({
-            "message": f"Reference document '{document.title}' added to the global collection.",
-            "entry": _reference_entry_response(entry),
-            "document": _document_payload(document),
-        }), 201
-    except ValueError as exc:
-        db.session.rollback()
-        return _error(str(exc), 400)
-    except Exception:
-        db.session.rollback()
-        current_app.logger.exception("Global reference upload failed.")
-        return _error("The reference document could not be saved.", 500)
-
-
-@bp.post("/admin/references/<int:entry_id>/verify")
-@admin_required
-def verify_global_reference_entry(entry_id):
-    entry = db.session.get(ReferenceEntry, entry_id)
-    if not entry or entry.scope != "global" or entry.status != "review_required":
-        return _error("Reference document not found or no longer requires review.", 404)
-    rights_basis = str(request.form.get("rights_basis", "")).strip()
-    if rights_basis not in GLOBAL_RIGHTS_BASES:
-        return _error("Select a valid permission basis for this global reference.")
-    if str(request.form.get("rights_confirmed", "")).lower() not in {"1", "true", "yes", "on"}:
-        return _error("Confirm that AcaSift has the necessary rights to use this document globally.")
-    license_name = str(request.form.get("license_name", "")).strip() or None
-    license_url, url_error = _valid_reference_url(request.form.get("license_url"), "licence URL")
-    if url_error:
-        return url_error
-    source_url, url_error = _valid_reference_url(request.form.get("source_url"), "source URL")
-    if url_error:
-        return url_error
-    if rights_basis == "open_license" and (not license_name or not license_url):
-        return _error("Provide the open licence name and its official licence URL.")
-    rights_notes = str(request.form.get("rights_notes", "")).strip()[:2000] or None
-    if rights_basis in {"author_permission", "publisher_agreement", "other_authorization"} and not (source_url or rights_notes):
-        return _error("Provide a source URL or permission note supporting global use.")
-    entry.status = "active"
-    entry.rights_basis = rights_basis
-    entry.license_name = license_name
-    entry.license_url = license_url
-    entry.source_url = source_url
-    entry.rights_notes = rights_notes
-    entry.rights_verified = True
-    entry.verified_by_user_id = current_user.user_id
-    entry.verified_at = datetime.now(timezone.utc)
-    db.session.commit()
-    return jsonify({"message": "Global reference rights verified. The document is now eligible for comparisons."})
-
-
-@bp.delete("/admin/references/<int:entry_id>")
-@admin_required
-def archive_global_reference_entry(entry_id):
-    entry = db.session.get(ReferenceEntry, entry_id)
-    if not entry or entry.scope != "global":
-        return _error("Global reference not found.", 404)
-    archive_reference_entry(entry)
-    db.session.commit()
-    return jsonify({"message": "The global reference has been removed from future comparisons."})
 
 
 @bp.get("/bootstrap/status")

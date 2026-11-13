@@ -58,4 +58,18 @@ class Config:
     # to work without keys, subject to each provider's anonymous rate limits.
     OPENALEX_API_KEY = os.environ.get("OPENALEX_API_KEY", "").strip()
     SEMANTIC_SCHOLAR_API_KEY = os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "").strip()
-    ACQUISITION_CONTACT_EMAIL = os.environ.get("ACQUISITION_CONTACT_EMAIL", "").strip()
+    # Live scholarly search uses the same polite-pool contact setting. The older
+    # variable name remains as a compatibility fallback for existing Render config.
+    ACQUISITION_CONTACT_EMAIL = os.environ.get(
+        "SCHOLARLY_SEARCH_CONTACT_EMAIL",
+        os.environ.get("ACQUISITION_CONTACT_EMAIL", ""),
+    ).strip()
+    MAX_EXTERNAL_SOURCES = int(os.environ.get("MAX_EXTERNAL_SOURCES", "24"))
+    MAX_EXTERNAL_DOWNLOADS = int(os.environ.get("MAX_EXTERNAL_DOWNLOADS", "8"))
+    MAX_EXTERNAL_DOWNLOAD_MB = int(os.environ.get("MAX_EXTERNAL_DOWNLOAD_MB", "12"))
+    ENABLE_LOCAL_SEMANTIC = os.environ.get("ENABLE_LOCAL_SEMANTIC", "false").lower() == "true"
+    SEMANTIC_MODEL_NAME = os.environ.get(
+        "SEMANTIC_MODEL_NAME",
+        "sentence-transformers/all-MiniLM-L6-v2",
+    )
+    SEMANTIC_MATCH_THRESHOLD = float(os.environ.get("SEMANTIC_MATCH_THRESHOLD", "0.82"))

@@ -235,6 +235,9 @@ export function SubmissionRequestDetailPage() {
                 <label htmlFor="submission-file">Choose document</label>
                 <input id="submission-file" type="file" name="document" accept={item.accepted_file_types.map(type => `.${type}`).join(',')} aria-describedby="submission-file-hint" required />
                 <p className="form-hint" id="submission-file-hint">Accepted: {item.accepted_file_types.map(type => type.toUpperCase()).join(', ')} · Maximum size: {item.max_file_size_mb} MB. {item.allow_resubmissions ? 'Resubmissions are allowed.' : 'Only one submission is allowed per account.'}</p>
+                <p className="form-hint external-search-disclosure">
+                    For external scholarly discovery, AcaSift sends short title/keyword search phrases derived from your document to scholarly metadata providers; it does not send the full document. Full text is retrieved only where a recognised reuse licence permits, processed temporarily and discarded. Reviewers may see source details and short matched excerpts.
+                </p>
                 <button className="button button-primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit document'} <ArrowRight size={15} /></button>
             </Form>
         </section>}

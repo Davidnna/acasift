@@ -43,6 +43,9 @@ export interface ComparisonSummary {
         queries_attempted: number;
         queries_succeeded: number;
         records_returned: number;
+        cache_hits?: number;
+        configured?: boolean;
+        records_enriched?: number;
         errors: string[];
     }>;
 }
@@ -89,6 +92,7 @@ export interface ExternalComparisonPassage {
 
 export interface ExternalComparisonResult {
     id: number;
+    evidence_method_counts?: Record<string, number>;
     provider: string;
     providers: string[];
     title: string;

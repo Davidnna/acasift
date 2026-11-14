@@ -1,11 +1,11 @@
 {
   "dataset": "AcaSift controlled overlap evaluation set v1",
   "ngram_size": 5,
-  "case_count": 12,
+  "case_count": 15,
   "confusion_matrix": {
-    "true_positive": 6,
+    "true_positive": 8,
     "false_positive": 0,
-    "true_negative": 6,
+    "true_negative": 7,
     "false_negative": 0
   },
   "metrics": {
@@ -13,6 +13,19 @@
     "recall": 1.0,
     "f1_score": 1.0,
     "accuracy": 1.0,
+    "positive_passage_localization_rate": 1.0
+  },
+  "fuzzy_metrics": {
+    "labelled_case_count": 2,
+    "confusion_matrix": {
+      "true_positive": 1,
+      "false_positive": 0,
+      "true_negative": 1,
+      "false_negative": 0
+    },
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
     "positive_passage_localization_rate": 1.0
   },
   "cases": [
@@ -23,7 +36,10 @@
       "matched_ngram_windows": 9,
       "total_ngram_windows": 9,
       "coverage_percent": 100.0,
-      "passage_localized": true
+      "passage_localized": true,
+      "expected_fuzzy": null,
+      "detected_fuzzy": null,
+      "fuzzy_coverage_percent": 100.0
     },
     {
       "id": "P02_partial_copy",
@@ -32,7 +48,10 @@
       "matched_ngram_windows": 12,
       "total_ngram_windows": 24,
       "coverage_percent": 50.0,
-      "passage_localized": true
+      "passage_localized": true,
+      "expected_fuzzy": null,
+      "detected_fuzzy": null,
+      "fuzzy_coverage_percent": 57.1429
     },
     {
       "id": "P03_case_and_punctuation",
@@ -41,7 +60,10 @@
       "matched_ngram_windows": 6,
       "total_ngram_windows": 6,
       "coverage_percent": 100.0,
-      "passage_localized": true
+      "passage_localized": true,
+      "expected_fuzzy": null,
+      "detected_fuzzy": null,
+      "fuzzy_coverage_percent": 100.0
     },
     {
       "id": "P04_separate_passages",
@@ -50,7 +72,10 @@
       "matched_ngram_windows": 10,
       "total_ngram_windows": 24,
       "coverage_percent": 41.6667,
-      "passage_localized": true
+      "passage_localized": true,
+      "expected_fuzzy": null,
+      "detected_fuzzy": null,
+      "fuzzy_coverage_percent": 0.0
     },
     {
       "id": "P05_repeated_source_phrase",
@@ -59,7 +84,10 @@
       "matched_ngram_windows": 18,
       "total_ngram_windows": 22,
       "coverage_percent": 81.8182,
-      "passage_localized": true
+      "passage_localized": true,
+      "expected_fuzzy": null,
+      "detected_fuzzy": null,
+      "fuzzy_coverage_percent": 50.0
     },
     {
       "id": "P06_unicode_compatibility",
@@ -68,7 +96,10 @@
       "matched_ngram_windows": 7,
       "total_ngram_windows": 7,
       "coverage_percent": 100.0,
-      "passage_localized": true
+      "passage_localized": true,
+      "expected_fuzzy": null,
+      "detected_fuzzy": null,
+      "fuzzy_coverage_percent": 0.0
     },
     {
       "id": "N01_unrelated_topics",
@@ -77,7 +108,10 @@
       "matched_ngram_windows": 0,
       "total_ngram_windows": 10,
       "coverage_percent": 0.0,
-      "passage_localized": null
+      "passage_localized": null,
+      "expected_fuzzy": null,
+      "detected_fuzzy": null,
+      "fuzzy_coverage_percent": 0.0
     },
     {
       "id": "N02_paraphrase_only",
@@ -86,7 +120,10 @@
       "matched_ngram_windows": 0,
       "total_ngram_windows": 9,
       "coverage_percent": 0.0,
-      "passage_localized": null
+      "passage_localized": null,
+      "expected_fuzzy": null,
+      "detected_fuzzy": null,
+      "fuzzy_coverage_percent": 0.0
     },
     {
       "id": "N03_reordered_terms",
@@ -95,7 +132,10 @@
       "matched_ngram_windows": 0,
       "total_ngram_windows": 7,
       "coverage_percent": 0.0,
-      "passage_localized": null
+      "passage_localized": null,
+      "expected_fuzzy": null,
+      "detected_fuzzy": null,
+      "fuzzy_coverage_percent": 0.0
     },
     {
       "id": "N04_shared_academic_vocabulary",
@@ -104,7 +144,10 @@
       "matched_ngram_windows": 0,
       "total_ngram_windows": 7,
       "coverage_percent": 0.0,
-      "passage_localized": null
+      "passage_localized": null,
+      "expected_fuzzy": null,
+      "detected_fuzzy": null,
+      "fuzzy_coverage_percent": 0.0
     },
     {
       "id": "N05_short_common_phrase",
@@ -113,7 +156,10 @@
       "matched_ngram_windows": 0,
       "total_ngram_windows": 9,
       "coverage_percent": 0.0,
-      "passage_localized": null
+      "passage_localized": null,
+      "expected_fuzzy": null,
+      "detected_fuzzy": null,
+      "fuzzy_coverage_percent": 0.0
     },
     {
       "id": "N06_distinct_content",
@@ -122,8 +168,47 @@
       "matched_ngram_windows": 0,
       "total_ngram_windows": 8,
       "coverage_percent": 0.0,
-      "passage_localized": null
+      "passage_localized": null,
+      "expected_fuzzy": null,
+      "detected_fuzzy": null,
+      "fuzzy_coverage_percent": 0.0
+    },
+    {
+      "id": "P07_near_copy_single_word_substitution",
+      "expected_overlap": true,
+      "detected_overlap": true,
+      "matched_ngram_windows": 7,
+      "total_ngram_windows": 12,
+      "coverage_percent": 58.3333,
+      "passage_localized": true,
+      "expected_fuzzy": true,
+      "detected_fuzzy": true,
+      "fuzzy_coverage_percent": 100.0
+    },
+    {
+      "id": "P08_exact_passage_with_added_material",
+      "expected_overlap": true,
+      "detected_overlap": true,
+      "matched_ngram_windows": 12,
+      "total_ngram_windows": 24,
+      "coverage_percent": 50.0,
+      "passage_localized": true,
+      "expected_fuzzy": null,
+      "detected_fuzzy": null,
+      "fuzzy_coverage_percent": 57.1429
+    },
+    {
+      "id": "N07_similar_topic_different_sentence",
+      "expected_overlap": false,
+      "detected_overlap": false,
+      "matched_ngram_windows": 0,
+      "total_ngram_windows": 11,
+      "coverage_percent": 0.0,
+      "passage_localized": null,
+      "expected_fuzzy": false,
+      "detected_fuzzy": false,
+      "fuzzy_coverage_percent": 0.0
     }
   ],
-  "interpretation": "These metrics describe performance on this small synthetic exact-overlap corpus only. They are not estimates of real-world plagiarism detection accuracy."
+  "interpretation": "These metrics describe performance on a small synthetic software-check corpus only. Exact overlap and fuzzy near-copy matching are separate tasks. They are not estimates of real-world plagiarism-detection accuracy."
 }

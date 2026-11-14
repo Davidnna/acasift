@@ -64,12 +64,22 @@ class Config:
         "SCHOLARLY_SEARCH_CONTACT_EMAIL",
         os.environ.get("ACQUISITION_CONTACT_EMAIL", ""),
     ).strip()
-    MAX_EXTERNAL_SOURCES = int(os.environ.get("MAX_EXTERNAL_SOURCES", "24"))
+    MAX_EXTERNAL_SOURCES = int(os.environ.get("MAX_EXTERNAL_SOURCES", "40"))
     MAX_EXTERNAL_DOWNLOADS = int(os.environ.get("MAX_EXTERNAL_DOWNLOADS", "8"))
     MAX_EXTERNAL_DOWNLOAD_MB = int(os.environ.get("MAX_EXTERNAL_DOWNLOAD_MB", "12"))
+    EXTERNAL_HTTP_TIMEOUT_SECONDS = int(os.environ.get("EXTERNAL_HTTP_TIMEOUT_SECONDS", "8"))
     ENABLE_LOCAL_SEMANTIC = os.environ.get("ENABLE_LOCAL_SEMANTIC", "false").lower() == "true"
     SEMANTIC_MODEL_NAME = os.environ.get(
         "SEMANTIC_MODEL_NAME",
         "sentence-transformers/all-MiniLM-L6-v2",
     )
     SEMANTIC_MATCH_THRESHOLD = float(os.environ.get("SEMANTIC_MATCH_THRESHOLD", "0.82"))
+    UNPAYWALL_EMAIL = os.environ.get(
+        "UNPAYWALL_EMAIL",
+        os.environ.get("SCHOLARLY_SEARCH_CONTACT_EMAIL", os.environ.get("ACQUISITION_CONTACT_EMAIL", "")),
+    ).strip()
+    MAX_EXTERNAL_QUERIES = int(os.environ.get("MAX_EXTERNAL_QUERIES", "3"))
+    EXTERNAL_DISCOVERY_MAX_WORKERS = int(os.environ.get("EXTERNAL_DISCOVERY_MAX_WORKERS", "12"))
+    EXTERNAL_RETRIEVAL_MAX_WORKERS = int(os.environ.get("EXTERNAL_RETRIEVAL_MAX_WORKERS", "4"))
+    EXTERNAL_DISCOVERY_CACHE_TTL_SECONDS = int(os.environ.get("EXTERNAL_DISCOVERY_CACHE_TTL_SECONDS", "300"))
+    MAX_UNPAYWALL_LOOKUPS_PER_RUN = int(os.environ.get("MAX_UNPAYWALL_LOOKUPS_PER_RUN", "20"))

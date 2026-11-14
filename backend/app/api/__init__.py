@@ -215,8 +215,13 @@ def _comparison_payload(comparison, include_results=False, hide_peer_source_deta
                 providers = json.loads(result.providers_json or "[]")
             except (TypeError, ValueError):
                 providers = []
+            method_counts = {}
+            for passage in result.passages:
+                method = passage.match_method or "unknown"
+                method_counts[method] = method_counts.get(method, 0) + 1
             payload["external_results"].append({
                 "id": result.external_result_id,
+                "evidence_method_counts": method_counts,
                 "provider": result.provider,
                 "providers": providers,
                 "title": result.title,

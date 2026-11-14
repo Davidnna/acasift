@@ -34,6 +34,7 @@ def _empty_ngram_result(effective_ngram_size=0):
         "total_count": 0,
         "coverage": 0.0,
         "effective_ngram_size": effective_ngram_size,
+        "matched_token_indices": [],
         "passages": [],
     }
 
@@ -83,6 +84,7 @@ def find_ngram_matches(
 
     total_count = len(query_tokens) - effective_n + 1
     matched_count = 0
+    matched_token_indices = set()
     # Token-index alignment is stable even when punctuation or whitespace differs.
     alignment_positions = defaultdict(set)
 
@@ -93,6 +95,7 @@ def find_ngram_matches(
             continue
 
         matched_count += 1
+        matched_token_indices.update(range(query_start, query_start + effective_n))
         for reference_start in reference_positions:
             alignment = reference_start - query_start
             alignment_positions[alignment].add(query_start)
@@ -164,6 +167,7 @@ def find_ngram_matches(
         "total_count": total_count,
         "coverage": round(coverage, 4),
         "effective_ngram_size": effective_n,
+        "matched_token_indices": sorted(matched_token_indices),
         "passages": ordered_passages[:max(0, int(max_passages))],
     }
 
@@ -207,7 +211,7 @@ def find_fuzzy_matches(
     *,
     minimum_score=88.0,
     minimum_words=8,
-    max_passages=20,
+    max_passages=100,
 ):
     """Find near-identical sentence passages using RapidFuzz.
 
@@ -318,7 +322,7 @@ def find_semantic_matches(
     reference_text,
     *,
     minimum_similarity=None,
-    max_passages=20,
+    max_passages=100,
 ):
     """Find semantically similar sentence pairs using an optional local model.
 
@@ -354,8 +358,8 @@ def find_semantic_matches(
                 "coverage": 0.0, "passages": [],
             }
 
-        query_sentences = query_sentences[:200]
-        reference_sentences = reference_sentences[:300]
+        query_sentences = query_sentences[:400]
+        reference_sentences = reference_sentences[:400]
         query_vectors = model.encode(
             [item["text"] for item in query_sentences],
             convert_to_numpy=True,
@@ -432,6 +436,51 @@ def find_semantic_matches(
         }
 
 
+def _token_indices_for_passage(tokens, passage):
+    start = int(passage.get("submitted_start", 0))
+    end = int(passage.get("submitted_end", 0))
+    return {
+        index for index, token in enumerate(tokens)
+        if token[1] < end and token[2] > start
+    }
+
+
+def _deduplicate_method_coverage(method_result, submitted_text, excluded_token_indices):
+    """Recalculate a method's coverage using only target words not already
+    credited to a higher-priority method. This prevents exact, fuzzy and
+    semantic methods from counting the same submitted words repeatedly.
+    """
+    tokens = token_spans(submitted_text)
+    already_covered = set(excluded_token_indices or set())
+    method_covered = set()
+    weighted_scores = []
+    retained_passages = []
+
+    for passage in method_result.get("passages", []):
+        passage_tokens = _token_indices_for_passage(tokens, passage)
+        new_tokens = passage_tokens - already_covered - method_covered
+        if not new_tokens:
+            continue
+        method_covered.update(new_tokens)
+        score = float(passage.get("match_score", 0.0))
+        weighted_scores.append((score, len(new_tokens)))
+        retained_passages.append(passage)
+
+    total_words = max(1, len(tokens))
+    denominator = sum(words for _score, words in weighted_scores)
+    similarity = (
+        sum(score * words for score, words in weighted_scores) / denominator
+        if denominator else 0.0
+    )
+    adjusted = dict(method_result)
+    adjusted["passages"] = retained_passages
+    adjusted["matched_words"] = len(method_covered)
+    adjusted["coverage"] = round(len(method_covered) / total_words * 100.0, 4)
+    adjusted["similarity"] = round(similarity, 4)
+    adjusted["_covered_token_indices"] = method_covered
+    return adjusted
+
+
 def _tfidf_pair_similarity(submitted_text, reference_text):
     try:
         vectorizer = TfidfVectorizer(
@@ -452,8 +501,16 @@ def _tfidf_pair_similarity(submitted_text, reference_text):
 def compare_text_pair(submitted_text, reference_text, ngram_size=5, cosine_override=None):
     """Run exact N-gram, fuzzy sentence, TF-IDF and optional semantic comparison."""
     exact = find_ngram_matches(submitted_text, reference_text, n=ngram_size)
-    fuzzy = find_fuzzy_matches(submitted_text, reference_text)
-    semantic = find_semantic_matches(submitted_text, reference_text)
+    fuzzy_raw = find_fuzzy_matches(submitted_text, reference_text)
+    semantic_raw = find_semantic_matches(submitted_text, reference_text)
+    query_tokens = token_spans(submitted_text)
+    exact_covered = set(exact.get("matched_token_indices", []))
+    fuzzy = _deduplicate_method_coverage(fuzzy_raw, submitted_text, exact_covered)
+    semantic = _deduplicate_method_coverage(
+        semantic_raw,
+        submitted_text,
+        exact_covered | fuzzy["_covered_token_indices"],
+    )
     cosine = (
         round(float(cosine_override), 4)
         if cosine_override is not None
@@ -471,16 +528,33 @@ def compare_text_pair(submitted_text, reference_text, ngram_size=5, cosine_overr
             "match_score": 100.0,
         })
 
-    # Merge methods without repeating the same target passage. Exact evidence takes
-    # precedence over fuzzy/semantic evidence when offsets substantially overlap.
+    # Merge methods without repeating the same target passage. Exact evidence
+    # takes precedence over fuzzy evidence, which takes precedence over semantic
+    # evidence when their submitted-text ranges substantially overlap.
     passages = list(exact_passages)
     exact_spans = [(p["submitted_start"], p["submitted_end"]) for p in exact_passages]
-    for candidate in fuzzy["passages"] + semantic["passages"]:
+    fuzzy_passages = []
+    for candidate in fuzzy["passages"]:
         start, end = candidate["submitted_start"], candidate["submitted_end"]
         candidate_length = max(1, end - start)
         overlaps = [
             max(0, min(end, right) - max(start, left)) / candidate_length
             for left, right in exact_spans
+        ]
+        if overlaps and max(overlaps) >= 0.70:
+            continue
+        fuzzy_passages.append(candidate)
+        passages.append(candidate)
+
+    stronger_spans = exact_spans + [
+        (p["submitted_start"], p["submitted_end"]) for p in fuzzy_passages
+    ]
+    for candidate in semantic["passages"]:
+        start, end = candidate["submitted_start"], candidate["submitted_end"]
+        candidate_length = max(1, end - start)
+        overlaps = [
+            max(0, min(end, right) - max(start, left)) / candidate_length
+            for left, right in stronger_spans
         ]
         if overlaps and max(overlaps) >= 0.70:
             continue
@@ -492,16 +566,16 @@ def compare_text_pair(submitted_text, reference_text, ngram_size=5, cosine_overr
         item["match_method"],
     ))
 
-    if semantic["available"] and semantic["coverage"] is not None:
-        composite = (
-            0.40 * exact["coverage"]
-            + 0.35 * fuzzy["coverage"]
-            + 0.25 * semantic["coverage"]
-        )
-    else:
-        composite = (
-            0.40 * exact["coverage"] + 0.35 * fuzzy["coverage"]
-        ) / 0.75
+    # A submitted token is credited once, using the strongest available
+    # evidence method. This is a unique matched-word coverage indicator, not
+    # a weighted probability or plagiarism score.
+    total_query_words = max(1, len(query_tokens))
+    unique_matched_words = len(
+        exact_covered
+        | fuzzy["_covered_token_indices"]
+        | semantic["_covered_token_indices"]
+    )
+    composite = unique_matched_words / total_query_words * 100.0
 
     return {
         "cosine_similarity": cosine,

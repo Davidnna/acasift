@@ -42,12 +42,26 @@ services:
       - key: PASSWORD_RESET_HOURS
         value: "1"
 
+      - key: SCHOLARLY_SEARCH_CONTACT_EMAIL
+        sync: false
       - key: MAX_EXTERNAL_SOURCES
-        value: "24"
+        value: "40"
       - key: MAX_EXTERNAL_DOWNLOADS
         value: "8"
       - key: MAX_EXTERNAL_DOWNLOAD_MB
         value: "12"
+      - key: MAX_EXTERNAL_QUERIES
+        value: "3"
+      - key: EXTERNAL_HTTP_TIMEOUT_SECONDS
+        value: "8"
+      - key: EXTERNAL_DISCOVERY_MAX_WORKERS
+        value: "12"
+      - key: EXTERNAL_RETRIEVAL_MAX_WORKERS
+        value: "4"
+      - key: EXTERNAL_DISCOVERY_CACHE_TTL_SECONDS
+        value: "300"
+      - key: MAX_UNPAYWALL_LOOKUPS_PER_RUN
+        value: "20"
       - key: ENABLE_LOCAL_SEMANTIC
         value: "false"
       - key: SEMANTIC_MODEL_NAME

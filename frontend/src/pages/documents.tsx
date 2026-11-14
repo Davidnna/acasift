@@ -41,6 +41,7 @@ export function ComparisonPage() {
         <div className="report-overview">
             <div><span>Status</span><strong><StatusPill value={comparison.status} /></strong></div>
             <div><span>Peer submissions compared</span><strong>{peerSources.length}</strong></div>
+            <div><span>External records discovered</span><strong>{comparison.external_sources_discovered || 0}</strong></div>
             <div><span>External full texts checked</span><strong>{comparison.external_sources_compared || 0}</strong></div>
             <div><span>External sources with matches</span><strong>{comparison.external_sources_with_matches || 0}</strong></div>
             <div><span>Started</span><strong>{formatDateTime(comparison.started_at)}</strong></div>
@@ -57,10 +58,11 @@ export function ComparisonPage() {
             <ul>
                 <li><strong>TF-IDF cosine similarity</strong> measures lexical similarity across document content; it is not a copied-content percentage.</li>
                 <li><strong>Exact N-gram coverage</strong> measures the proportion of submission word-sequence windows found in the source.</li>
-                <li><strong>Fuzzy sentence matching</strong> identifies near-identical sentences with limited wording changes. It does not establish paraphrase or idea appropriation.</li>
-                <li><strong>Semantic matching</strong> compares sentence embeddings using a local model when one is installed and enabled. {`Semantic analysis was ${semanticStateLabel} for this report.`}</li>
-                <li><strong>Combined overlap indicator</strong> weights exact coverage (40%), fuzzy coverage (35%) and semantic coverage (25%). When semantic analysis is unavailable, the two available coverage measures are reweighted. This indicator is for reviewer prioritisation, not a probability of plagiarism.</li>
-                <li>External full text is retrieved only from publicly accessible sources with a recognised reuse licence (or where the article XML declares one), processed temporarily and discarded. The default run is bounded to 24 metadata records and 8 permitted full-text downloads; every successfully retrieved full text within that limit is compared. ACASIFT retains source metadata and short evidence excerpts, not complete external papers.</li>
+                <li><strong>Fuzzy sentence matching</strong> identifies near-identical sentences with limited wording changes. Its coverage credits only submitted words not already attributed to exact N-gram matches.</li>
+                <li><strong>Semantic matching</strong> compares sentence embeddings using a local model when one is installed and enabled. Its coverage credits only words not already attributed to exact or fuzzy matches. {`Semantic analysis was ${semanticStateLabel} for this report.`}</li>
+                <li><strong>Unique matched-word coverage</strong> measures the proportion of submitted words covered by at least one matching method. Each submitted word is credited once, using exact, fuzzy or semantic evidence in that order. It is a reviewer aid, not a probability of plagiarism.</li>
+                <li>External full text is retrieved only from publicly accessible sources with a recognised reuse licence (or where eligible Europe PMC article XML declares one), processed temporarily and discarded. The default run is bounded to 40 metadata records and 8 permitted full-text downloads. A metadata record is not itself a document comparison; only successfully retrieved, permitted full texts are compared.</li>
+                <li>Provider searches are bounded and concurrent. Recent metadata responses may be cached briefly to reduce repeated API traffic; full-text documents are never cached. A missing external match does not establish that no overlap exists because not every scholarly work is openly accessible or licensed for retrieval.</li>
             </ul>
         </section>
 
@@ -88,7 +90,7 @@ export function ComparisonPage() {
                             <span className="match-count">{result.matched_ngram_count} {occurrenceBased ? "matching N-gram windows" : "matching unique N-grams"}</span>
                         </div>
                         <div className="result-metrics">
-                            <Metric label="Combined overlap indicator" value={externalSearchRun ? `${result.composite_similarity.toFixed(2)}%` : "Not calculated"} />
+                            <Metric label="Unique matched-word coverage" value={externalSearchRun ? `${result.composite_similarity.toFixed(2)}%` : "Not calculated"} />
                             <Metric label="TF-IDF lexical similarity" value={`${result.cosine_similarity.toFixed(2)}%`} />
                             <Metric label={occurrenceBased ? "Exact N-gram occurrence coverage" : "Legacy unique N-gram coverage"} value={`${result.matched_ngram_coverage.toFixed(2)}%`} />
                             <Metric label="Fuzzy sentence coverage" value={externalSearchRun ? `${result.fuzzy_coverage.toFixed(2)}%` : "Not calculated"} />
@@ -119,7 +121,7 @@ export function ComparisonPage() {
                 <div className="panel-heading">
                     <div>
                         <h2>External scholarly sources</h2>
-                        <p>Live discovery across OpenAlex, Crossref, Europe PMC, DOAJ, Zenodo, Semantic Scholar and arXiv.</p>
+                        <p>Live discovery across OpenAlex, Crossref, Europe PMC, DOAJ, Zenodo, Semantic Scholar, arXiv and OpenAIRE. Unpaywall resolves DOI-based open-access locations and licence details.</p>
                     </div>
                     <StatusPill value={externalSearchRun ? (comparison.external_search_status || 'completed') : 'Not run'} />
                 </div>
@@ -137,7 +139,9 @@ export function ComparisonPage() {
                 {Object.keys(providerSummary).length > 0 && (
                     <p className="muted-note">
                         Provider queries: {Object.entries(providerSummary).map(([provider, summary]) =>
-                            `${provider.replace(/_/g, ' ')} ${summary.queries_succeeded}/${summary.queries_attempted}`
+                            provider === 'unpaywall' && !summary.configured
+                                ? 'Unpaywall not configured'
+                                : `${provider.replace(/_/g, ' ')} ${summary.queries_succeeded}/${summary.queries_attempted}`
                         ).join(' · ')}
                     </p>
                 )}
@@ -166,12 +170,13 @@ export function ComparisonPage() {
                                     {source.journal ? ` · ${source.journal}` : ''}
                                 </p>
                                 {source.doi && <p>DOI: {source.doi}</p>}
+                        {source.evidence_method_counts && <p className="muted-note">Evidence methods: {Object.entries(source.evidence_method_counts).map(([method, count]) => `${method.replace(/_/g, ' ')} (${count})`).join(' · ')}</p>}
                                 {source.license_name && <p>Reuse licence identified: {source.license_name}</p>}
                             </div>
                             <span className="match-count">{source.composite_similarity.toFixed(2)}% combined</span>
                         </div>
                         <div className="result-metrics">
-                            <Metric label="Combined overlap indicator" value={`${source.composite_similarity.toFixed(2)}%`} />
+                            <Metric label="Unique matched-word coverage" value={`${source.composite_similarity.toFixed(2)}%`} />
                             <Metric label="TF-IDF lexical similarity" value={`${source.cosine_similarity.toFixed(2)}%`} />
                             <Metric label="Exact N-gram coverage" value={`${source.exact_ngram_coverage.toFixed(2)}%`} />
                             <Metric label="Fuzzy sentence coverage" value={`${source.fuzzy_coverage.toFixed(2)}%`} />

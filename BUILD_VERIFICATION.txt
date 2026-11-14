@@ -1,0 +1,65 @@
+AcaSift 0.17.0 — Build Verification
+====================================
+
+Implementation scope
+--------------------
+This release combines the six requested workstreams:
+1. Similarity accuracy and evidence accounting.
+2. Broader scholarly source coverage.
+3. Processing and provider-search performance.
+4. Reviewer report clarity and attribution.
+5. Security and privacy controls.
+6. Bounded concurrency and operational scalability.
+
+Checks completed
+----------------
+- Python compileall: passed for the backend source tree.
+- Similarity engine unit tests: 17 passed, 0 failed.
+- Scholarly provider unit tests: 12 passed, 0 failed using an isolated Flask
+  application-context harness. The harness mocked provider HTTP responses;
+  no live scholarly API requests were made.
+- External similarity report smoke test: passed. The report returned source
+  metadata and short excerpts; complete retrieved source text was not retained.
+- OpenAIRE parser test: passed against a representative V3 response fixture.
+- Unpaywall rights-gate tests: passed. An unversioned `cc-by` label is not
+  accepted as a specific reusable licence; a versioned `cc-by-4.0` label is.
+- Metadata cache test: passed. Cached results are copy-safe and metadata-only.
+- Shared executor test: passed. Requests reuse bounded process-wide worker pools.
+- SSRF and URL checks: passed for private IP rejection, HTTPS-only URLs and
+  credential-bearing URL rejection.
+- Frontend TS/TSX syntax transpilation: 20 files parsed, 0 syntax errors.
+- Controlled synthetic evaluation: 15 exact-overlap cases; 8 true positives,
+  7 true negatives, 0 false positives and 0 false negatives. Fuzzy matching was
+  separately labelled on only 2 cases (1 positive and 1 negative).
+
+Interpretation limits
+---------------------
+The evaluation corpus is small and synthetic. Its metrics are software
+regression checks only; they do not estimate real-world plagiarism-detection
+accuracy, sensitivity, specificity or false-positive rates in academic work.
+AcaSift reports textual evidence and does not make misconduct determinations.
+
+Checks not completed in this environment
+-----------------------------------------
+- The full Flask/SQLAlchemy application test suite and live database migration
+  were not run because Flask and the project's backend dependencies were not
+  installed, and package installation was blocked by unavailable DNS/network.
+- The full frontend TypeScript type-check and Vite production build were not run
+  because npm dependencies were not installed and package access was unavailable.
+- A full Docker image build and live Render deployment test were not run.
+- No live external scholarly provider calls were made during verification.
+
+Deployment notes
+----------------
+- No database schema migration is required for 0.17.0; the changes use existing
+  comparison and evidence fields and add computed report metadata only.
+- Back up the production database and uploaded-document storage before deployment.
+- Set SCHOLARLY_SEARCH_CONTACT_EMAIL in Render to a monitored contact address.
+  This enables Unpaywall DOI resolution and polite-pool identification. If it is
+  unset, OpenAIRE and other configured discovery providers still operate, but
+  Unpaywall is shown as not configured.
+- Semantic embeddings remain optional and disabled by default to avoid adding
+  a large model's memory and CPU cost to a low-resource web instance.
+- The application uses bounded process-wide worker pools, not a distributed
+  job queue. A separate queue/worker architecture may be required if concurrent
+  large-document submissions grow beyond the current web-service capacity.

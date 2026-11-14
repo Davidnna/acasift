@@ -1,6 +1,6 @@
 {
   "dataset_name": "AcaSift controlled overlap evaluation set v1",
-  "description": "Original synthetic document pairs designed to test exact word-sequence overlap detection. This is a software verification corpus, not a representative academic benchmark.",
+  "description": "Original synthetic document pairs for controlled software checks of exact word-sequence overlap and near-identical sentence matching. This is not a representative academic benchmark and must not be used to claim real-world plagiarism-detection accuracy.",
   "cases": [
     {
       "id": "P01_exact_copy",
@@ -84,6 +84,29 @@
       "expected_overlap": false,
       "submitted_text": "A neural network optimises parameters through repeated gradient updates during model training.",
       "reference_text": "A river delta forms when sediment accumulates near a coastline over many years.",
+      "expected_passage": ""
+    },
+    {
+      "id": "P07_near_copy_single_word_substitution",
+      "expected_overlap": true,
+      "expected_fuzzy": true,
+      "submitted_text": "The research examines community health interventions that improve hypertension control in rural populations and underserved communities.",
+      "reference_text": "The research examines community health strategies that improve hypertension control in rural populations and underserved communities.",
+      "expected_passage": ""
+    },
+    {
+      "id": "P08_exact_passage_with_added_material",
+      "expected_overlap": true,
+      "submitted_text": "This section introduces the project. Relational database management systems organise records into structured tables and support efficient querying for institutional information. The next section explains the study design.",
+      "reference_text": "Relational database management systems organise records into structured tables and support efficient querying for institutional information across different organisations.",
+      "expected_passage": "Relational database management systems organise records into structured tables and support efficient querying for institutional information"
+    },
+    {
+      "id": "N07_similar_topic_different_sentence",
+      "expected_overlap": false,
+      "expected_fuzzy": false,
+      "submitted_text": "This research evaluates community health programmes and their contribution to better outcomes in rural areas.",
+      "reference_text": "The study explores nursing services and the delivery of public health interventions across regional hospitals.",
       "expected_passage": ""
     }
   ]

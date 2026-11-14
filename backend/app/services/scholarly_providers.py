@@ -10,6 +10,8 @@ import html
 import ipaddress
 import json
 import os
+import copy
+import threading
 import re
 import socket
 import time
@@ -21,10 +23,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from html.parser import HTMLParser
 from types import SimpleNamespace
 
-import fitz
+import pymupdf
 from flask import current_app
 
-USER_AGENT = "AcaSift/0.16.0 External Scholarly Similarity (+https://acasift.onrender.com)"
+USER_AGENT = "AcaSift/0.17.0 External Scholarly Similarity (+https://acasift.onrender.com)"
 MAX_DOWNLOAD_BYTES = 12 * 1024 * 1024
 HTTP_TIMEOUT_SECONDS = 8
 MAX_SOURCE_CHARS = 900_000
@@ -45,6 +47,8 @@ PROVIDERS = {
     "zenodo": {"name": "Zenodo", "kind": "open_access_full_text"},
     "semantic_scholar": {"name": "Semantic Scholar", "kind": "discovery"},
     "arxiv": {"name": "arXiv", "kind": "open_access_full_text"},
+    "openaire": {"name": "OpenAIRE Graph", "kind": "discovery"},
+    "unpaywall": {"name": "Unpaywall", "kind": "doi_open_access_resolution"},
 }
 
 def _normalise_doi(value):
@@ -58,6 +62,8 @@ def _normalise_license(value):
     raw = str(value or "").strip()
     if not raw:
         return None, None
+    if raw.lower().startswith("http://creativecommons.org/"):
+        raw = "https://creativecommons.org/" + raw[len("http://creativecommons.org/"):]
     lowered = raw.lower().rstrip("/")
     for url, name in ALLOWED_LICENSES.items():
         if lowered == url.lower().rstrip("/"):
@@ -65,10 +71,10 @@ def _normalise_license(value):
     # Recognise exact versioned identifiers, but do not infer a version from
     # vague labels such as "CC BY" or from an open-access flag alone.
     aliases = {
-        "cc-by-4.0": ("CC BY 4.0", ALLOWED_LICENSES["https://creativecommons.org/licenses/by/4.0/"]),
-        "cc-by-3.0": ("CC BY 3.0", ALLOWED_LICENSES["https://creativecommons.org/licenses/by/3.0/"]),
-        "cc-by-2.0": ("CC BY 2.0", ALLOWED_LICENSES["https://creativecommons.org/licenses/by/2.0/"]),
-        "cc0-1.0": ("CC0 1.0", ALLOWED_LICENSES["https://creativecommons.org/publicdomain/zero/1.0/"]),
+        "cc-by-4.0": ("CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"),
+        "cc-by-3.0": ("CC BY 3.0", "https://creativecommons.org/licenses/by/3.0/"),
+        "cc-by-2.0": ("CC BY 2.0", "https://creativecommons.org/licenses/by/2.0/"),
+        "cc0-1.0": ("CC0 1.0", "https://creativecommons.org/publicdomain/zero/1.0/"),
     }
     key = lowered.replace("https://", "").replace("http://", "")
     key = key.replace("creativecommons.org/", "").strip("/")
@@ -81,10 +87,10 @@ def _normalise_license(value):
     if key in aliases:
         return aliases[key]
     labels = {
-        "cc by 4.0": ("CC BY 4.0", ALLOWED_LICENSES["https://creativecommons.org/licenses/by/4.0/"]),
-        "cc by 3.0": ("CC BY 3.0", ALLOWED_LICENSES["https://creativecommons.org/licenses/by/3.0/"]),
-        "cc by 2.0": ("CC BY 2.0", ALLOWED_LICENSES["https://creativecommons.org/licenses/by/2.0/"]),
-        "creative commons attribution 4.0": ("CC BY 4.0", ALLOWED_LICENSES["https://creativecommons.org/licenses/by/4.0/"]),
+        "cc by 4.0": ("CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"),
+        "cc by 3.0": ("CC BY 3.0", "https://creativecommons.org/licenses/by/3.0/"),
+        "cc by 2.0": ("CC BY 2.0", "https://creativecommons.org/licenses/by/2.0/"),
+        "creative commons attribution 4.0": ("CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"),
     }
     if lowered in labels:
         return labels[lowered]
@@ -93,7 +99,10 @@ def _normalise_license(value):
     return None, raw[:1000]
 
 
-def _request_bytes(url, *, headers=None, max_bytes=2_000_000, timeout=HTTP_TIMEOUT_SECONDS, safe_external=False):
+def _request_bytes(url, *, headers=None, max_bytes=2_000_000, timeout=None, safe_external=False):
+    if timeout is None:
+        timeout = int(current_app.config.get("EXTERNAL_HTTP_TIMEOUT_SECONDS", HTTP_TIMEOUT_SECONDS))
+    timeout = max(3, min(int(timeout), 20))
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError("Only HTTPS source URLs are accepted.")
@@ -131,6 +140,14 @@ def _request_bytes(url, *, headers=None, max_bytes=2_000_000, timeout=HTTP_TIMEO
 
 def _assert_public_host(hostname):
     try:
+        literal_address = ipaddress.ip_address(hostname)
+    except ValueError:
+        literal_address = None
+    if literal_address is not None:
+        if not literal_address.is_global:
+            raise ValueError("The document host resolves to a non-public network address.")
+        raise ValueError("Literal IP addresses are not accepted as external document hosts.")
+    try:
         addresses = {item[4][0] for item in socket.getaddrinfo(hostname, None)}
     except OSError as exc:
         raise ValueError("The document host could not be resolved safely.") from exc
@@ -146,8 +163,12 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
     def __init__(self, safe_external=False):
         super().__init__()
         self.safe_external = safe_external
+        self.redirect_count = 0
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        self.redirect_count += 1
+        if self.redirect_count > 4:
+            raise ValueError("The source exceeded the allowed number of redirects.")
         parsed = urllib.parse.urlparse(newurl)
         if parsed.scheme != "https" or not parsed.hostname:
             raise ValueError("A source redirected to an unsupported URL.")
@@ -167,7 +188,10 @@ def _authors(values):
         if isinstance(item, str):
             name = item.strip()
         elif isinstance(item, dict):
-            name = item.get("display_name") or item.get("name") or item.get("given") or ""
+            name = (
+                item.get("display_name") or item.get("fullName")
+                or item.get("fullname") or item.get("name") or item.get("given") or ""
+            )
             if item.get("family") and item.get("given"):
                 name = f"{item.get('given')} {item.get('family')}"
         else:
@@ -436,6 +460,88 @@ def _discover_arxiv(query, limit, state):
     return [item for item in results if item]
 
 
+def _discover_openaire(query, limit, state):
+    """Search the stable OpenAIRE Graph V3 research-products endpoint."""
+    params = {
+        "search": query,
+        "type": "publication",
+        "page": state.page,
+        "pageSize": min(limit, 25),
+    }
+    contact = current_app.config.get("ACQUISITION_CONTACT_EMAIL", "")
+    if contact:
+        params["mailto"] = contact
+    url = "https://api.openaire.eu/graph/v3/research-products?" + urllib.parse.urlencode(params)
+    data = _json_request(url)
+    results = []
+
+    for item in data.get("results", []):
+        instances = item.get("instances") or item.get("instance") or []
+        if isinstance(instances, dict):
+            instances = [instances]
+        chosen = None
+        for instance in instances:
+            if not isinstance(instance, dict):
+                continue
+            license_value = instance.get("license")
+            license_name, _license_url = _normalise_license(license_value)
+            urls = instance.get("urls") or instance.get("url") or []
+            if isinstance(urls, str):
+                urls = [urls]
+            candidate_url = next((_safe_https_url(value) for value in urls if _safe_https_url(value)), None)
+            if candidate_url and (license_name or chosen is None):
+                chosen = (candidate_url, license_value, license_name)
+            if license_name and candidate_url:
+                break
+
+        full_text_url = chosen[0] if chosen and chosen[2] else None
+        license_value = chosen[1] if chosen else None
+        full_text_format = None
+        if full_text_url:
+            path = urllib.parse.urlparse(full_text_url).path.lower()
+            full_text_format = "pdf" if path.endswith(".pdf") else "html"
+
+        pids = item.get("pids") or item.get("pid") or []
+        if isinstance(pids, dict):
+            pids = [pids]
+        doi = next((
+            entry.get("value") for entry in pids
+            if isinstance(entry, dict) and str(entry.get("scheme", "")).lower() == "doi"
+        ), None)
+        authors = item.get("authors") or []
+        descriptions = item.get("descriptions") or item.get("description") or []
+        if isinstance(descriptions, str):
+            abstract = descriptions
+        elif isinstance(descriptions, list):
+            abstract = next((
+                entry.get("description") or entry.get("value") or entry.get("text")
+                for entry in descriptions if isinstance(entry, dict)
+            ), None)
+        else:
+            abstract = None
+
+        results.append(_normalised_record(
+            "openaire",
+            item.get("id") or doi,
+            title=item.get("mainTitle") or item.get("title"),
+            authors=authors,
+            year=item.get("publicationDate") or item.get("publicationYear"),
+            journal=(item.get("journal") or {}).get("name") if isinstance(item.get("journal"), dict) else item.get("publisher"),
+            doi=doi,
+            abstract=abstract,
+            source_url=("https://doi.org/" + urllib.parse.quote(_normalise_doi(doi), safe="/") if doi else None),
+            full_text_url=full_text_url,
+            full_text_format=full_text_format,
+            license_value=license_value,
+        ))
+
+    header = data.get("header") or {}
+    state.total_available = int(header.get("numFound") or 0)
+    state.page += 1
+    state.exhausted = not results or (state.total_available > 0 and (state.page - 1) * min(limit, 25) >= state.total_available)
+    return [item for item in results if item]
+
+
 DISCOVERY_FUNCTIONS = {
     "openalex": _discover_openalex,
     "crossref": _discover_crossref,
@@ -444,6 +550,7 @@ DISCOVERY_FUNCTIONS = {
     "zenodo": _discover_zenodo,
     "semantic_scholar": _discover_semantic_scholar,
     "arxiv": _discover_arxiv,
+    "openaire": _discover_openaire,
 }
 
 
@@ -500,7 +607,7 @@ def _extract_html_text(payload):
 
 
 def _extract_pdf_text(payload):
-    with fitz.open(stream=payload, filetype="pdf") as pdf:
+    with pymupdf.open(stream=payload, filetype="pdf") as pdf:
         parts = []
         total = 0
         for page_number, page in enumerate(pdf):
@@ -537,8 +644,8 @@ def fetch_permitted_full_text(record):
     payload, content_type, final_url = _request_bytes(
         full_text_url,
         headers={"Accept": "application/pdf, application/xml, text/xml, text/html, text/plain;q=0.9"},
-        max_bytes=max(1, int(current_app.config.get("MAX_EXTERNAL_DOWNLOAD_MB", 12))) * 1024 * 1024,
-        timeout=HTTP_TIMEOUT_SECONDS,
+        max_bytes=max(1, min(20, int(current_app.config.get("MAX_EXTERNAL_DOWNLOAD_MB", 12)))) * 1024 * 1024,
+        timeout=int(current_app.config.get("EXTERNAL_HTTP_TIMEOUT_SECONDS", HTTP_TIMEOUT_SECONDS)),
         safe_external=True,
     )
 
@@ -630,7 +737,7 @@ def targeted_queries(submitted_text, document_title=None, max_queries=3):
         query = re.sub(r"\s+", " ", query).strip()
         if query and query.casefold() not in {item.casefold() for item in deduped}:
             deduped.append(query)
-    return deduped[:max(1, int(max_queries))]
+    return deduped[:max(1, min(4, int(max_queries)))]
 
 
 def _candidate_key(record):
@@ -676,12 +783,150 @@ def _merge_candidates(records):
     return list(merged.values())
 
 
-def discover_scholarly_sources(submitted_text, document_title=None, max_sources=None):
-    """Search all configured scholarly providers concurrently using targeted queries."""
+_DISCOVERY_CACHE = {}
+_DISCOVERY_CACHE_LOCK = threading.Lock()
+_SHARED_EXECUTORS = {}
+_SHARED_EXECUTORS_LOCK = threading.Lock()
+
+
+def _shared_executor(name, max_workers):
+    """Reuse bounded process-wide pools instead of creating a pool per request."""
+    workers = max(1, min(16, int(max_workers)))
+    key = (name, workers)
+    with _SHARED_EXECUTORS_LOCK:
+        executor = _SHARED_EXECUTORS.get(key)
+        if executor is None:
+            executor = ThreadPoolExecutor(
+                max_workers=workers,
+                thread_name_prefix=f"acasift-{name}",
+            )
+            _SHARED_EXECUTORS[key] = executor
+        return executor
+
+
+def _cached_provider_search(provider, query, limit, function, ttl_seconds):
+    import hashlib
+    query_key = hashlib.sha256(query.casefold().encode("utf-8")).hexdigest()
+    key = (provider, query_key, int(limit))
+    now = time.monotonic()
+    with _DISCOVERY_CACHE_LOCK:
+        cached = _DISCOVERY_CACHE.get(key)
+        if cached and cached[0] > now:
+            return copy.deepcopy(cached[1]), True
+        if cached:
+            _DISCOVERY_CACHE.pop(key, None)
+
+    state = SimpleNamespace(
+        cursor="*" if provider == "openalex" else None,
+        offset=0,
+        page=1,
+        total_available=None,
+        exhausted=False,
+    )
+    records = function(query, limit, state)
+    with _DISCOVERY_CACHE_LOCK:
+        if len(_DISCOVERY_CACHE) >= 256:
+            oldest_key = min(_DISCOVERY_CACHE, key=lambda item: _DISCOVERY_CACHE[item][0])
+            _DISCOVERY_CACHE.pop(oldest_key, None)
+        _DISCOVERY_CACHE[key] = (now + max(0, ttl_seconds), copy.deepcopy(records or []))
+    return records or [], False
+
+
+def _enrich_with_unpaywall(candidates, contact_email, max_lookups=20):
+    """Resolve DOI OA locations; only exact, recognised licences enable retrieval.
+
+    Unpaywall's retired free-text search endpoint is deliberately not used.
+    Its current API is DOI-based, so this resolver enriches DOI records found by
+    OpenAlex, Crossref, OpenAIRE and other discovery providers.
+    """
     app = current_app._get_current_object()
-    queries = targeted_queries(submitted_text, document_title=document_title)
-    max_sources = max_sources or int(app.config.get("MAX_EXTERNAL_SOURCES", 24))
-    max_sources = min(max(1, int(max_sources)), 40)
+    status = {
+        "configured": bool(contact_email),
+        "queries_attempted": 0,
+        "queries_succeeded": 0,
+        "records_returned": 0,
+        "records_enriched": 0,
+        "cache_hits": 0,
+        "errors": [],
+    }
+    if not contact_email:
+        return status
+
+    targets = []
+    seen_dois = set()
+    for candidate in candidates:
+        doi = _normalise_doi(candidate.get("doi"))
+        if not doi or doi in seen_dois:
+            continue
+        if candidate.get("license_name") and candidate.get("full_text_url"):
+            continue
+        seen_dois.add(doi)
+        targets.append((candidate, doi))
+        if len(targets) >= max(1, min(int(max_lookups), 30)):
+            break
+
+    status["queries_attempted"] = len(targets)
+    status["records_returned"] = len(targets)
+    if not targets:
+        return status
+
+    def resolve(candidate, doi):
+        with app.app_context():
+            url = "https://api.unpaywall.org/v2/" + urllib.parse.quote(doi, safe="/") + "?" + urllib.parse.urlencode({"email": contact_email})
+            data = _json_request(url)
+            location = data.get("best_oa_location") or {}
+            if not location:
+                locations = data.get("oa_locations") or []
+                location = next((item for item in locations if isinstance(item, dict)), {})
+            raw_license = location.get("license")
+            license_name, license_url = _normalise_license(raw_license)
+            pdf_url = location.get("url_for_pdf")
+            landing_url = location.get("url_for_landing_page")
+            full_url = _safe_https_url(pdf_url) or _safe_https_url(landing_url)
+            if license_name and full_url:
+                candidate["license_name"] = license_name
+                candidate["license_url"] = license_url
+                candidate["full_text_url"] = full_url
+                candidate["full_text_format"] = "pdf" if _safe_https_url(pdf_url) else "html"
+                candidate["rights_status"] = "eligible"
+                candidate["open_access_version"] = location.get("version")
+                return True
+            if raw_license and not candidate.get("license_name"):
+                candidate["rights_status"] = "review_required"
+                candidate["unverified_license_label"] = str(raw_license)[:120]
+            return False
+
+    executor = _shared_executor("unpaywall", 6)
+    futures = {executor.submit(resolve, candidate, doi): candidate for candidate, doi in targets}
+    for future in as_completed(futures):
+        try:
+            enriched = future.result()
+            status["queries_succeeded"] += 1
+            status["records_enriched"] += int(bool(enriched))
+        except Exception as exc:
+            status["errors"].append(type(exc).__name__)
+    return status
+
+
+def discover_scholarly_sources(submitted_text, document_title=None, max_sources=None):
+    """Search configured scholarly providers concurrently using bounded queries.
+
+    Only short title/keyword phrases leave AcaSift. Provider metadata may be
+    cached briefly in process memory; downloaded full text is never cached.
+    """
+    app = current_app._get_current_object()
+    queries = targeted_queries(
+        submitted_text,
+        document_title=document_title,
+        max_queries=app.config.get("MAX_EXTERNAL_QUERIES", 3),
+    )
+    max_sources = max_sources or int(app.config.get("MAX_EXTERNAL_SOURCES", 40))
+    max_sources = min(max(1, int(max_sources)), 60)
+    ttl_seconds = int(app.config.get("EXTERNAL_DISCOVERY_CACHE_TTL_SECONDS", 300))
+    max_workers = min(
+        16,
+        max(1, int(app.config.get("EXTERNAL_DISCOVERY_MAX_WORKERS", 12))),
+    )
 
     tasks = [
         (provider, query)
@@ -690,44 +935,66 @@ def discover_scholarly_sources(submitted_text, document_title=None, max_sources=
     ]
     raw_records = []
     provider_status = {
-        provider: {"queries_attempted": len(queries), "queries_succeeded": 0,
-                   "records_returned": 0, "errors": []}
+        provider: {
+            "queries_attempted": len(queries),
+            "queries_succeeded": 0,
+            "records_returned": 0,
+            "cache_hits": 0,
+            "errors": [],
+        }
         for provider in DISCOVERY_FUNCTIONS
     }
 
     def search_one(provider, query):
         with app.app_context():
-            state = SimpleNamespace(
-                cursor="*" if provider == "openalex" else None,
-                offset=0,
-                page=1,
-                total_available=None,
-                exhausted=False,
-            )
             function = DISCOVERY_FUNCTIONS[provider]
-            return function(query, 5, state)
+            return _cached_provider_search(
+                provider, query, 5, function, ttl_seconds
+            )
 
-    with ThreadPoolExecutor(max_workers=min(6, max(1, len(tasks)))) as executor:
-        future_map = {
-            executor.submit(search_one, provider, query): (provider, query)
-            for provider, query in tasks
-        }
-        for future in as_completed(future_map):
-            provider, query = future_map[future]
-            try:
-                records = future.result()
-                provider_status[provider]["queries_succeeded"] += 1
-                provider_status[provider]["records_returned"] += len(records or [])
-                raw_records.extend(records or [])
-            except Exception as exc:
-                provider_status[provider]["errors"].append(type(exc).__name__)
-                app.logger.warning(
-                    "External scholarly discovery failed for provider %s (query %s): %s",
-                    provider, query[:80], type(exc).__name__,
-                )
+    executor = _shared_executor("discovery", max_workers)
+    future_map = {
+        executor.submit(search_one, provider, query): (provider, query)
+        for provider, query in tasks
+    }
+    for future in as_completed(future_map):
+        provider, _query = future_map[future]
+        try:
+            records, cache_hit = future.result()
+            provider_status[provider]["queries_succeeded"] += 1
+            provider_status[provider]["records_returned"] += len(records or [])
+            provider_status[provider]["cache_hits"] += int(cache_hit)
+            raw_records.extend(records or [])
+        except Exception as exc:
+            provider_status[provider]["errors"].append(type(exc).__name__)
+            # Do not log derived search terms: they originate from user documents.
+            app.logger.warning(
+                "External scholarly discovery failed for provider %s: %s",
+                provider,
+                type(exc).__name__,
+            )
 
     candidates = _merge_candidates(raw_records)
-    # Prefer candidates with a known reusable licence and an actual full-text URL.
+    candidates.sort(
+        key=lambda item: (
+            bool(item.get("license_name") and item.get("full_text_url")),
+            bool(item.get("full_text_url")),
+            bool(item.get("doi")),
+            item.get("year") or 0,
+        ),
+        reverse=True,
+    )
+
+    contact_email = app.config.get("UNPAYWALL_EMAIL") or app.config.get("ACQUISITION_CONTACT_EMAIL", "")
+    with app.app_context():
+        unpaywall_status = _enrich_with_unpaywall(
+            candidates[:min(max_sources, 30)],
+            contact_email,
+            max_lookups=app.config.get("MAX_UNPAYWALL_LOOKUPS_PER_RUN", 20),
+        )
+    provider_status["unpaywall"] = unpaywall_status
+
+    # Re-sort after rights/location enrichment and bound the records passed to retrieval.
     candidates.sort(
         key=lambda item: (
             bool(item.get("license_name") and item.get("full_text_url")),
@@ -744,7 +1011,6 @@ def discover_scholarly_sources(submitted_text, document_title=None, max_sources=
         "sources_discovered": len(candidates),
         "sources": candidates[:max_sources],
     }
-
 
 def retrieve_sources_concurrently(candidates, max_downloads=None):
     """Retrieve only permitted public full text, concurrently and in memory."""
@@ -771,22 +1037,26 @@ def retrieve_sources_concurrently(candidates, max_downloads=None):
     if not eligible:
         return retrieved, failures
 
-    with ThreadPoolExecutor(max_workers=min(4, len(eligible))) as executor:
-        future_map = {
-            executor.submit(retrieve_one, candidate): candidate
-            for candidate in eligible
-        }
-        for future in as_completed(future_map):
-            candidate = future_map[future]
-            try:
-                source, result = future.result()
-                retrieved.append((source, result))
-            except Exception as exc:
-                failures.append({
-                    "title": candidate.get("title", "Untitled source"),
-                    "provider": candidate.get("provider"),
-                    "reason": str(exc)[:300],
-                })
+    retrieval_workers = min(
+        6,
+        max(1, int(app.config.get("EXTERNAL_RETRIEVAL_MAX_WORKERS", 4))),
+    )
+    executor = _shared_executor("retrieval", retrieval_workers)
+    future_map = {
+        executor.submit(retrieve_one, candidate): candidate
+        for candidate in eligible
+    }
+    for future in as_completed(future_map):
+        candidate = future_map[future]
+        try:
+            source, result = future.result()
+            retrieved.append((source, result))
+        except Exception as exc:
+            failures.append({
+                "title": candidate.get("title", "Untitled source"),
+                "provider": candidate.get("provider"),
+                "reason": str(exc)[:300],
+            })
     return retrieved, failures
 
 

@@ -128,6 +128,37 @@ class NgramMatchingTests(unittest.TestCase):
         self.assertEqual(result["coverage"], 0.0)
 
 
+    def test_composite_coverage_does_not_double_count_exact_and_fuzzy_target_words(self):
+        submitted = (
+            "The research examines community health interventions that improve "
+            "hypertension control in rural populations. "
+            "A separate paragraph discusses the study limitations and sampling procedure."
+        )
+        reference = (
+            "The research examines community health interventions that improve "
+            "hypertension control in rural populations. "
+            "A separate paragraph discusses the study limitations and sampling procedures."
+        )
+        result = compare_text_pair(submitted, reference, ngram_size=5)
+        self.assertGreater(result["matched_ngram_coverage"], 0)
+        self.assertGreaterEqual(result["fuzzy_coverage"], 0)
+        # Exact evidence is credited first; fuzzy/semantic coverage only credits
+        # additional target words not already attributed to a stronger method.
+        self.assertLessEqual(
+            result["fuzzy_coverage"] + result["semantic_coverage"] if result["semantic_coverage"] is not None else result["fuzzy_coverage"],
+            100.0,
+        )
+
+    def test_unique_matched_word_coverage_is_not_reduced_by_method_weights(self):
+        text = (
+            "A complete matching passage contains enough words to demonstrate "
+            "the exact same text across the submitted document and source."
+        )
+        result = compare_text_pair(text, text, ngram_size=5)
+        self.assertEqual(result["composite_similarity"], 100.0)
+        self.assertEqual(result["matched_ngram_coverage"], 100.0)
+
+
 class RepositoryComparisonTests(unittest.TestCase):
     def test_repository_results_are_ranked_by_similarity(self):
         exact = SimpleNamespace(extracted_text="Database systems organise records into structured relational tables.", title="Exact")

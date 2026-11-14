@@ -4,7 +4,7 @@ import re
 import uuid
 from pathlib import Path
 
-import fitz
+import pymupdf
 from docx import Document as DocxDocument
 from werkzeug.utils import secure_filename
 
@@ -26,7 +26,7 @@ def extract_text(filename, file_bytes):
 
     if extension == "pdf":
         try:
-            with fitz.open(stream=file_bytes, filetype="pdf") as pdf:
+            with pymupdf.open(stream=file_bytes, filetype="pdf") as pdf:
                 text = "\n".join(page.get_text("text") for page in pdf)
         except Exception as exc:
             raise ValueError("The PDF could not be opened or is damaged.") from exc
